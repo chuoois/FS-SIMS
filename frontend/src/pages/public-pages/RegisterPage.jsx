@@ -53,7 +53,7 @@ export const RegisterPage = () => {
             name="fullName"
             required
             autoComplete="name"
-            placeholder="Nguyễn Văn A"
+            placeholder="Nhập họ và tên"
             className={inputClass}
             value={form.fullName}
             onChange={handleChange}
@@ -68,7 +68,7 @@ export const RegisterPage = () => {
             type="email"
             required
             autoComplete="email"
-            placeholder="ten@email.com"
+            placeholder="Nhập email"
             className={inputClass}
             value={form.email}
             onChange={handleChange}
@@ -83,7 +83,7 @@ export const RegisterPage = () => {
             type="tel"
             required
             autoComplete="tel"
-            placeholder="0912 345 678"
+            placeholder="Nhập số điện thoại"
             className={inputClass}
             value={form.phone}
             onChange={handleChange}

@@ -8,6 +8,7 @@ import { ProductPage } from "../../pages/public-pages/ProductPage";
 import { AboutPage, ContactPage } from "../../pages/public-pages/InfoPages";
 import { CartPage } from "../../pages/public-pages/Cartpage";
 import { ProductFavoritePage } from "../../pages/public-pages/ProductFavoritePage";
+import { ProfilePage } from "../../pages/public-pages/Profilepage";
 
 export const PublicRouter = {
   path: "/",
@@ -52,6 +53,10 @@ export const PublicRouter = {
     {
       path: 'my-favorites',
       element: <ProductFavoritePage />
+    },
+    {
+      path: 'profile',
+      element: <ProfilePage />
     }
   ],
 };
