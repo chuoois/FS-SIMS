@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
-import { Heart, Menu, Phone, Search, ShoppingBag, Star, User, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Heart, LogOut, Menu, Phone, Search, ShoppingBag, Star, User, X } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 
 const navigation = [
   { label: 'Sản phẩm', to: '/products' },
@@ -12,7 +13,7 @@ const navigation = [
 const focusRing =
   'focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-900';
 
-/* Liên kết tiện ích ở thanh trên (Yêu thích, Giỏ hàng, Đăng nhập) */
+/* Liên kết tiện ích ở thanh trên (Yêu thích, Giỏ hàng) */
 const UtilityLink = ({ to, icon: Icon, label, count = 0 }) => (
   <Link
     to={to}
@@ -31,6 +32,77 @@ const UtilityLink = ({ to, icon: Icon, label, count = 0 }) => (
   </Link>
 );
 
+/* Avatar nhỏ trong Header — hiện ảnh hoặc chữ cái đầu */
+const UserAvatar = ({ avatarUrl, fullName, size = 'size-7' }) => {
+  const initial = (fullName?.trim().split(/\s+/).pop() || '?').charAt(0).toUpperCase();
+  return avatarUrl ? (
+    <img
+      src={avatarUrl}
+      alt={fullName}
+      className={`${size} rounded-full object-cover ring-1 ring-stone-300`}
+    />
+  ) : (
+    <span
+      className={`${size} grid place-items-center rounded-full bg-stone-800 text-[11px] font-bold text-white`}
+      aria-hidden="true"
+    >
+      {initial}
+    </span>
+  );
+};
+
+/* Dropdown menu khi đã đăng nhập */
+const UserMenu = ({ user, onClose }) => {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    onClose();
+    await logout();
+    navigate('/home');
+  };
+
+  return (
+    <div
+      className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"
+      role="menu"
+      aria-label="Menu tài khoản"
+    >
+      {/* Thông tin user */}
+      <div className="border-b border-stone-100 px-4 py-3">
+        <p className="truncate text-[13px] font-bold text-stone-900">{user.fullName}</p>
+        <p className="truncate text-[11px] text-stone-500">{user.email}</p>
+      </div>
+
+      {/* Các tuỳ chọn */}
+      <ul className="py-1">
+        <li role="none">
+          <Link
+            to="/profile"
+            role="menuitem"
+            onClick={onClose}
+            className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900"
+          >
+            <User className="size-4 text-stone-400" strokeWidth={1.6} aria-hidden="true" />
+            Hồ sơ của tôi
+          </Link>
+        </li>
+        <li role="none">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-red-600 transition-colors hover:bg-red-50"
+          >
+            <LogOut className="size-4" strokeWidth={1.6} aria-hidden="true" />
+            Đăng xuất
+          </button>
+        </li>
+      </ul>
+    </div>
+  );
+};
+
 const navLinkClass = ({ isActive }) =>
   `whitespace-nowrap border-b-2 py-1 text-[15px] uppercase tracking-wide transition-colors ${focusRing} ${
     isActive
@@ -41,6 +113,21 @@ const navLinkClass = ({ isActive }) =>
 /* favoriteCount / cartCount: truyền từ store; mặc định 0 thì không hiện số */
 export const Header = ({ favoriteCount = 0, cartCount = 0 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
+  const { user, isAuthenticated } = useAuth();
+
+  // Đóng dropdown khi click bên ngoài
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
 
   return (
     <header className="w-full bg-white text-stone-800" id="trang-chu">
@@ -64,7 +151,40 @@ export const Header = ({ favoriteCount = 0, cartCount = 0 }) => {
           <UtilityLink to="/my-favorites" icon={Heart} label="Yêu thích" count={favoriteCount} />
           <UtilityLink to="/my-cart" icon={ShoppingBag} label="Giỏ hàng" count={cartCount} />
           <span className="h-4 w-px bg-stone-200" aria-hidden="true" />
-          <UtilityLink to="/login" icon={User} label="Đăng nhập" />
+
+          {/* Khu vực Login / User */}
+          {isAuthenticated && user ? (
+            <div className="relative" ref={userMenuRef}>
+              <button
+                id="user-menu-trigger"
+                type="button"
+                aria-haspopup="true"
+                aria-expanded={userMenuOpen}
+                aria-label={`Tài khoản của ${user.fullName}`}
+                onClick={() => setUserMenuOpen((o) => !o)}
+                className={`flex items-center gap-2 text-stone-700 transition-colors hover:text-stone-900 ${focusRing}`}
+              >
+                <UserAvatar avatarUrl={user.avatarUrl} fullName={user.fullName} />
+                <span className="hidden max-w-[120px] truncate text-[13px] font-semibold sm:inline">
+                  {user.fullName}
+                </span>
+              </button>
+
+              {userMenuOpen && (
+                <UserMenu user={user} onClose={() => setUserMenuOpen(false)} />
+              )}
+            </div>
+          ) : (
+            <Link
+              to="/login"
+              id="header-login-btn"
+              aria-label="Đăng nhập"
+              className={`flex items-center gap-1.5 text-stone-600 transition-colors hover:text-stone-900 ${focusRing}`}
+            >
+              <User className="size-[18px] text-stone-500 transition-colors group-hover:text-stone-900" strokeWidth={1.6} aria-hidden="true" />
+              <span className="hidden sm:inline">Đăng nhập</span>
+            </Link>
+          )}
         </div>
       </div>
 

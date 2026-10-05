@@ -1,4 +1,4 @@
-function validateRegistrationInput({ email, password, fullName } = {}) {
+function validateRegistrationInput({ email, password, fullName, phoneNumber } = {}) {
   if (typeof email !== 'string' || !email.trim()) {
     return 'Email là bắt buộc';
   }
@@ -16,7 +16,30 @@ function validateRegistrationInput({ email, password, fullName } = {}) {
     return 'Họ và tên là bắt buộc và không được vượt quá 150 ký tự';
   }
 
+  if (phoneNumber !== undefined && phoneNumber !== null && phoneNumber !== '') {
+    if (typeof phoneNumber !== 'string' || !/^[0-9+\-\s()]{7,20}$/.test(phoneNumber.trim())) {
+      return 'Số điện thoại không hợp lệ';
+    }
+  }
+
   return null;
 }
 
-module.exports = { validateRegistrationInput };
+function validateLoginInput({ email, password } = {}) {
+  if (typeof email !== 'string' || !email.trim()) {
+    return 'Email là bắt buộc';
+  }
+
+  const normalizedEmail = email.trim();
+  if (normalizedEmail.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return 'Email không hợp lệ';
+  }
+
+  if (typeof password !== 'string' || !password) {
+    return 'Mật khẩu là bắt buộc';
+  }
+
+  return null;
+}
+
+module.exports = { validateRegistrationInput, validateLoginInput };

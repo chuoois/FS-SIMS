@@ -9,6 +9,7 @@ import { AboutPage, ContactPage } from "../../pages/public-pages/InfoPages";
 import { CartPage } from "../../pages/public-pages/Cartpage";
 import { ProductFavoritePage } from "../../pages/public-pages/ProductFavoritePage";
 import { ProfilePage } from "../../pages/public-pages/Profilepage";
+import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 
 export const PublicRouter = {
   path: "/",
@@ -54,9 +55,16 @@ export const PublicRouter = {
       path: 'my-favorites',
       element: <ProductFavoritePage />
     },
+
+    // ── Routes yêu cầu đăng nhập (mọi role) ─────────────────
     {
-      path: 'profile',
-      element: <ProfilePage />
-    }
+      element: <ProtectedRoute />,
+      children: [
+        {
+          path: 'profile',
+          element: <ProfilePage />,
+        },
+      ],
+    },
   ],
 };

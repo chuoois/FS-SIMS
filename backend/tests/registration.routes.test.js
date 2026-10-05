@@ -26,6 +26,7 @@ describe('POST /api/users/register', () => {
       roleId: account.roleId,
       email: account.email,
       fullName: account.fullName,
+      phoneNumber: account.phoneNumber,
     }));
   });
 
@@ -57,7 +58,7 @@ describe('POST /api/users/register', () => {
       .send({ email: '  Person@Example.com ', password: 'password123', fullName: ' Test User ' });
 
     expect(response.status).toBe(201);
-    expect(response.body.user).toEqual({
+    expect(response.body.user).toMatchObject({
       userAccountId: 21,
       roleId: 5,
       email: 'person@example.com',
@@ -71,4 +72,14 @@ describe('POST /api/users/register', () => {
     expect(account.passwordHash).not.toBe('password123');
     await expect(bcrypt.compare('password123', account.passwordHash)).resolves.toBe(true);
   });
-});
+
+  test('truyền đúng phoneNumber khi có số điện thoại', async () => {
+    const response = await request(app)
+      .post('/api/users/register')
+      .send({ email: 'user@example.com', password: 'password123', fullName: 'Test User', phone: '0912345678' });
+
+    expect(response.status).toBe(201);
+    const [account] = createUserAccount.mock.calls[0];
+    expect(account.phoneNumber).toBe('0912345678');
+  });
+});

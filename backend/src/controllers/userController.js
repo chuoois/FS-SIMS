@@ -11,16 +11,19 @@ function isDuplicateEmailError(error) {
 }
 
 async function registerUser(req, res) {
-  const validationError = validateRegistrationInput(req.body);
+  // Frontend gửi { fullName, email, phone, password }
+  const { fullName, email, phone: phoneNumber, password } = req.body;
+
+  const validationError = validateRegistrationInput({ email, password, fullName, phoneNumber });
   if (validationError) {
     return res.status(400).json({ message: validationError });
   }
 
-  const email = req.body.email.trim().toLowerCase();
-  const fullName = req.body.fullName.trim();
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedFullName = fullName.trim();
 
   try {
-    const existingAccount = await findUserAccountByEmail(email);
+    const existingAccount = await findUserAccountByEmail(normalizedEmail);
     if (existingAccount) {
       return res.status(409).json({ message: 'Email đã được sử dụng' });
     }
@@ -30,12 +33,13 @@ async function registerUser(req, res) {
       return res.status(500).json({ message: 'Chưa cấu hình vai trò CUSTOMER' });
     }
 
-    const passwordHash = await bcrypt.hash(req.body.password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
     const user = await createUserAccount({
       roleId: customerRole.role_id,
-      email,
+      email: normalizedEmail,
       passwordHash,
-      fullName,
+      fullName: normalizedFullName,
+      phoneNumber: phoneNumber ? phoneNumber.trim() : null,
       createBy: 'SYSTEM',
     });
 
@@ -48,6 +52,7 @@ async function registerUser(req, res) {
       return res.status(409).json({ message: 'Email đã được sử dụng' });
     }
 
+    console.error('[userController.registerUser]', error);
     return res.status(500).json({ message: 'Không thể tạo tài khoản' });
   }
 }

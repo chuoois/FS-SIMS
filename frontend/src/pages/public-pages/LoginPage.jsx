@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
 
 const inputClass =
   'h-11 w-full border border-stone-300 bg-white px-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-2 focus:outline-stone-900';
@@ -13,15 +15,26 @@ export const LoginPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Sau khi login, redirect về trang trước đó hoặc home
+  const from = location.state?.from?.pathname || '/home';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      // TODO: gọi API đăng nhập ở đây, ví dụ: await authApi.login({ email, password });
+      await login({ email: email.trim(), password });
+      toast.success('Đăng nhập thành công!');
+      navigate(from, { replace: true });
     } catch (err) {
-      setError(err?.message || 'Đăng nhập thất bại, vui lòng thử lại.');
+      const msg =
+        err?.response?.data?.message || err?.message || 'Đăng nhập thất bại, vui lòng thử lại.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -37,9 +50,9 @@ export const LoginPage = () => {
         {error && <p className="border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
         <div className="grid gap-1.5">
-          <label htmlFor="email" className={labelClass}>Email</label>
+          <label htmlFor="login-email" className={labelClass}>Email</label>
           <input
-            id="email"
+            id="login-email"
             type="email"
             required
             autoComplete="email"
@@ -51,10 +64,10 @@ export const LoginPage = () => {
         </div>
 
         <div className="grid gap-1.5">
-          <label htmlFor="password" className={labelClass}>Mật khẩu</label>
+          <label htmlFor="login-password" className={labelClass}>Mật khẩu</label>
           <div className="relative">
             <input
-              id="password"
+              id="login-password"
               type={showPassword ? 'text' : 'password'}
               required
               autoComplete="current-password"
@@ -82,6 +95,7 @@ export const LoginPage = () => {
 
         <button
           type="submit"
+          id="login-submit-btn"
           disabled={loading}
           className="h-11 w-full bg-black text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-stone-800 disabled:opacity-60"
         >

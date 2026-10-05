@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { registerUser, loginUser } from '../../services/authService';
+import { useAuth } from '../../context/AuthContext';
 
 const inputClass =
   'h-11 w-full border border-stone-300 bg-white px-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-2 focus:outline-stone-900';
@@ -18,20 +21,38 @@ export const RegisterPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
+    // Validate client-side trước khi gọi API
     if (form.password.length < 8) return setError('Mật khẩu cần ít nhất 8 ký tự.');
     if (form.password !== form.confirmPassword) return setError('Mật khẩu nhập lại chưa khớp.');
 
     setLoading(true);
     try {
-      // TODO: gọi API đăng ký ở đây, ví dụ: await authApi.register(form);
+      // 1. Đăng ký tài khoản
+      await registerUser({
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        password: form.password,
+      });
+
+      // 2. Tự động đăng nhập luôn sau khi đăng ký thành công
+      await login({ email: form.email.trim(), password: form.password });
+
+      toast.success('Tạo tài khoản thành công! Chào mừng bạn.');
+      navigate('/home', { replace: true });
     } catch (err) {
-      setError(err?.message || 'Đăng ký thất bại, vui lòng thử lại.');
+      const msg =
+        err?.response?.data?.message || err?.message || 'Đăng ký thất bại, vui lòng thử lại.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -47,9 +68,9 @@ export const RegisterPage = () => {
         {error && <p className="border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
         <div className="grid gap-1.5">
-          <label htmlFor="fullName" className={labelClass}>Họ và tên</label>
+          <label htmlFor="reg-fullName" className={labelClass}>Họ và tên</label>
           <input
-            id="fullName"
+            id="reg-fullName"
             name="fullName"
             required
             autoComplete="name"
@@ -61,9 +82,9 @@ export const RegisterPage = () => {
         </div>
 
         <div className="grid gap-1.5">
-          <label htmlFor="email" className={labelClass}>Email</label>
+          <label htmlFor="reg-email" className={labelClass}>Email</label>
           <input
-            id="email"
+            id="reg-email"
             name="email"
             type="email"
             required
@@ -76,12 +97,13 @@ export const RegisterPage = () => {
         </div>
 
         <div className="grid gap-1.5">
-          <label htmlFor="phone" className={labelClass}>Số điện thoại</label>
+          <label htmlFor="reg-phone" className={labelClass}>
+            Số điện thoại <span className="text-stone-400 font-normal normal-case">(tuỳ chọn)</span>
+          </label>
           <input
-            id="phone"
+            id="reg-phone"
             name="phone"
             type="tel"
-            required
             autoComplete="tel"
             placeholder="Nhập số điện thoại"
             className={inputClass}
@@ -91,10 +113,10 @@ export const RegisterPage = () => {
         </div>
 
         <div className="grid gap-1.5">
-          <label htmlFor="password" className={labelClass}>Mật khẩu</label>
+          <label htmlFor="reg-password" className={labelClass}>Mật khẩu</label>
           <div className="relative">
             <input
-              id="password"
+              id="reg-password"
               name="password"
               type={showPassword ? 'text' : 'password'}
               required
@@ -116,9 +138,9 @@ export const RegisterPage = () => {
         </div>
 
         <div className="grid gap-1.5">
-          <label htmlFor="confirmPassword" className={labelClass}>Nhập lại mật khẩu</label>
+          <label htmlFor="reg-confirmPassword" className={labelClass}>Nhập lại mật khẩu</label>
           <input
-            id="confirmPassword"
+            id="reg-confirmPassword"
             name="confirmPassword"
             type={showPassword ? 'text' : 'password'}
             required
@@ -132,6 +154,7 @@ export const RegisterPage = () => {
 
         <button
           type="submit"
+          id="register-submit-btn"
           disabled={loading}
           className="h-11 w-full bg-black text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-stone-800 disabled:opacity-60"
         >
