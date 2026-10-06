@@ -35,7 +35,7 @@ export async function logoutUser() {
  * @param {{ fullName: string, email: string, phone: string, password: string }} data
  */
 export async function registerUser({ fullName, email, phone, password }) {
-  const response = await api.post('/users/register', { fullName, email, phone, password });
+  const response = await api.post('/auth/register', { fullName, email, phone, password });
   return response.data; // { message, user }
 }
 

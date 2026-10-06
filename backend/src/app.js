@@ -3,8 +3,8 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
-const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 
@@ -21,8 +21,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend đang chạy' });
 });
 
-app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 
 // Middleware xử lý lỗi tập trung
 app.use((err, req, res, next) => {

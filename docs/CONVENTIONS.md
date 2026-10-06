@@ -31,7 +31,6 @@ frontend/src/
 ├── hooks/         # custom hooks dùng chung
 ├── context/       # React Context (auth, theme...)
 ├── app/           # Router (ownerrouter...)
-└── tests/         # test file đặt ở đây, không rải rác trong components/pages
 ```
 
 Quy tắc cứng:

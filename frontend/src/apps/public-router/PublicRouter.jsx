@@ -1,3 +1,4 @@
+import { redirect } from "react-router-dom";
 import { HomeLayout } from "../../components/layouts/home-layout/HomeLayout";
 import { LoginPage } from "../../pages/public-pages/LoginPage";
 import { RegisterPage } from "../../pages/public-pages/RegisterPage";
@@ -15,6 +16,11 @@ export const PublicRouter = {
   path: "/",
   element: <HomeLayout />,
   children: [
+    // "/" -> "/home"
+    {
+      index: true,
+      loader: () => redirect("/home"),
+    },
     {
       path: "home",
       element: <HomePage />,
@@ -40,20 +46,20 @@ export const PublicRouter = {
       element: <ProductPage />,
     },
     {
-      path: 'about',
-      element: <AboutPage />
+      path: "about",
+      element: <AboutPage />,
     },
     {
-      path: 'contact',
-      element: <ContactPage />
+      path: "contact",
+      element: <ContactPage />,
     },
     {
-      path: 'my-cart',
-      element: <CartPage />
+      path: "my-cart",
+      element: <CartPage />,
     },
     {
-      path: 'my-favorites',
-      element: <ProductFavoritePage />
+      path: "my-favorites",
+      element: <ProductFavoritePage />,
     },
 
     // ── Routes yêu cầu đăng nhập (mọi role) ─────────────────
@@ -61,7 +67,7 @@ export const PublicRouter = {
       element: <ProtectedRoute />,
       children: [
         {
-          path: 'profile',
+          path: "profile",
           element: <ProfilePage />,
         },
       ],

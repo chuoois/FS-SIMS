@@ -6,6 +6,7 @@
 
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/sequelize");
+
 const UserAccount = sequelize.define(
   "UserAccount",
   {
@@ -62,6 +63,11 @@ const UserAccount = sequelize.define(
       allowNull: true,
     },
 
+    avatar_url: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+
     note: {
       type: DataTypes.STRING(255),
       allowNull: true,
@@ -81,16 +87,11 @@ const UserAccount = sequelize.define(
       type: DataTypes.STRING(100),
       allowNull: true,
     },
-
-    //#endregion
   },
   {
     tableName: "user_account",
-
     timestamps: true,
-
     createdAt: "createdate",
-
     updatedAt: false,
   },
 );
@@ -154,11 +155,9 @@ async function createUserAccount({
 async function findUserAccountByEmail(email) {
   return UserAccount.findOne({
     where: { email },
-
     raw: true,
   });
 }
-
 
 // =========================================================
 // Find User By ID
@@ -170,7 +169,6 @@ async function findUserAccountById(userAccountId) {
     attributes: {
       exclude: ["password_hash"],
     },
-
     raw: true,
   });
 }
@@ -198,7 +196,6 @@ async function getAllUserAccounts() {
     ],
 
     order: [["user_account_id", "DESC"]],
-
     raw: true,
   });
 }
@@ -212,6 +209,7 @@ async function updateUserAccountStatus(userAccountId, status, modifiedBy) {
     {
       status,
       modifieby: modifiedBy,
+      modifiedate: new Date(),
     },
     {
       where: {
@@ -229,20 +227,27 @@ async function updateUserAccountStatus(userAccountId, status, modifiedBy) {
 
 async function updateUserProfile(
   userAccountId,
-  { fullName, phoneNumber, dob, gender, address, note },
+  { fullName, phoneNumber, dob, gender, address, note, avatarUrl },
   modifiedBy,
 ) {
-  const [affected] = await UserAccount.update(
-    {
-      full_name: fullName,
-      phone_number: phoneNumber,
-      dob,
-      gender,
-      address,
-      note,
+  const updateFields = {
+    full_name: fullName,
+    phone_number: phoneNumber,
+    dob,
+    gender,
+    address,
+    note,
 
-      modifieby: modifiedBy,
-    },
+    modifieby: modifiedBy,
+    modifiedate: new Date(),
+  };
+
+  if (avatarUrl !== undefined) {
+    updateFields.avatar_url = avatarUrl;
+  }
+
+  const [affected] = await UserAccount.update(
+    updateFields,
     {
       where: {
         user_account_id: userAccountId,

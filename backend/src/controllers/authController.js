@@ -1,26 +1,87 @@
 // =========================================================
 // authController.js
-// Xử lý Login / Logout / Refresh Token
+// Xử lý Register / Login / Logout / Refresh Token
 // =========================================================
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { randomBytes } = require('crypto');
 
-const { findUserAccountByEmail } = require('../models/userAccount.model');
+const {
+  createUserAccount,
+  findUserAccountByEmail,
+} = require('../models/userAccount.model');
+const { findUserRoleByCode } = require('../models/userRole.model');
 const {
   createRefreshToken,
   findValidRefreshToken,
   deleteRefreshToken,
   deleteTokensByAccountId,
 } = require('../models/refreshToken.model');
-const { validateLoginInput } = require('../utils/validators');
+const {
+  validateLoginInput,
+  validateRegistrationInput,
+} = require('../utils/validators');
 
 const ACCESS_TOKEN_EXPIRES = '15m';
 const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
 function generateAccessToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES });
+}
+
+function isDuplicateEmailError(error) {
+  return error.name === 'SequelizeUniqueConstraintError' || error.original?.code === 'ER_DUP_ENTRY';
+}
+
+// =========================================================
+// POST /api/auth/register
+// =========================================================
+async function register(req, res) {
+  // Frontend gửi { fullName, email, phone, password }
+  const { fullName, email, phone: phoneNumber, password } = req.body;
+
+  const validationError = validateRegistrationInput({ email, password, fullName, phoneNumber });
+  if (validationError) {
+    return res.status(400).json({ message: validationError });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedFullName = fullName.trim();
+
+  try {
+    const existingAccount = await findUserAccountByEmail(normalizedEmail);
+    if (existingAccount) {
+      return res.status(409).json({ message: 'Email đã được sử dụng' });
+    }
+
+    const customerRole = await findUserRoleByCode('CUSTOMER');
+    if (!customerRole) {
+      return res.status(500).json({ message: 'Chưa cấu hình vai trò CUSTOMER' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await createUserAccount({
+      roleId: customerRole.role_id,
+      email: normalizedEmail,
+      passwordHash,
+      fullName: normalizedFullName,
+      phoneNumber: phoneNumber ? phoneNumber.trim() : null,
+      createBy: 'SYSTEM',
+    });
+
+    return res.status(201).json({
+      message: 'Đăng ký tài khoản thành công',
+      user,
+    });
+  } catch (error) {
+    if (isDuplicateEmailError(error)) {
+      return res.status(409).json({ message: 'Email đã được sử dụng' });
+    }
+
+    console.error('[authController.register]', error);
+    return res.status(500).json({ message: 'Không thể tạo tài khoản' });
+  }
 }
 
 // =========================================================
@@ -154,4 +215,4 @@ async function logout(req, res) {
   return res.status(200).json({ message: 'Đăng xuất thành công' });
 }
 
-module.exports = { login, refreshToken, logout };
+module.exports = { register, login, refreshToken, logout };

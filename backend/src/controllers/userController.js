@@ -1,60 +1,119 @@
-const bcrypt = require('bcryptjs');
 const {
-  createUserAccount,
-  findUserAccountByEmail,
+  findUserAccountById,
+  updateUserProfile,
 } = require('../models/userAccount.model');
-const { findUserRoleByCode } = require('../models/userRole.model');
-const { validateRegistrationInput } = require('../utils/validators');
+const { deleteImage, getPublicIdFromUrl } = require('../services/cloudinaryService');
 
-function isDuplicateEmailError(error) {
-  return error.name === 'SequelizeUniqueConstraintError' || error.original?.code === 'ER_DUP_ENTRY';
+function mapUserProfile(account = {}) {
+  return {
+    userAccountId: account.user_account_id ?? account.userAccountId ?? null,
+    roleId: account.role_id ?? account.roleId ?? null,
+    email: account.email ?? '',
+    status: account.status ?? 'ACTIVE',
+    fullName: account.full_name ?? account.fullName ?? '',
+    phoneNumber: account.phone_number ?? account.phoneNumber ?? null,
+    dateOfBirth: account.dob ?? account.dateOfBirth ?? null,
+    gender: account.gender ?? null,
+    address: account.address ?? null,
+    avatarUrl: account.avatar_url ?? account.avatarUrl ?? null,
+  };
 }
 
-async function registerUser(req, res) {
-  // Frontend gửi { fullName, email, phone, password }
-  const { fullName, email, phone: phoneNumber, password } = req.body;
-
-  const validationError = validateRegistrationInput({ email, password, fullName, phoneNumber });
-  if (validationError) {
-    return res.status(400).json({ message: validationError });
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const normalizedFullName = fullName.trim();
-
+async function getProfile(req, res) {
   try {
-    const existingAccount = await findUserAccountByEmail(normalizedEmail);
-    if (existingAccount) {
-      return res.status(409).json({ message: 'Email đã được sử dụng' });
+    const userId = Number(req.user?.sub);
+    if (!userId) {
+      return res.status(401).json({ message: 'Yêu cầu xác thực. Vui lòng đăng nhập.' });
     }
 
-    const customerRole = await findUserRoleByCode('CUSTOMER');
-    if (!customerRole) {
-      return res.status(500).json({ message: 'Chưa cấu hình vai trò CUSTOMER' });
+    const account = await findUserAccountById(userId);
+    if (!account) {
+      return res.status(404).json({ message: 'Người dùng không tồn tại' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await createUserAccount({
-      roleId: customerRole.role_id,
-      email: normalizedEmail,
-      passwordHash,
-      fullName: normalizedFullName,
-      phoneNumber: phoneNumber ? phoneNumber.trim() : null,
-      createBy: 'SYSTEM',
-    });
-
-    return res.status(201).json({
-      message: 'Đăng ký tài khoản thành công',
-      user,
+    return res.status(200).json({
+      message: 'Lấy thông tin hồ sơ thành công',
+      user: mapUserProfile(account),
     });
   } catch (error) {
-    if (isDuplicateEmailError(error)) {
-      return res.status(409).json({ message: 'Email đã được sử dụng' });
-    }
-
-    console.error('[userController.registerUser]', error);
-    return res.status(500).json({ message: 'Không thể tạo tài khoản' });
+    console.error('[userController.getProfile]', error);
+    return res.status(500).json({ message: 'Không thể lấy thông tin hồ sơ' });
   }
 }
 
-module.exports = { registerUser };
+async function updateProfile(req, res) {
+  try {
+    const userId = Number(req.user?.sub);
+    if (!userId) {
+      return res.status(401).json({ message: 'Yêu cầu xác thực. Vui lòng đăng nhập.' });
+    }
+
+    const existing = await findUserAccountById(userId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Người dùng không tồn tại' });
+    }
+
+    const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
+    if (!fullName) {
+      return res.status(400).json({ message: 'Họ và tên là bắt buộc' });
+    }
+
+    const phone = req.body?.phone !== undefined && req.body?.phone !== null && req.body?.phone !== ''
+      ? String(req.body.phone).trim()
+      : null;
+    if (phone && !/^(0|\+84)\d{9,10}$/.test(phone.replace(/\s/g, ''))) {
+      return res.status(400).json({ message: 'Số điện thoại không hợp lệ' });
+    }
+
+    const birthday = req.body?.birthday || null;
+    const gender = req.body?.gender || null;
+    const address = req.body?.address !== undefined && req.body?.address !== null
+      ? String(req.body.address).trim()
+      : null;
+
+    const updatePayload = {
+      fullName,
+      phoneNumber: phone,
+      dob: birthday,
+      gender,
+      address,
+      note: existing.note ?? null,
+    };
+    const existingAvatarUrl = existing.avatar_url ?? existing.avatarUrl ?? null;
+    const avatarUrl = req.file?.path ?? (req.body?.removeAvatar === 'true' ? null : undefined);
+    if (avatarUrl !== undefined) {
+      updatePayload.avatarUrl = avatarUrl;
+    }
+
+    const updated = await updateUserProfile(userId, updatePayload, `USER:${userId}`);
+    if (!updated) {
+      return res.status(400).json({ message: 'Cập nhật hồ sơ không thành công' });
+    }
+
+    if (avatarUrl !== undefined && existingAvatarUrl && avatarUrl !== existingAvatarUrl) {
+      try {
+        await deleteImage(getPublicIdFromUrl(existingAvatarUrl));
+      } catch (error) {
+        console.warn('[userController.updateProfile] Không thể xóa ảnh đại diện cũ:', error.message);
+      }
+    }
+
+    return res.status(200).json({
+      message: 'Cập nhật hồ sơ thành công',
+      user: mapUserProfile({
+        ...existing,
+        full_name: fullName,
+        phone_number: phone,
+        dob: birthday,
+        gender,
+        address,
+        avatar_url: avatarUrl !== undefined ? avatarUrl : existingAvatarUrl,
+      }),
+    });
+  } catch (error) {
+    console.error('[userController.updateProfile]', error);
+    return res.status(500).json({ message: 'Không thể cập nhật hồ sơ' });
+  }
+}
+
+module.exports = { getProfile, updateProfile };

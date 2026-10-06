@@ -1,23 +1,34 @@
 import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, KeyRound, UserRound } from 'lucide-react';
+// Đổi đường dẫn nếu file service của bạn nằm ở chỗ khác
+import { getUserProfile, updateUserProfile } from '../../services/userService';
 
-/* ---------- Dữ liệu mẫu (thay bằng thông tin người dùng từ API) ---------- */
-const initialProfile = {
-  fullName: 'Nguyễn Văn A',
-  email: 'nguyenvana@example.com',
-  phone: '0912345678',
-  gender: 'male',
-  birthday: '1995-05-20',
+/* ---------- Hằng số & helper ---------- */
+const emptyProfile = {
+  fullName: '',
+  email: '',
+  phone: '',
+  gender: '',
+  birthday: '',
   address: '',
 };
 
-const genders = [
-  { value: 'male', label: 'Nam' },
-  { value: 'female', label: 'Nữ' },
-  { value: 'other', label: 'Khác' },
-];
+// Chuyển dữ liệu user từ API sang state của form
+const mapUserToForm = (user = {}) => ({
+  fullName: user.fullName || '',
+  email: user.email || '',
+  phone: user.phoneNumber || '',
+  gender: user.gender || '',
+  birthday: user.dateOfBirth ? String(user.dateOfBirth).slice(0, 10) : '', // input date cần YYYY-MM-DD
+  address: user.address || '',
+});
 
+const genders = [
+  { value: 'MALE', label: 'Nam' },
+  { value: 'FEMALE', label: 'Nữ' },
+  { value: 'OTHER', label: 'Khác' },
+];
 const MAX_AVATAR_MB = 2;
 
 const tabs = [
@@ -47,7 +58,7 @@ const Field = ({ label, error, hint, children }) => {
 const PrimaryButton = ({ children, ...props }) => (
   <button
     type="submit"
-    className="h-11 bg-[#232226] px-8 text-xs font-bold uppercase text-white transition-colors hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#232226]"
+    className="h-11 bg-[#232226] px-8 text-xs font-bold uppercase text-white transition-colors hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#232226] disabled:cursor-not-allowed disabled:opacity-50"
     {...props}
   >
     {children}
@@ -115,18 +126,71 @@ const AvatarPicker = ({ name, url, onChange }) => {
 
 /* ---------- Tab: thông tin cá nhân ---------- */
 const InfoForm = () => {
-  const [values, setValues] = useState(initialProfile);
-  const [saved, setSaved] = useState(initialProfile);
+  const [values, setValues] = useState(emptyProfile);
+  const [saved, setSaved] = useState(emptyProfile);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState('');
+  const [statusType, setStatusType] = useState('success'); // 'success' | 'error'
+  const [isFetching, setIsFetching] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [savedAvatarUrl, setSavedAvatarUrl] = useState('');
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
+  const [removeAvatar, setRemoveAvatar] = useState(false);
 
-  useEffect(() => () => avatarUrl && URL.revokeObjectURL(avatarUrl), [avatarUrl]);
+  const showStatus = (message, type = 'success') => {
+    setStatus(message);
+    setStatusType(type);
+  };
+
+  // Tải hồ sơ khi vào trang
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        const response = await getUserProfile();
+        if (!active) return;
+        const next = mapUserToForm(response?.user);
+        setValues(next);
+        setSaved(next);
+        const currentAvatarUrl = response?.user?.avatarUrl || '';
+        setAvatarUrl(currentAvatarUrl);
+        setSavedAvatarUrl(currentAvatarUrl);
+      } catch (error) {
+        if (!active) return;
+        showStatus(error?.response?.data?.message || 'Không thể tải thông tin hồ sơ.', 'error');
+      } finally {
+        if (active) setIsFetching(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Giải phóng URL ảnh tạm khi đổi ảnh / rời trang
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl('');
+      return undefined;
+    }
+
+    const previewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [avatarFile]);
 
   const pickAvatar = (file) => {
     setAvatarFile(file);
-    setAvatarUrl(file ? URL.createObjectURL(file) : '');
+    if (file) {
+      setRemoveAvatar(false);
+    } else {
+      setRemoveAvatar(Boolean(avatarUrl));
+      setAvatarUrl('');
+    }
     setStatus('');
   };
 
@@ -138,32 +202,63 @@ const InfoForm = () => {
   const validate = () => {
     const next = {};
     if (!values.fullName.trim()) next.fullName = 'Vui lòng nhập họ và tên.';
-    if (!/^(0|\+84)\d{9}$/.test(values.phone.replace(/\s/g, ''))) next.phone = 'Số điện thoại không hợp lệ.';
+    if (!/^(0|\+84)\d{9,10}$/.test(values.phone.replace(/\s/g, ''))) next.phone = 'Số điện thoại không hợp lệ.';
     return next;
   };
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     const next = validate();
     setErrors(next);
     if (Object.keys(next).length) return;
-    // TODO: gọi API cập nhật hồ sơ (kèm avatarFile nếu có)
-    setSaved(values);
-    setStatus('Đã lưu thay đổi.');
+
+    setIsLoading(true);
+    try {
+      // Tên field khớp với dữ liệu backend trả về (phoneNumber, dateOfBirth)
+      const payload = new FormData();
+      payload.append('fullName', values.fullName.trim());
+      payload.append('phone', values.phone.replace(/\s/g, ''));
+      payload.append('birthday', values.birthday || '');
+      payload.append('gender', values.gender || '');
+      payload.append('address', values.address.trim());
+      if (avatarFile) payload.append('avatar', avatarFile);
+      else if (removeAvatar) payload.append('removeAvatar', 'true');
+
+      const response = await updateUserProfile(payload);
+      const updated = mapUserToForm(response?.user);
+      const updatedAvatarUrl = response?.user?.avatarUrl || '';
+      setValues(updated);
+      setSaved(updated);
+      setAvatarUrl(updatedAvatarUrl);
+      setSavedAvatarUrl(updatedAvatarUrl);
+      setAvatarFile(null);
+      setRemoveAvatar(false);
+      showStatus(response?.message || 'Đã lưu thay đổi.');
+    } catch (error) {
+      showStatus(error?.response?.data?.message || 'Không thể cập nhật hồ sơ.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const dirty = JSON.stringify(values) !== JSON.stringify(saved) || !!avatarFile;
+  const dirty = JSON.stringify(values) !== JSON.stringify(saved) || !!avatarFile || removeAvatar;
 
   const reset = () => {
     setValues(saved);
     setErrors({});
-    pickAvatar(null);
+    setAvatarFile(null);
+    setAvatarUrl(savedAvatarUrl);
+    setRemoveAvatar(false);
     setStatus('');
   };
 
+  if (isFetching) {
+    return <p role="status" className="text-sm text-stone-500">Đang tải thông tin...</p>;
+  }
+
   return (
     <form onSubmit={onSubmit} noValidate className="grid gap-6">
-      <AvatarPicker name={values.fullName} url={avatarUrl} onChange={pickAvatar} />
+      <AvatarPicker name={values.fullName} url={avatarPreviewUrl || avatarUrl} onChange={pickAvatar} />
 
       <div className="grid gap-6 sm:grid-cols-2">
         <Field label="Họ và tên (Yêu cầu)" error={errors.fullName}>
@@ -178,6 +273,7 @@ const InfoForm = () => {
         <Field label="Giới tính">
           {(p) => (
             <select {...p} value={values.gender} onChange={set('gender')}>
+              <option value="">Chưa chọn</option>
               {genders.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
             </select>
           )}
@@ -186,20 +282,28 @@ const InfoForm = () => {
           {(p) => <input {...p} type="date" value={values.birthday} onChange={set('birthday')} autoComplete="bday" />}
         </Field>
         <div className="sm:col-span-2">
-          <Field label="Địa chỉ nhận hàng">
+          <Field
+            label="Địa chỉ nhận hàng"
+            hint="Lưu ý: Bạn chịu hoàn toàn trách nhiệm về tính chính xác của địa chỉ nhận hàng. Chúng tôi không chịu trách nhiệm nếu đơn hàng bị giao sai hoặc thất lạc do địa chỉ không chính xác."
+          >
             {(p) => <textarea {...p} rows={3} value={values.address} onChange={set('address')} autoComplete="street-address" />}
           </Field>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
-        <PrimaryButton disabled={!dirty}>Lưu thay đổi</PrimaryButton>
+        <PrimaryButton disabled={!dirty || isLoading}>{isLoading ? 'Đang lưu...' : 'Lưu thay đổi'}</PrimaryButton>
         {dirty && (
           <button type="button" onClick={reset} className="text-xs font-bold text-stone-600 hover:text-stone-900">
             Hủy thay đổi
           </button>
         )}
-        <p role="status" className="text-[13px] font-medium text-green-700">{status}</p>
+        <p
+          role="status"
+          className={`text-[13px] font-medium ${statusType === 'error' ? 'text-red-600' : 'text-green-700'}`}
+        >
+          {status}
+        </p>
       </div>
     </form>
   );
@@ -284,11 +388,10 @@ export const ProfilePage = () => {
               type="button"
               onClick={() => setTab(id)}
               aria-current={tab === id ? 'page' : undefined}
-              className={`flex shrink-0 items-center gap-3 border-b-2 px-1 py-3 text-left text-[13px] transition-colors md:border-b md:border-l-2 md:border-b-stone-200 md:px-4 ${
-                tab === id
-                  ? 'border-orange-700 font-bold text-orange-700 md:border-l-orange-700'
-                  : 'border-transparent font-medium text-stone-700 hover:text-orange-700 md:border-l-transparent'
-              }`}
+              className={`flex shrink-0 items-center gap-3 border-b-2 px-1 py-3 text-left text-[13px] transition-colors md:border-b md:border-l-2 md:border-b-stone-200 md:px-4 ${tab === id
+                ? 'border-orange-700 font-bold text-orange-700 md:border-l-orange-700'
+                : 'border-transparent font-medium text-stone-700 hover:text-orange-700 md:border-l-transparent'
+                }`}
             >
               <Icon className="size-4" aria-hidden="true" />
               {label}
