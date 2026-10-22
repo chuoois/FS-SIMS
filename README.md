@@ -112,3 +112,10 @@ File test nằm ở `frontend/src/tests/CreateUserPage.test.jsx` — test render
 docker-compose down          # dừng, giữ lại data MySQL (volume)
 docker-compose down -v       # dừng và xoá luôn data MySQL
 ```
+# Chỉ restart container backend (không rebuild toàn bộ)
+docker-compose restart backend
+# Chỉ restart container fronend(không rebuild toàn bộ)
+docker-compose restart frontend
+
+# Hoặc nếu đổi package.json mới chạy full build
+docker-compose up --build

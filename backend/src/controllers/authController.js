@@ -10,6 +10,7 @@ const { randomBytes } = require('crypto');
 const {
   createUserAccount,
   findUserAccountByEmail,
+  findUserAccountById,
 } = require('../models/userAccount.model');
 const { findUserRoleByCode } = require('../models/userRole.model');
 const {
@@ -23,7 +24,7 @@ const {
   validateRegistrationInput,
 } = require('../utils/validators');
 
-const ACCESS_TOKEN_EXPIRES = '15m';
+const ACCESS_TOKEN_EXPIRES = '30s';
 const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
 function generateAccessToken(payload) {
@@ -170,13 +171,15 @@ async function refreshToken(req, res) {
       return res.status(401).json({ message: 'Refresh token không hợp lệ hoặc đã hết hạn' });
     }
 
-    const account = await findUserAccountByEmail(stored.email);
+    // Dùng user_account_id (không phải email — bảng refresh_token không có cột email)
+    const account = await findUserAccountById(stored.user_account_id);
     if (!account) {
       return res.status(401).json({ message: 'Tài khoản không tồn tại' });
     }
 
     const tokenPayload = {
-      sub: stored.user_account_id,
+      sub: account.user_account_id,
+      email: account.email,
       role: account.role_id,
     };
 
