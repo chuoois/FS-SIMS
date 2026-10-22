@@ -1,5 +1,5 @@
 const express = require('express');
-const { register ,login, refreshToken, logout } = require('../controllers/authController');
+const { register, login, refreshToken, logout, forgotPassword } = require('../controllers/authController');
 
 const router = express.Router();
 
@@ -14,5 +14,8 @@ router.post('/refresh', refreshToken);
 
 // POST /api/auth/logout
 router.post('/logout', logout);
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', forgotPassword);
 
 module.exports = router;

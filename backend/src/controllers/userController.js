@@ -1,7 +1,10 @@
 const {
   findUserAccountById,
+  findUserAccountByEmail,
   updateUserProfile,
+  updateUserPassword,
 } = require('../models/userAccount.model');
+const bcrypt = require('bcryptjs');
 const { deleteImage, getPublicIdFromUrl } = require('../services/cloudinaryService');
 
 function mapUserProfile(account = {}) {
@@ -116,4 +119,49 @@ async function updateProfile(req, res) {
   }
 }
 
-module.exports = { getProfile, updateProfile };
+// =========================================================
+// PUT /api/users/change-password
+// Body: { currentPassword, newPassword }
+// =========================================================
+async function changePassword(req, res) {
+  try {
+    const userId = Number(req.user?.sub);
+    const userEmail = req.user?.email;
+    if (!userId) {
+      return res.status(401).json({ message: 'Yêu cầu xác thực. Vui lòng đăng nhập.' });
+    }
+
+    const { currentPassword, newPassword } = req.body ?? {};
+
+    if (!currentPassword) {
+      return res.status(400).json({ message: 'Vui lòng nhập mật khẩu hiện tại.' });
+    }
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 8 ký tự.' });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải khác mật khẩu hiện tại.' });
+    }
+
+    // findUserAccountByEmail trả về password_hash; findById không trả về
+    const account = await findUserAccountByEmail(userEmail);
+    if (!account) {
+      return res.status(404).json({ message: 'Người dùng không tồn tại.' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, account.password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng.' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await updateUserPassword(userId, newHash);
+
+    return res.status(200).json({ message: 'Đổi mật khẩu thành công.' });
+  } catch (error) {
+    console.error('[userController.changePassword]', error);
+    return res.status(500).json({ message: 'Không thể đổi mật khẩu.' });
+  }
+}
+
+module.exports = { getProfile, updateProfile, changePassword };
