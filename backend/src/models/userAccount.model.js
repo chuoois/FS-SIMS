@@ -1,4 +1,3 @@
-// =========================================================
 // UserAccount.js
 // Quản lý tài khoản người dùng và thông tin profile
 // Created By: ThinhBui
@@ -19,6 +18,7 @@ const UserAccount = sequelize.define(
     role_id: {
       type: DataTypes.BIGINT,
       allowNull: false,
+      references: { model: 'user_role', key: 'role_id' },
     },
 
     email: {
@@ -92,7 +92,8 @@ const UserAccount = sequelize.define(
     tableName: "user_account",
     timestamps: true,
     createdAt: "createdate",
-    updatedAt: "modifiedate",
+    updatedAt: 'modifiedate',
+    indexes: [{ name: 'idx_user_account_role_id', fields: ['role_id'] }],
   },
 );
 
@@ -258,6 +259,14 @@ async function updateUserProfile(
   return affected > 0;
 }
 
+async function updateUserPassword(userAccountId, passwordHash) {
+  const [affected] = await UserAccount.update(
+    { password_hash: passwordHash, modifiedate: new Date() },
+    { where: { user_account_id: userAccountId } },
+  );
+  return affected > 0;
+}
+
 module.exports = {
   UserAccount,
   createUserAccount,
@@ -266,4 +275,5 @@ module.exports = {
   getAllUserAccounts,
   updateUserAccountStatus,
   updateUserProfile,
+  updateUserPassword,
 };

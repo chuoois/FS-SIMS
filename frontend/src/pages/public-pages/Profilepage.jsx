@@ -1,8 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, KeyRound, UserRound } from 'lucide-react';
-// Đổi đường dẫn nếu file service của bạn nằm ở chỗ khác
-import { getUserProfile, updateUserProfile } from '../../services/userService';
+import { getUserProfile, updateUserProfile, changePassword } from '../../services/userService';
 
 /* ---------- Hằng số & helper ---------- */
 const emptyProfile = {
@@ -329,24 +328,47 @@ const PasswordForm = () => {
   const [show, setShow] = useState(false);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState('');
+  const [statusType, setStatusType] = useState('success'); // 'success' | 'error'
+  const [isLoading, setIsLoading] = useState(false);
 
   const set = (key) => (e) => {
     setValues((v) => ({ ...v, [key]: e.target.value }));
     setStatus('');
+    setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
 
-  const onSubmit = (e) => {
-    e.preventDefault();
+  const validate = () => {
     const next = {};
     if (!values.current) next.current = 'Vui lòng nhập mật khẩu hiện tại.';
     if (values.next.length < 8) next.next = 'Mật khẩu mới cần ít nhất 8 ký tự.';
     else if (values.next === values.current) next.next = 'Mật khẩu mới phải khác mật khẩu hiện tại.';
     if (values.confirm !== values.next) next.confirm = 'Mật khẩu xác nhận không khớp.';
-    setErrors(next);
-    if (Object.keys(next).length) return;
-    // TODO: gọi API đổi mật khẩu
-    setValues({ current: '', next: '', confirm: '' });
-    setStatus('Đã đổi mật khẩu.');
+    return next;
+  };
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    setIsLoading(true);
+    setStatus('');
+    try {
+      const data = await changePassword({
+        currentPassword: values.current,
+        newPassword: values.next,
+      });
+      setValues({ current: '', next: '', confirm: '' });
+      setStatus(data?.message || 'Đổi mật khẩu thành công.');
+      setStatusType('success');
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'Không thể đổi mật khẩu, vui lòng thử lại.';
+      setStatus(msg);
+      setStatusType('error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggle = () => setShow((s) => !s);
@@ -354,18 +376,29 @@ const PasswordForm = () => {
   return (
     <form onSubmit={onSubmit} noValidate className="grid max-w-[420px] gap-6">
       <Field label="Mật khẩu hiện tại" error={errors.current}>
-        {(p) => <PasswordInput {...p} show={show} onToggle={toggle} value={values.current} onChange={set('current')} autoComplete="current-password" />}
+        {(p) => <PasswordInput {...p} id="change-pw-current" show={show} onToggle={toggle} value={values.current} onChange={set('current')} autoComplete="current-password" />}
       </Field>
       <Field label="Mật khẩu mới" error={errors.next} hint="Tối thiểu 8 ký tự.">
-        {(p) => <PasswordInput {...p} show={show} onToggle={toggle} value={values.next} onChange={set('next')} autoComplete="new-password" />}
+        {(p) => <PasswordInput {...p} id="change-pw-new" show={show} onToggle={toggle} value={values.next} onChange={set('next')} autoComplete="new-password" />}
       </Field>
       <Field label="Nhập lại mật khẩu mới" error={errors.confirm}>
-        {(p) => <PasswordInput {...p} show={show} onToggle={toggle} value={values.confirm} onChange={set('confirm')} autoComplete="new-password" />}
+        {(p) => <PasswordInput {...p} id="change-pw-confirm" show={show} onToggle={toggle} value={values.confirm} onChange={set('confirm')} autoComplete="new-password" />}
       </Field>
 
       <div className="flex flex-wrap items-center gap-4">
-        <PrimaryButton>Đổi mật khẩu</PrimaryButton>
-        <p role="status" className="text-[13px] font-medium text-green-700">{status}</p>
+        <PrimaryButton id="change-pw-submit-btn" disabled={isLoading}>
+          {isLoading ? 'Đang xử lý...' : 'Đổi mật khẩu'}
+        </PrimaryButton>
+        {status && (
+          <p
+            role="status"
+            className={`text-[13px] font-medium ${
+              statusType === 'error' ? 'text-red-600' : 'text-green-700'
+            }`}
+          >
+            {status}
+          </p>
+        )}
       </div>
     </form>
   );
