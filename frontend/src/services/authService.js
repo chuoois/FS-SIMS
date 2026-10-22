@@ -39,3 +39,11 @@ export async function registerUser({ fullName, email, phone, password }) {
   return response.data; // { message, user }
 }
 
+/**
+ * Quên mật khẩu — hệ thống gửi mật khẩu mới về email
+ * @param {{ email: string }} data
+ */
+export async function forgotPassword({ email }) {
+  const response = await api.post('/auth/forgot-password', { email });
+  return response.data; // { message }
+}

@@ -258,6 +258,22 @@ async function updateUserProfile(
   return affected > 0;
 }
 
+// =========================================================
+// Update User Password (dùng cho forgot password)
+// =========================================================
+async function updateUserPassword(userAccountId, passwordHash) {
+  const [affected] = await UserAccount.update(
+    {
+      password_hash: passwordHash,
+      modifiedate: new Date(),
+    },
+    {
+      where: { user_account_id: userAccountId },
+    },
+  );
+  return affected > 0;
+}
+
 module.exports = {
   UserAccount,
   createUserAccount,
@@ -266,4 +282,5 @@ module.exports = {
   getAllUserAccounts,
   updateUserAccountStatus,
   updateUserProfile,
-};
+  updateUserPassword,
+};

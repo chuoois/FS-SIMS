@@ -11,6 +11,7 @@ const {
   createUserAccount,
   findUserAccountByEmail,
   findUserAccountById,
+  updateUserPassword,
 } = require('../models/userAccount.model');
 const { findUserRoleByCode } = require('../models/userRole.model');
 const {
@@ -23,6 +24,7 @@ const {
   validateLoginInput,
   validateRegistrationInput,
 } = require('../utils/validators');
+const { sendNewPasswordEmail } = require('../services/mailService');
 
 const ACCESS_TOKEN_EXPIRES = '30s';
 const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
@@ -218,4 +220,54 @@ async function logout(req, res) {
   return res.status(200).json({ message: 'Đăng xuất thành công' });
 }
 
-module.exports = { register, login, refreshToken, logout };
+// =========================================================
+// POST /api/auth/forgot-password
+// =========================================================
+async function forgotPassword(req, res) {
+  const email = req.body?.email?.trim().toLowerCase();
+  if (!email) {
+    return res.status(400).json({ message: 'Vui lòng cung cấp địa chỉ email.' });
+  }
+
+  // Phản hồi chung — không tiết lộ email có tồn tại hay không (tránh user enumeration)
+  const genericOk = {
+    message: 'Nếu email đã được đăng ký, mật khẩu mới sẽ được gửi đến hộp thư của bạn.',
+  };
+
+  try {
+    const account = await findUserAccountByEmail(email);
+    if (!account) {
+      // Trả 200 để không lộ thông tin
+      return res.status(200).json(genericOk);
+    }
+
+    if (account.status !== 'ACTIVE') {
+      return res.status(200).json(genericOk);
+    }
+
+    // Tạo mật khẩu mới ngẫu nhiên: 10 ký tự gồm chữ hoa, chữ thường và số
+    const newPassword = randomBytes(8)
+      .toString('base64')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 10)
+      .padEnd(10, 'A');
+
+    // Hash và lưu vào DB
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await updateUserPassword(account.user_account_id, passwordHash);
+
+    // Gửi mail (không await để không block response nếu mail chậm)
+    sendNewPasswordEmail(
+      account.email,
+      account.full_name || 'bạn',
+      newPassword,
+    ).catch((err) => console.error('[forgotPassword] sendMail error:', err.message));
+
+    return res.status(200).json(genericOk);
+  } catch (error) {
+    console.error('[authController.forgotPassword]', error);
+    return res.status(500).json({ message: 'Lỗi máy chủ, vui lòng thử lại.' });
+  }
+}
+
+module.exports = { register, login, refreshToken, logout, forgotPassword };
