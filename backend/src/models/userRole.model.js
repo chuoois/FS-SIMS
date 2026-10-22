@@ -39,7 +39,7 @@ const UserRole = sequelize.define(
     tableName: "user_role",
     timestamps: true,
     createdAt: "createdate",
-    updatedAt: false, 
+    updatedAt: 'modifiedate', 
   },
 );
 

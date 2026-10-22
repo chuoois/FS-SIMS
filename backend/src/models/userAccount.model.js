@@ -45,7 +45,7 @@ const UserAccount = sequelize.define(
 
     phone_number: {
       type: DataTypes.STRING(20),
-      allowNull: true,
+      allowNull: false,
     },
 
     dob: {
@@ -92,7 +92,7 @@ const UserAccount = sequelize.define(
     tableName: "user_account",
     timestamps: true,
     createdAt: "createdate",
-    updatedAt: false,
+    updatedAt: "modifiedate",
   },
 );
 

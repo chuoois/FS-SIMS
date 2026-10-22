@@ -39,7 +39,7 @@ const RefreshToken = sequelize.define(
     tableName: 'refresh_token',
     timestamps: true,
     createdAt: 'createdate',
-    updatedAt: false,
+    updatedAt: 'modifiedate',
   }
 );
 
