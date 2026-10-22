@@ -62,13 +62,13 @@ describe('POST /api/auth/login', () => {
     expect(res.body.message).toBe('Mật khẩu là bắt buộc');
   });
 
-  test('trả 401 khi email không tồn tại', async () => {
+  test('trả 404 khi email không tồn tại', async () => {
     findUserAccountByEmail.mockResolvedValue(null);
     const res = await request(app)
       .post('/api/auth/login')
       .send({ email: 'noone@example.com', password: 'password123' });
-    expect(res.status).toBe(401);
-    expect(res.body.message).toBe('Email hoặc mật khẩu không đúng');
+    expect(res.status).toBe(404);
+    expect(res.body.message).toBe('Tài khoản không tồn tại');
   });
 
   test('trả 401 khi mật khẩu sai', async () => {
