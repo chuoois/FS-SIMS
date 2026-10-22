@@ -31,20 +31,28 @@ const categories = [
 
 const heroSlides = [
   {
-    eyebrow: 'HÀNG MỚI VỀ',
-    title: 'Côte',
-    accent: 'Noire',
-    text: 'Bộ sưu tập hoa & hương thơm cao cấp mới nhất đã có mặt tại Góc Nhà',
+    eyebrow: 'BỘ SƯU TẬP PHÒNG KHÁCH',
+    title: 'Tinh Hoa',
+    accent: 'Gỗ Tự Nhiên',
+    text: 'Không gian phòng khách sang trọng, ấm cúng với sofa gỗ, bàn trà chế tác tinh xảo từ gỗ sồi và óc chó tuyển chọn.',
     href: '#san-pham',
-    image: '', // điền URL ảnh banner 1
+    image: '/assets/slide_phong_khach.jpg',
   },
   {
-    eyebrow: 'BỘ SƯU TẬP MỚI',
-    title: 'Không gian',
-    accent: 'sống',
-    text: 'Sofa, bàn ghế và đồ trang trí cho căn nhà của bạn',
+    eyebrow: 'KHÔNG GIAN PHÒNG ĂN',
+    title: 'Bữa Cơm',
+    accent: 'Sum Vầy',
+    text: 'Bàn ghế ăn gỗ nguyên khối bền chắc cùng năm tháng, kết nối những khoảnh khắc yêu thương của gia đình.',
     href: '#san-pham',
-    image: '', // điền URL ảnh banner 2
+    image: '/assets/slide_ban_an.png',
+  },
+  {
+    eyebrow: 'NỘI THẤT PHÒNG NGỦ',
+    title: 'Chốn Về',
+    accent: 'Bình Yên',
+    text: 'Giường ngủ, tủ áo và táp đầu giường từ gỗ cao cấp – kiến tạo không gian thư thái cho giấc ngủ an lành.',
+    href: '#san-pham',
+    image: '/assets/slide_phong_ngu.png',
   },
 ];
 
@@ -135,15 +143,15 @@ const Hero = () => {
           ) : (
             <div className={`absolute inset-0 -z-20 ${i % 2 ? 'bg-stone-600' : 'bg-stone-700'}`} aria-hidden="true" />
           )}
-          <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/55 via-black/10 to-black/20" aria-hidden="true" />
+          <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/40 to-black/25" aria-hidden="true" />
 
-          <div className="w-full px-5 pb-20 text-white md:pb-24 lg:px-[4vw]">
+          <div className="w-full px-5 pb-16 text-white md:pb-24 lg:px-[4vw]">
             <div className="max-w-[640px]">
-              <p className="text-sm font-bold tracking-wide text-amber-500">{slide.eyebrow}</p>
-              <h2 className="mt-10 text-5xl font-light italic tracking-tight md:text-7xl">
-                {slide.title} <span className="text-amber-500">{slide.accent}</span>
+              <p className="text-xs font-bold tracking-wider text-amber-400 uppercase sm:text-sm">{slide.eyebrow}</p>
+              <h2 className="mt-3 text-4xl font-light italic tracking-tight sm:text-5xl md:mt-4 md:text-7xl">
+                {slide.title} <span className="text-amber-400">{slide.accent}</span>
               </h2>
-              <p className="mt-16 max-w-[430px] text-xl font-medium leading-relaxed">{slide.text}</p>
+              <p className="mt-4 max-w-[480px] text-sm font-medium leading-relaxed text-stone-100 sm:text-base md:mt-6 md:text-lg">{slide.text}</p>
               <a
                 href={slide.href}
                 tabIndex={i === index ? 0 : -1}

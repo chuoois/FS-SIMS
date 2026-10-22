@@ -99,7 +99,7 @@ async function login(req, res) {
   try {
     const account = await findUserAccountByEmail(email);
     if (!account) {
-      return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+      return res.status(404).json({ message: 'Tài khoản không tồn tại' });
     }
 
     if (account.status !== 'ACTIVE') {
