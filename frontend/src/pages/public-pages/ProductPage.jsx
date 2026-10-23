@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { getProducts } from '../../services/productService';
 import { ChevronDown, ChevronRight, Heart } from 'lucide-react';
 
 /* ---------- Dữ liệu mẫu (thay bằng API; image: URL ảnh sản phẩm) ---------- */
@@ -8,21 +9,6 @@ const PAGE_SIZE = 8;
 const sortOptions = [
   { value: 'asc', label: 'Theo giá: Thấp đến cao' },
   { value: 'desc', label: 'Theo giá: Cao đến thấp' }
-];
-
-const products = [
-  { id: 1, name: 'Armchair Bubble', price: 19400000, isNew: true, image: '' },
-  { id: 2, name: 'Armchair Flow Green', price: 13900001, isNew: true, image: '' },
-  { id: 3, name: 'Armchair Jupiter', price: 18990000, isNew: true, image: '' },
-  { id: 4, name: 'Armchair Luster', price: 55900000, isNew: true, image: '' },
-  { id: 5, name: 'Bình Trang Trí Ab5060 D8X7Xh29.5 Sm', price: 5500000, image: '' },
-  { id: 6, name: 'Bình Trang Trí Ab5063 D10X9Xh23 Sm', price: 5500000, image: '' },
-  { id: 7, name: 'Bình Trang Trí Ab9009', price: 1100001, image: '' },
-  { id: 8, name: 'Bình Trang Trí Ab9010', price: 1100001, image: '' },
-  { id: 9, name: 'Bình Trang Trí Ab9029', price: 1500000, image: '' },
-  { id: 10, name: 'Bình Trang Trí Ac20039 D16Xt12Xh38 Sm', price: 5500000, image: '' },
-  { id: 11, name: 'Bình Trang Trí Ac30039', price: 5500000, image: '' },
-  { id: 12, name: 'Bình Trang Trí Ac30040', price: 4500000, image: '' },
 ];
 
 const formatVnd = (n) => `${n.toLocaleString('en-US')} VND`;
@@ -156,17 +142,32 @@ const Pagination = ({ page, total, onChange }) => {
 
 /* ---------- Trang Sản phẩm (route con của HomeLayout) ---------- */
 export const ProductPage = () => {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [sortDraft, setSortDraft] = useState('asc');
   const [sort, setSort] = useState('asc');
   const [page, setPage] = useState(1);
   const [liked, setLiked] = useState(() => new Set());
+
+  useEffect(() => {
+    let active = true;
+    getProducts()
+      .then((items) => { if (active) setProducts(Array.isArray(items) ? items : []); })
+      .catch((error) => {
+        console.error('[ProductPage] Không tải được sản phẩm:', error);
+        if (active) setLoadError('Không thể tải sản phẩm. Vui lòng thử lại sau.');
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   const sorted = useMemo(() => {
     const list = [...products];
     if (sort === 'asc') list.sort((a, b) => a.price - b.price);
     if (sort === 'desc') list.sort((a, b) => b.price - a.price);
     return list;
-  }, [sort]);
+  }, [products, sort]);
 
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
   const visible = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -194,6 +195,11 @@ export const ProductPage = () => {
       <FilterBar value={sortDraft} onChange={setSortDraft} onApply={apply} />
 
       <section className="mx-auto max-w-[1710px] px-5 pb-20 pt-12 lg:px-[4vw]" aria-label="Danh sách sản phẩm">
+        <p className="mb-4 text-sm text-stone-600" aria-live="polite">
+          {loading ? 'Đang tải sản phẩm...' : `${products.length} sản phẩm`}
+        </p>
+        {loadError && <p className="mb-6 text-center text-red-700">{loadError}</p>}
+        {!loading && !loadError && products.length === 0 && <p className="mb-6 text-center">Chưa có sản phẩm.</p>}
         <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
           {visible.map((p) => (
             <ProductCard key={p.id} product={p} liked={liked.has(p.id)} onToggle={toggleLike} />

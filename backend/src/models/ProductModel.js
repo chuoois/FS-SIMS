@@ -33,4 +33,16 @@ const Product = sequelize.define('Product', {
     { name: 'idx_product_color', unique: false, fields: ['color_id'] }],
 });
 
-module.exports = { Product };
+async function getActiveProducts() {
+  return Product.findAll({
+    where: { status: 'ACTIVE' },
+    attributes: [
+      'product_id', 'product_code', 'product_name', 'description', 'price',
+      'stock_quantity', 'image_url', 'product_type', 'category_id',
+    ],
+    order: [['product_id', 'ASC']],
+    raw: true,
+  });
+}
+
+module.exports = { Product, getActiveProducts };
