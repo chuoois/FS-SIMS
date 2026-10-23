@@ -124,6 +124,7 @@ export function AuthProvider({ children }) {
     isInitializing,
     login,
     logout,
+    saveSession,
   };
 
   return (

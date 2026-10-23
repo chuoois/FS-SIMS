@@ -57,18 +57,6 @@ export const roles = {
       { label: 'Báo cáo nhóm', path: 'reports', icon: BarChart3 },
     ],
   },
-  accountant: {
-    label: 'Kế toán',
-    base: '/accountant',
-    items: [
-      { label: 'Tổng quan', path: '', icon: LayoutDashboard },
-      { label: 'Hóa đơn', path: 'invoices', icon: Receipt },
-      { label: 'Thu chi', path: 'cashflow', icon: Wallet },
-      { label: 'Công nợ', path: 'debts', icon: HandCoins },
-      { label: 'Lương nhân viên', path: 'payroll', icon: Calculator },
-      { label: 'Báo cáo tài chính', path: 'reports', icon: BarChart3 },
-    ],
-  },
 };
 
 /* Thêm `to` và `end` cho từng mục để dùng với NavLink */
