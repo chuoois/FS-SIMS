@@ -24,45 +24,45 @@ export const roles = {
     base: '/owner',
     items: [
       { label: 'Tổng quan', path: '', icon: LayoutDashboard },
-      { label: 'Doanh thu & báo cáo', path: 'reports', icon: BarChart3 },
-      { label: 'Đơn hàng', path: 'orders', icon: Package },
-      { label: 'Sản phẩm', path: 'products', icon: Boxes },
-      { label: 'Khách hàng', path: 'customers', icon: Users },
-      { label: 'Nhân sự', path: 'staff', icon: UserCog },
-      { label: 'Tài chính', path: 'finance', icon: Wallet },
-      { label: 'Cài đặt', path: 'settings', icon: Settings },
+      { label: 'Quản lý tài khoản', path: 'accounts', icon: UserCog },
+      { label: 'Doanh thu & báo cáo', path: '#', icon: BarChart3 },
+      { label: 'Đơn hàng', path: '#', icon: Package },
+      { label: 'Sản phẩm', path: '#', icon: Boxes },
+      { label: 'Khách hàng', path: '#', icon: Users },
+      { label: 'Cài đặt', path: '#', icon: Settings },
     ],
   },
   sale: {
-    label: 'Kinh doanh',
+    label: 'Nhân viên bán hàng',
     base: '/sale',
     items: [
       { label: 'Tổng quan', path: '', icon: LayoutDashboard },
-      { label: 'Đơn hàng', path: 'orders', icon: Package },
-      { label: 'Báo giá', path: 'quotes', icon: FileText },
-      { label: 'Khách hàng', path: 'customers', icon: Users },
-      { label: 'Lịch hẹn tư vấn', path: 'appointments', icon: CalendarCheck },
-      { label: 'Sản phẩm', path: 'products', icon: Boxes },
+      { label: 'Đơn hàng', path: '#', icon: Package },
+      { label: 'Báo giá', path: '#', icon: FileText },
+      { label: 'Khách hàng', path: '#', icon: Users },
+      { label: 'Lịch hẹn tư vấn', path: '#', icon: CalendarCheck },
+      { label: 'Sản phẩm', path: '#', icon: Boxes },
     ],
   },
   staffLeader: {
-    label: 'Trưởng nhóm',
+    label: 'Thợ xưởng',
     base: '/staff-leader',
     items: [
       { label: 'Tổng quan', path: '', icon: LayoutDashboard },
-      { label: 'Công việc', path: 'tasks', icon: ClipboardList },
-      { label: 'Tiến độ sản xuất', path: 'production', icon: Hammer },
-      { label: 'Nhân viên trong nhóm', path: 'team', icon: Users },
-      { label: 'Chấm công', path: 'attendance', icon: Clock },
-      { label: 'Báo cáo nhóm', path: 'reports', icon: BarChart3 },
+      { label: 'Công việc', path: '#', icon: ClipboardList },
+      { label: 'Tiến độ sản xuất', path: '#', icon: Hammer },
+      { label: 'Nhân viên trong nhóm', path: '#', icon: Users },
+      { label: 'Chấm công', path: '#', icon: Clock },
+      { label: 'Báo cáo nhóm', path: '#', icon: BarChart3 },
     ],
   },
 };
 
 /* Thêm `to` và `end` cho từng mục để dùng với NavLink */
 export const resolveItems = (role) =>
-  role.items.map((i) => ({
+  role.items.map((i, index) => ({
     ...i,
-    to: i.path ? `${role.base}/${i.path}` : role.base,
+    to: i.path === '#' ? '#' : i.path ? `${role.base}/${i.path}` : role.base,
     end: !i.path,
+    key: `${role.base}-${i.label}-${index}`,
   }));

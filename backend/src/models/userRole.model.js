@@ -50,4 +50,18 @@ async function findUserRoleByCode(roleCode) {
   });
 }
 
-module.exports = { UserRole, findUserRoleByCode };
+async function findUserRoleById(roleId) {
+  return UserRole.findByPk(roleId, { raw: true });
+}
+
+async function getStaffRoles() {
+  return UserRole.findAll({
+    where: {
+      role_code: ['SALES', 'LEADERSTAFF'],
+    },
+    order: [['role_id', 'ASC']],
+    raw: true,
+  });
+}
+
+module.exports = { UserRole, findUserRoleByCode, findUserRoleById, getStaffRoles };

@@ -1,5 +1,6 @@
 import { Link, NavLink } from 'react-router-dom';
 import { LogOut, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const focusRing =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700';
@@ -37,24 +38,51 @@ export const DashboardSidebar = ({ roleLabel, items, open, onClose, onLogout }) 
 
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Điều hướng chính">
         <ul className="grid gap-1">
-          {items.map(({ label, to, end, icon: Icon }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 border-l-2 px-3 py-2.5 text-[13px] font-medium transition-colors ${focusRing} ${
-                    isActive
-                      ? 'border-orange-700 bg-white/10 text-white'
-                      : 'border-transparent text-stone-400 hover:bg-white/5 hover:text-white'
-                  }`
-                }
-              >
-                <Icon className="size-[18px] shrink-0" strokeWidth={1.7} aria-hidden="true" />
-                {label}
-              </NavLink>
-            </li>
-          ))}
+          {items.map(({ label, to, end, icon: Icon, key }) => {
+            const isPending = to === '#';
+
+            if (isPending) {
+              return (
+                <li key={key || label}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toast(`Tính năng "${label}" đang được phát triển`, { icon: '🚧' })
+                    }
+                    className="flex w-full items-center justify-between border-l-2 border-transparent px-3 py-2.5 text-[13px] font-medium text-stone-400 transition-colors hover:bg-white/5 hover:text-stone-200"
+                    title={`Chức năng "${label}" đang được phát triển`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className="size-[18px] shrink-0 opacity-70" strokeWidth={1.7} aria-hidden="true" />
+                      <span>{label}</span>
+                    </div>
+                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-stone-400">
+                      Sắp có
+                    </span>
+                  </button>
+                </li>
+              );
+            }
+
+            return (
+              <li key={key || to}>
+                <NavLink
+                  to={to}
+                  end={end}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 border-l-2 px-3 py-2.5 text-[13px] font-medium transition-colors ${focusRing} ${
+                      isActive
+                        ? 'border-orange-700 bg-white/10 text-white'
+                        : 'border-transparent text-stone-400 hover:bg-white/5 hover:text-white'
+                    }`
+                  }
+                >
+                  <Icon className="size-[18px] shrink-0" strokeWidth={1.7} aria-hidden="true" />
+                  {label}
+                </NavLink>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 

@@ -3,7 +3,7 @@
 // Created By: ThinhBui
 // =========================================================
 
-const { DataTypes } = require("sequelize");
+const { DataTypes, Op } = require("sequelize");
 const { sequelize } = require("../config/sequelize");
 
 const UserAccount = sequelize.define(
@@ -96,6 +96,11 @@ const UserAccount = sequelize.define(
     indexes: [{ name: 'idx_user_account_role_id', fields: ['role_id'] }],
   },
 );
+
+const { UserRole } = require('./userRole.model');
+if (!UserAccount.associations || !UserAccount.associations.role) {
+  UserAccount.belongsTo(UserRole, { foreignKey: 'role_id', as: 'role' });
+}
 
 // =========================================================
 // Create User Account
@@ -267,6 +272,84 @@ async function updateUserPassword(userAccountId, passwordHash) {
   return affected > 0;
 }
 
+// =========================================================
+// Staff Account Management Queries (dành cho Owner)
+// =========================================================
+
+async function getStaffAccounts(staffRoleIds) {
+  const UserRoleModel = sequelize.models.UserRole || require('./userRole.model').UserRole;
+  return UserAccount.findAll({
+    where: {
+      role_id: { [Op.in]: staffRoleIds },
+    },
+    attributes: {
+      exclude: ['password_hash'],
+    },
+    include: [
+      {
+        model: UserRoleModel,
+        as: 'role',
+        attributes: ['role_id', 'role_code', 'role_name', 'description'],
+      },
+    ],
+    order: [['user_account_id', 'DESC']],
+  });
+}
+
+async function getStaffAccountById(userAccountId, staffRoleIds) {
+  const UserRoleModel = sequelize.models.UserRole || require('./userRole.model').UserRole;
+  const where = { user_account_id: userAccountId };
+  if (staffRoleIds && staffRoleIds.length > 0) {
+    where.role_id = { [Op.in]: staffRoleIds };
+  }
+  return UserAccount.findOne({
+    where,
+    attributes: {
+      exclude: ['password_hash'],
+    },
+    include: [
+      {
+        model: UserRoleModel,
+        as: 'role',
+        attributes: ['role_id', 'role_code', 'role_name', 'description'],
+      },
+    ],
+  });
+}
+
+async function updateStaffAccount(
+  userAccountId,
+  { email, roleId, fullName, phoneNumber, dob, gender, address, note, passwordHash },
+  modifiedBy,
+) {
+  const updateFields = {
+    modifieby: modifiedBy,
+    modifiedate: new Date(),
+  };
+
+  if (email !== undefined) updateFields.email = email;
+  if (roleId !== undefined) updateFields.role_id = roleId;
+  if (fullName !== undefined) updateFields.full_name = fullName;
+  if (phoneNumber !== undefined) updateFields.phone_number = phoneNumber;
+  if (dob !== undefined) updateFields.dob = dob || null;
+  if (gender !== undefined) updateFields.gender = gender || null;
+  if (address !== undefined) updateFields.address = address || null;
+  if (note !== undefined) updateFields.note = note || null;
+  if (passwordHash) updateFields.password_hash = passwordHash;
+
+  const [affected] = await UserAccount.update(updateFields, {
+    where: { user_account_id: userAccountId },
+  });
+  return affected > 0;
+}
+
+async function deleteStaffAccount(userAccountId) {
+  const affected = await UserAccount.destroy({
+    where: { user_account_id: userAccountId },
+  });
+  return affected > 0;
+}
+
 module.exports = {
   UserAccount,
   createUserAccount,
@@ -276,4 +359,8 @@ module.exports = {
   updateUserAccountStatus,
   updateUserProfile,
   updateUserPassword,
+  getStaffAccounts,
+  getStaffAccountById,
+  updateStaffAccount,
+  deleteStaffAccount,
 };

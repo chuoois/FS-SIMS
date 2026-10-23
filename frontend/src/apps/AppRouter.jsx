@@ -1,6 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 import { PublicRouter } from "../apps/public-router/PublicRouter";
-import { OwnerRouter, OwnerAliasRouter } from "../apps/dasboard-router/OwnerRouter";
+import { OwnerRouter } from "../apps/dasboard-router/OwnerRouter";
 import { SaleRouter } from "../apps/dasboard-router/SaleRouter";
 import { StaffLeaderRouter } from "../apps/dasboard-router/StaffLeaderRouter";
 import { StaffLoginPage } from "../pages/staff-pages/StaffLoginPage";
@@ -17,7 +17,6 @@ export const router = createBrowserRouter([
 
   // ── Routers Dashboard theo vai trò nhân viên ──
   OwnerRouter,
-  OwnerAliasRouter,
   SaleRouter,
   StaffLeaderRouter,
 

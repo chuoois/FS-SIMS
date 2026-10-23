@@ -91,9 +91,12 @@ export const StaffLoginPage = () => {
       const roleTitle = ROLE_NAMES[loggedUser.roleId] || 'Nhân viên';
       toast.success(`Đăng nhập thành công! Chào mừng ${loggedUser.fullName || roleTitle}.`);
 
-      // Điều hướng tới dashboard tương ứng của vai trò (hoặc trang trước đó nếu bị redirect)
+      // Điều hướng tới dashboard tương ứng của vai trò
+      // Chỉ dùng `fromPath` nếu path đó thực sự thuộc về vai trò của user vừa đăng nhập
+      const defaultPath = getStaffRedirectPath(loggedUser.roleId);
+      const fromPath = location.state?.from?.pathname;
       const redirectTarget =
-        location.state?.from?.pathname || getStaffRedirectPath(loggedUser.roleId);
+        fromPath && fromPath.startsWith(defaultPath) ? fromPath : defaultPath;
       navigate(redirectTarget, { replace: true });
     } catch (err) {
       const msg =
