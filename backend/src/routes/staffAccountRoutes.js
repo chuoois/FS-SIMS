@@ -8,12 +8,12 @@ const {
   changeStaffAccountStatus,
   removeStaffAccount,
 } = require('../controllers/staffAccountController');
-const { authenticate, requireOwner } = require('../middlewares/authMiddleware');
+const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
 // Tất cả các route quản lý tài khoản nhân viên đều yêu cầu đăng nhập và có vai trò OWNER
-router.use(authenticate, requireOwner);
+router.use(authenticate, requireRole('OWNER'));
 
 // GET /api/staff-accounts - Lấy danh sách tài khoản nhân viên
 router.get('/', listStaffAccounts);

@@ -2,6 +2,7 @@ import { OwnerLayout } from "../../components/layouts/dashboard-layout/Dashboard
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
 import { ManageStaffAccountsPage } from "../../pages/owner-pages/ManageStaffAccountsPage";
+import { ManageSuppliersPage } from "../../pages/owner-pages/ManageSuppliersPage";
 
 export const OwnerRouter = {
   path: "/owner",
@@ -25,6 +26,10 @@ export const OwnerRouter = {
         {
           path: "accounts",
           element: <ManageStaffAccountsPage />,
+        },
+        {
+          path: "suppliers",
+          element: <ManageSuppliersPage />,
         },
         {
           path: "analytics",

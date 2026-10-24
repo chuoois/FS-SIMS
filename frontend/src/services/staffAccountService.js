@@ -7,11 +7,20 @@
 import api from './api';
 
 /**
- * Lấy danh sách tài khoản nhân viên nội bộ (Owner, Sales, Staff Leader)
+ * Lấy danh sách tài khoản nhân viên nội bộ (Sales, Staff Leader)
+ * Hỗ trợ tìm kiếm, lọc theo vai trò, trạng thái và phân trang
+ * @param {{ search?: string, role?: string, status?: string, page?: number, limit?: number }} params
  */
-export async function getStaffAccounts() {
-  const response = await api.get('/staff-accounts');
-  return response.data; // { message, data: accounts }
+export async function getStaffAccounts(params = {}) {
+  const cleanParams = {};
+  if (params.search && params.search.trim()) cleanParams.search = params.search.trim();
+  if (params.role && params.role !== 'ALL') cleanParams.role = params.role;
+  if (params.status && params.status !== 'ALL') cleanParams.status = params.status;
+  if (params.page) cleanParams.page = params.page;
+  if (params.limit) cleanParams.limit = params.limit;
+
+  const response = await api.get('/staff-accounts', { params: cleanParams });
+  return response.data; // { message, data: accounts, pagination, stats }
 }
 
 /**

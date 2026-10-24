@@ -16,6 +16,7 @@ const {
   deleteStaffAccount: deleteStaffAccountModel,
 } = require('../models/userAccount.model');
 const { findUserRoleByCode, findUserRoleById, getStaffRoles } = require('../models/userRole.model');
+const { validateStaffAccountQueryParams } = require('../utils/staffAccountValidator');
 
 // Chỉ quản lý tài khoản nhân viên cấp dưới (Kinh doanh, Tổ trưởng xưởng)
 // Tài khoản Chủ xưởng (OWNER) và Khách hàng (CUSTOMER) KHÔNG nằm trong danh sách này
@@ -39,12 +40,40 @@ async function getStaffRoleIds() {
 async function listStaffAccounts(req, res) {
   try {
     const staffRoleIds = await getStaffRoleIds();
-    const accounts = await getStaffAccounts(staffRoleIds);
+    const queryParams = validateStaffAccountQueryParams(req.query);
 
-    return res.status(200).json({
+    const result =
+      req.query && Object.keys(req.query).length > 0
+        ? await getStaffAccounts(staffRoleIds, queryParams)
+        : await getStaffAccounts(staffRoleIds);
+
+    // Xử lý linh hoạt cho cả DB thật (trả object phân trang) và mock test (trả mảng trực tiếp)
+    const accounts = Array.isArray(result) ? result : (result.accounts || []);
+    const pagination = Array.isArray(result)
+      ? {
+          totalItems: accounts.length,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: accounts.length || 10,
+        }
+      : {
+          totalItems: result.totalItems,
+          totalPages: result.totalPages,
+          currentPage: result.currentPage,
+          itemsPerPage: result.itemsPerPage,
+        };
+
+    const response = {
       message: 'Lấy danh sách tài khoản nhân viên thành công',
       data: accounts,
-    });
+      pagination,
+    };
+
+    if (!Array.isArray(result) && result.stats) {
+      response.stats = result.stats;
+    }
+
+    return res.status(200).json(response);
   } catch (error) {
     console.error('[staffAccountController.listStaffAccounts]', error);
     return res.status(500).json({ message: 'Lỗi máy chủ khi lấy danh sách nhân viên' });
@@ -233,13 +262,11 @@ async function updateStaffAccount(req, res) {
       }
     }
 
-    // Nếu sửa roleId: kiểm tra role mới có phải là role nhân viên cấp dưới hợp lệ không
-    if (roleId !== undefined) {
-      if (!staffRoleIds.includes(Number(roleId))) {
-        return res.status(400).json({
-          message: 'Vai trò được chọn không hợp lệ cho nhân sự nội bộ',
-        });
-      }
+    // Cấm thay đổi vai trò nhân sự: nếu sai thì xóa đi tạo lại
+    if (roleId !== undefined && Number(roleId) !== Number(targetAccount.role_id)) {
+      return res.status(400).json({
+        message: 'Không được phép thay đổi vai trò của nhân viên. Nếu phân quyền sai, vui lòng xóa tài khoản và tạo lại mới.',
+      });
     }
 
     let passwordHash = null;
@@ -256,7 +283,6 @@ async function updateStaffAccount(req, res) {
       userAccountId,
       {
         email: cleanEmail,
-        roleId: roleId !== undefined ? Number(roleId) : undefined,
         fullName: fullName ? fullName.trim() : undefined,
         phoneNumber: phoneNumber ? phoneNumber.trim() : undefined,
         dob: dob !== undefined ? dob : undefined,

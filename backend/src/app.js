@@ -7,6 +7,7 @@ const authRoutes = require('./routes/authRoutes');
 const staffAuthRoutes = require('./routes/staffAuthRoutes');
 const staffAccountRoutes = require('./routes/staffAccountRoutes');
 const userRoutes = require('./routes/userRoutes');
+const supplierRoutes = require('./routes/supplierRoutes');
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/staff-auth', staffAuthRoutes);
 app.use('/api/staff-accounts', staffAccountRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/suppliers', supplierRoutes);
 
 // Middleware xử lý lỗi tập trung
 app.use((err, req, res, next) => {
