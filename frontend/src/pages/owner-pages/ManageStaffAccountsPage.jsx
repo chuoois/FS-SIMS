@@ -42,6 +42,8 @@ import {
   BadgeCheck,
   UserCheck,
   UserX,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -80,6 +82,14 @@ export const ManageStaffAccountsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    totalItems: 0,
+    totalPages: 1,
+    currentPage: 1,
+    itemsPerPage: 10,
+  });
+  const [serverStats, setServerStats] = useState(null);
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -124,11 +134,25 @@ export const ManageStaffAccountsPage = () => {
     else setRefreshing(true);
 
     try {
+      const params = {
+        search: searchTerm,
+        role: selectedRoleFilter,
+        status: selectedStatusFilter,
+        page: currentPage,
+        limit: 10,
+      };
+
       const [accRes, roleRes] = await Promise.all([
-        getStaffAccounts(),
+        getStaffAccounts(params),
         getStaffRoles(),
       ]);
       setAccounts(accRes.data || []);
+      if (accRes.pagination) {
+        setPagination(accRes.pagination);
+      }
+      if (accRes.stats) {
+        setServerStats(accRes.stats);
+      }
       setRoles(roleRes.roles || []);
     } catch (err) {
       console.error('Lỗi tải dữ liệu tài khoản nhân viên:', err);
@@ -137,15 +161,16 @@ export const ManageStaffAccountsPage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [searchTerm, selectedRoleFilter, selectedStatusFilter, currentPage]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Statistics calculation
+  // Statistics calculation (ưu tiên stats từ server, fallback đếm từ trang hiện tại)
   const stats = useMemo(() => {
-    const total = accounts.length;
+    if (serverStats) return serverStats;
+    const total = pagination.totalItems || accounts.length;
     const active = accounts.filter((a) => a.status === 'ACTIVE').length;
     const inactive = total - active;
     const salesCount = accounts.filter(
@@ -156,32 +181,10 @@ export const ManageStaffAccountsPage = () => {
     ).length;
 
     return { total, active, inactive, salesCount, leaderCount };
-  }, [accounts]);
+  }, [serverStats, accounts, pagination.totalItems]);
 
-  // Filtered accounts
-  const filteredAccounts = useMemo(() => {
-    return accounts.filter((acc) => {
-      // Search
-      const search = searchTerm.trim().toLowerCase();
-      const matchSearch =
-        !search ||
-        acc.full_name?.toLowerCase().includes(search) ||
-        acc.email?.toLowerCase().includes(search) ||
-        acc.phone_number?.includes(search);
-
-      // Role filter
-      const matchRole =
-        selectedRoleFilter === 'ALL' ||
-        String(acc.role_id) === String(selectedRoleFilter) ||
-        acc.role?.role_code === selectedRoleFilter;
-
-      // Status filter
-      const matchStatus =
-        selectedStatusFilter === 'ALL' || acc.status === selectedStatusFilter;
-
-      return matchSearch && matchRole && matchStatus;
-    });
-  }, [accounts, searchTerm, selectedRoleFilter, selectedStatusFilter]);
+  // Dữ liệu hiển thị (được API phân trang, tìm kiếm & lọc phía server)
+  const filteredAccounts = accounts;
 
   // ── Open Modals ──────────────────────────────────────────
   const handleOpenCreate = () => {
@@ -257,6 +260,7 @@ export const ManageStaffAccountsPage = () => {
     setSubmitting(true);
     try {
       const payload = { ...editForm };
+      delete payload.roleId; // Không cho phép đổi vai trò nhân viên
       if (!payload.password) delete payload.password; // không gửi nếu rỗng
 
       await updateStaffAccount(selectedAccount.user_account_id, payload);
@@ -348,7 +352,7 @@ export const ManageStaffAccountsPage = () => {
       </div>
 
       {/* ── Thống kê tổng quan (Cards) ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {/* Tổng nhân sự */}
         <div className="relative overflow-hidden rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
@@ -392,24 +396,6 @@ export const ManageStaffAccountsPage = () => {
           <p className="mt-2 text-2xl font-bold text-red-950">{stats.inactive}</p>
           <p className="mt-1 text-xs text-red-700">Bị vô hiệu hóa truy cập</p>
         </div>
-
-        {/* Vai trò Kinh doanh & Tổ trưởng */}
-        <div className="relative overflow-hidden rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-              Đội ngũ nhân sự
-            </span>
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-700">
-              <Briefcase className="h-4 w-4" />
-            </span>
-          </div>
-          <p className="mt-2 text-2xl font-bold text-stone-900">
-            {stats.salesCount + stats.leaderCount}
-          </p>
-          <p className="mt-1 text-xs text-stone-500">
-            {stats.salesCount} Kinh doanh • {stats.leaderCount} Tổ trưởng
-          </p>
-        </div>
       </div>
 
       {/* ── Bộ lọc & Tìm kiếm ── */}
@@ -421,7 +407,10 @@ export const ManageStaffAccountsPage = () => {
             type="text"
             placeholder="Tìm theo tên, email hoặc số điện thoại..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
             className="h-10 w-full rounded-lg border border-stone-300 bg-stone-50/50 pl-10 pr-3.5 text-sm text-stone-800 placeholder:text-stone-400 focus:border-stone-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-900"
           />
         </div>
@@ -432,7 +421,10 @@ export const ManageStaffAccountsPage = () => {
           <div className="relative">
             <select
               value={selectedRoleFilter}
-              onChange={(e) => setSelectedRoleFilter(e.target.value)}
+              onChange={(e) => {
+                setSelectedRoleFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="h-10 appearance-none rounded-lg border border-stone-300 bg-white pl-3.5 pr-8 text-sm font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
             >
               <option value="ALL">Tất cả vai trò</option>
@@ -449,7 +441,10 @@ export const ManageStaffAccountsPage = () => {
           <div className="relative">
             <select
               value={selectedStatusFilter}
-              onChange={(e) => setSelectedStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setSelectedStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="h-10 appearance-none rounded-lg border border-stone-300 bg-white pl-3.5 pr-8 text-sm font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
             >
               <option value="ALL">Tất cả trạng thái</option>
@@ -467,6 +462,7 @@ export const ManageStaffAccountsPage = () => {
                 setSearchTerm('');
                 setSelectedRoleFilter('ALL');
                 setSelectedStatusFilter('ALL');
+                setCurrentPage(1);
               }}
               className="inline-flex h-10 items-center gap-1 rounded-lg border border-stone-200 px-3 text-xs font-semibold text-stone-600 hover:bg-stone-100"
             >
@@ -636,6 +632,39 @@ export const ManageStaffAccountsPage = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* ── Phân trang ── */}
+        {!loading && accounts.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-stone-200 px-6 py-4 bg-stone-50/50 text-xs text-stone-600">
+            <div>
+              Hiển thị <span className="font-semibold text-stone-900">{accounts.length}</span> trên tổng số{' '}
+              <span className="font-semibold text-stone-900">{pagination.totalItems || accounts.length}</span> nhân sự
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span>Trước</span>
+              </button>
+              <span className="px-2 font-semibold text-stone-800">
+                Trang {pagination.currentPage || 1} / {pagination.totalPages || 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages || 1, p + 1))}
+                disabled={currentPage >= (pagination.totalPages || 1)}
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span>Sau</span>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -909,44 +938,42 @@ export const ManageStaffAccountsPage = () => {
 
             {/* Modal Body Form */}
             <form onSubmit={handleEditSubmit} className="max-h-[75vh] overflow-y-auto p-6 space-y-4">
-              {/* Thay đổi vai trò */}
+              {/* Vai trò nhân sự (Cố định, không cho sửa) */}
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-stone-700">
-                  Vai trò nhân sự <span className="text-red-500">*</span>
+                  Vai trò nhân sự (Cố định)
                 </label>
-                <div className="mt-2 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  {roles.map((r) => {
-                    const isSelected = String(editForm.roleId) === String(r.role_id);
-                    const cfg = ROLE_CONFIG[r.role_code] || {
-                      label: r.role_name,
-                      icon: Users,
-                    };
-                    const Icon = cfg.icon;
-
-                    return (
-                      <label
-                        key={r.role_id}
-                        className={`flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition ${
-                          isSelected
-                            ? 'border-stone-900 bg-stone-900 text-white shadow-sm'
-                            : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="editRoleId"
-                          value={r.role_id}
-                          checked={isSelected}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, roleId: e.target.value })
-                          }
-                          className="sr-only"
-                        />
-                        <Icon className="h-4 w-4 flex-shrink-0" />
-                        <span className="text-xs font-bold">{r.role_name}</span>
-                      </label>
-                    );
-                  })}
+                <div className="mt-2 flex items-center justify-between rounded-xl border border-stone-200 bg-stone-100 p-3.5">
+                  <div className="flex items-center gap-2.5">
+                    {(() => {
+                      const roleCode = selectedAccount.role?.role_code || (roles.find(r => String(r.role_id) === String(selectedAccount.role_id))?.role_code);
+                      const cfg = ROLE_CONFIG[roleCode] || {
+                        label: selectedAccount.role?.role_name || 'Nhân viên',
+                        icon: Users,
+                      };
+                      const Icon = cfg.icon;
+                      return (
+                        <>
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-stone-200 text-stone-700">
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <span className="text-sm font-bold text-stone-900">
+                              {selectedAccount.role?.role_name || cfg.label}
+                            </span>
+                            {roleCode && (
+                              <span className="block text-[11px] text-stone-500 font-mono">
+                                {roleCode}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <span className="rounded-full bg-stone-200/80 px-2.5 py-1 text-[11px] font-semibold text-stone-600">
+                    Không thể đổi
+                  </span>
                 </div>
               </div>
 

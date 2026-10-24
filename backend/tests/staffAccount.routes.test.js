@@ -109,6 +109,51 @@ describe('Owner Staff Accounts Management API', () => {
       // getStaffAccounts được gọi với mảng chỉ chứa SALES và LEADERSTAFF role ID
       expect(getStaffAccounts).toHaveBeenCalledWith([SALES_ROLE_ID, LEADER_ROLE_ID]);
     });
+
+    test('truyền tham số tìm kiếm, lọc vai trò, trạng thái và phân trang vào getStaffAccounts', async () => {
+      const mockResult = {
+        accounts: [
+          {
+            user_account_id: 2,
+            email: 'sales@gmail.com',
+            full_name: 'Nguyễn Văn Sales',
+            role_id: SALES_ROLE_ID,
+            status: 'ACTIVE',
+            role: { role_code: 'SALES', role_name: 'Nhân viên kinh doanh' },
+          },
+        ],
+        totalItems: 1,
+        totalPages: 1,
+        currentPage: 1,
+        itemsPerPage: 10,
+        stats: { total: 2, active: 2, inactive: 0, salesCount: 1, leaderCount: 1 },
+      };
+      getStaffAccounts.mockResolvedValue(mockResult);
+
+      const res = await request(app)
+        .get('/api/staff-accounts?search=sales&role=SALES&status=ACTIVE&page=1&limit=10')
+        .set('Authorization', `Bearer ${ownerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.pagination).toEqual({
+        totalItems: 1,
+        totalPages: 1,
+        currentPage: 1,
+        itemsPerPage: 10,
+      });
+      expect(res.body.stats).toBeDefined();
+      expect(getStaffAccounts).toHaveBeenCalledWith(
+        [SALES_ROLE_ID, LEADER_ROLE_ID],
+        expect.objectContaining({
+          search: 'sales',
+          role: 'SALES',
+          status: 'ACTIVE',
+          page: 1,
+          limit: 10,
+        }),
+      );
+    });
   });
 
   describe('GET /api/staff-accounts/roles', () => {
@@ -248,6 +293,24 @@ describe('Owner Staff Accounts Management API', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.message).toContain('Email không đúng định dạng');
+    });
+
+    test('trả về 400 nếu cố tình thay đổi vai trò nhân sự', async () => {
+      getStaffAccountById.mockResolvedValue({
+        user_account_id: 2,
+        email: 'sales@gmail.com',
+        role_id: SALES_ROLE_ID,
+      });
+
+      const res = await request(app)
+        .put('/api/staff-accounts/2')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          roleId: LEADER_ROLE_ID,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Không được phép thay đổi vai trò');
     });
   });
 

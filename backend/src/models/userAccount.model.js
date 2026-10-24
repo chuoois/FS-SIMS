@@ -276,12 +276,57 @@ async function updateUserPassword(userAccountId, passwordHash) {
 // Staff Account Management Queries (dành cho Owner)
 // =========================================================
 
-async function getStaffAccounts(staffRoleIds) {
+async function getStaffAccounts(staffRoleIds, queryParams = {}) {
   const UserRoleModel = sequelize.models.UserRole || require('./userRole.model').UserRole;
-  return UserAccount.findAll({
-    where: {
-      role_id: { [Op.in]: staffRoleIds },
-    },
+
+  const page = Math.max(1, parseInt(queryParams.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(queryParams.limit, 10) || 10));
+  const offset = (page - 1) * limit;
+
+  // Base whereClause: bắt buộc role_id thuộc nhóm nhân viên cấp dưới (SALES, LEADERSTAFF)
+  const whereClause = {
+    role_id: { [Op.in]: staffRoleIds },
+  };
+
+  // Lọc theo vai trò nếu có
+  if (queryParams.role && queryParams.role !== 'ALL') {
+    const roleVal = queryParams.role;
+    if (!isNaN(Number(roleVal))) {
+      const numRoleId = Number(roleVal);
+      if (staffRoleIds.includes(numRoleId)) {
+        whereClause.role_id = numRoleId;
+      }
+    } else {
+      const foundRole = await UserRoleModel.findOne({
+        where: { role_code: String(roleVal).trim().toUpperCase() },
+        raw: true,
+      });
+      if (foundRole && staffRoleIds.includes(Number(foundRole.role_id))) {
+        whereClause.role_id = Number(foundRole.role_id);
+      }
+    }
+  }
+
+  // Lọc theo trạng thái nếu có
+  if (queryParams.status && queryParams.status !== 'ALL') {
+    const normStatus = String(queryParams.status).trim().toUpperCase();
+    if (normStatus === 'ACTIVE' || normStatus === 'INACTIVE') {
+      whereClause.status = normStatus;
+    }
+  }
+
+  // Tìm kiếm theo tên, email hoặc số điện thoại
+  if (queryParams.search && String(queryParams.search).trim()) {
+    const cleanSearch = String(queryParams.search).trim();
+    whereClause[Op.or] = [
+      { full_name: { [Op.like]: `%${cleanSearch}%` } },
+      { email: { [Op.like]: `%${cleanSearch}%` } },
+      { phone_number: { [Op.like]: `%${cleanSearch}%` } },
+    ];
+  }
+
+  const { count, rows } = await UserAccount.findAndCountAll({
+    where: whereClause,
     attributes: {
       exclude: ['password_hash'],
     },
@@ -292,8 +337,51 @@ async function getStaffAccounts(staffRoleIds) {
         attributes: ['role_id', 'role_code', 'role_name', 'description'],
       },
     ],
+    limit,
+    offset,
     order: [['user_account_id', 'DESC']],
   });
+
+  const totalPages = Math.ceil(count / limit) || 1;
+
+  // Thống kê tổng thể toàn hệ thống cho đội ngũ nhân viên cấp dưới
+  let stats = null;
+  try {
+    const allStaff = await UserAccount.findAll({
+      where: { role_id: { [Op.in]: staffRoleIds } },
+      attributes: ['user_account_id', 'role_id', 'status'],
+      include: [
+        {
+          model: UserRoleModel,
+          as: 'role',
+          attributes: ['role_code'],
+        },
+      ],
+    });
+
+    const total = allStaff.length;
+    const active = allStaff.filter((a) => a.status === 'ACTIVE').length;
+    const inactive = total - active;
+    const salesCount = allStaff.filter(
+      (a) => a.role?.role_code === 'SALES' || Number(a.role_id) === 2
+    ).length;
+    const leaderCount = allStaff.filter(
+      (a) => a.role?.role_code === 'LEADERSTAFF' || Number(a.role_id) === 3
+    ).length;
+
+    stats = { total, active, inactive, salesCount, leaderCount };
+  } catch (err) {
+    console.error('[getStaffAccounts.stats]', err);
+  }
+
+  return {
+    accounts: rows,
+    totalItems: count,
+    totalPages,
+    currentPage: page,
+    itemsPerPage: limit,
+    stats,
+  };
 }
 
 async function getStaffAccountById(userAccountId, staffRoleIds) {

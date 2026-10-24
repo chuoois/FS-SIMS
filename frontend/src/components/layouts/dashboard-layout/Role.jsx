@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Boxes,
+  Building2,
   CalendarCheck,
   Calculator,
   ClipboardList,
@@ -25,6 +26,7 @@ export const roles = {
     items: [
       { label: 'Tổng quan', path: '', icon: LayoutDashboard },
       { label: 'Quản lý tài khoản', path: 'accounts', icon: UserCog },
+      { label: 'Nhà cung cấp', path: 'suppliers', icon: Building2 },
       { label: 'Doanh thu & báo cáo', path: '#', icon: BarChart3 },
       { label: 'Đơn hàng', path: '#', icon: Package },
       { label: 'Sản phẩm', path: '#', icon: Boxes },
