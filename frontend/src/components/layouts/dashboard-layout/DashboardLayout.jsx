@@ -15,7 +15,9 @@ const DashboardLayout = ({ role, user: userProp, onLogout: onLogoutProp }) => {
   const onLogout = onLogoutProp || logout;
 
   const items = resolveItems(role);
-  const current = items.find((i) => (i.end ? pathname === i.to : pathname.startsWith(i.to)));
+  const current = items.find(
+    (i) => i.to !== '#' && (i.end ? pathname === i.to : pathname.startsWith(i.to))
+  );
 
   // Đóng sidebar khi đổi trang hoặc bấm Esc
   useEffect(() => setOpen(false), [pathname]);

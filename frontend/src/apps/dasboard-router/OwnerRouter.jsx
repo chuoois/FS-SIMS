@@ -1,10 +1,10 @@
-import { Navigate } from "react-router-dom";
 import { OwnerLayout } from "../../components/layouts/dashboard-layout/DashboardLayout";
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
+import { ManageStaffAccountsPage } from "../../pages/owner-pages/ManageStaffAccountsPage";
 
 export const OwnerRouter = {
-  path: "/dashboardowner",
+  path: "/owner",
   // Guard: phải đăng nhập VÀ có role OWNER
   element: <ProtectedRoute roles={[ROLES.OWNER]} redirectTo="/staff/login" />,
   children: [
@@ -23,6 +23,10 @@ export const OwnerRouter = {
           ),
         },
         {
+          path: "accounts",
+          element: <ManageStaffAccountsPage />,
+        },
+        {
           path: "analytics",
           element: (
             <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
@@ -33,10 +37,4 @@ export const OwnerRouter = {
       ],
     },
   ],
-};
-
-// Alias /owner trỏ về /dashboardowner
-export const OwnerAliasRouter = {
-  path: "/owner",
-  element: <Navigate to="/dashboardowner" replace />,
 };

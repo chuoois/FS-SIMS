@@ -28,7 +28,7 @@ export const ROLE_NAMES = {
 
 /** Đường dẫn mặc định sau khi nhân viên đăng nhập */
 export const STAFF_DEFAULT_REDIRECTS = {
-  [ROLES.OWNER]: '/dashboardowner',
+  [ROLES.OWNER]: '/owner',
   [ROLES.SALES]: '/sale',
   [ROLES.LEADERSTAFF]: '/staff-leader',
 };
@@ -40,7 +40,7 @@ export function isStaffRole(roleId) {
 
 /** Lấy đường dẫn chuyển hướng cho nhân viên theo role */
 export function getStaffRedirectPath(roleId) {
-  return STAFF_DEFAULT_REDIRECTS[Number(roleId)] || '/dashboardowner';
+  return STAFF_DEFAULT_REDIRECTS[Number(roleId)] || '/owner';
 }
 
 /** Lấy tên hiển thị vai trò */
