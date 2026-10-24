@@ -16,6 +16,10 @@ async function getProducts(req, res) {
       image: row.image_url,
       type: row.product_type,
       categoryId: row.category_id,
+      category: row.category_name,
+      room: row.room_name,
+      material: row.material_name,
+      color: row.color_name,
     }));
     return res.status(200).json({ message: 'Lấy danh sách sản phẩm thành công', products });
   } catch (error) {

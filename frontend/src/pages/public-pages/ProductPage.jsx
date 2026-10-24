@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getProducts } from '../../services/productService';
-import { ChevronDown, ChevronRight, Heart } from 'lucide-react';
+import { ChevronDown, ChevronRight, Heart, Search, X } from 'lucide-react';
 
 /* ---------- Dữ liệu mẫu (thay bằng API; image: URL ảnh sản phẩm) ---------- */
-const banner = { title: 'Sản phẩm', image: '' };
+const banner = { title: 'Sản phẩm', image: '/images/product-banner.jpg' };
 const PAGE_SIZE = 8;
 
 const sortOptions = [
   { value: 'asc', label: 'Theo giá: Thấp đến cao' },
   { value: 'desc', label: 'Theo giá: Cao đến thấp' }
+];
+
+const filterGroups = [
+  { key: 'category', label: 'Danh mục' },
+  { key: 'room', label: 'Không gian' },
+  { key: 'material', label: 'Chất liệu' },
+  { key: 'color', label: 'Màu sắc' },
 ];
 
 const formatVnd = (n) => `${n.toLocaleString('en-US')} VND`;
@@ -53,8 +60,48 @@ const Banner = () => (
   </section>
 );
 
+const SearchBar = ({ value, onChange }) => (
+  <div className="mx-auto max-w-[1710px] px-5 pt-10 lg:px-[4vw]">
+    <label htmlFor="product-search" className="mb-2 block text-sm font-medium text-stone-700">Tìm sản phẩm</label>
+    <div className="relative max-w-xl">
+      <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-500" aria-hidden="true" />
+      <input id="product-search" type="search" value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Nhập tên, mã hoặc mô tả sản phẩm"
+        className="w-full border border-stone-300 bg-white py-3 pl-10 pr-10 text-sm text-stone-900 outline-none focus:border-stone-700" />
+      {value && <button type="button" onClick={() => onChange('')} aria-label="Xóa nội dung tìm kiếm" className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500"><X className="size-4" /></button>}
+    </div>
+  </div>
+);
+
+const FilterSidebar = ({ products, selected, onToggle, onClear }) => (
+  <aside className="self-start border border-stone-200 bg-white p-5" aria-label="Bộ lọc sản phẩm">
+    <div className="mb-5 flex items-center justify-between border-b border-stone-200 pb-3">
+      <h2 className="text-sm font-bold uppercase tracking-wide text-stone-900">Bộ lọc</h2>
+      <button type="button" onClick={onClear} className="text-xs text-stone-600 underline hover:text-black">Xóa lọc</button>
+    </div>
+    {filterGroups.map(({ key, label }) => {
+      const options = [...new Set(products.map((product) => product[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+      return (
+        <fieldset key={key} className="mb-5 last:mb-0">
+          <legend className="mb-3 text-sm font-semibold text-stone-800">{label}</legend>
+          <div className="max-h-48 space-y-2 overflow-y-auto">
+            {options.map((option) => (
+              <label key={option} className="flex cursor-pointer items-center gap-2 text-sm text-stone-700">
+                <input type="checkbox" checked={selected[key].includes(option)} onChange={() => onToggle(key, option)} className="size-4 accent-stone-900" />
+                <span>{option}</span>
+              </label>
+            ))}
+            {options.length === 0 && <p className="text-xs text-stone-500">Đang tải lựa chọn...</p>}
+          </div>
+        </fieldset>
+      );
+    })}
+  </aside>
+);
+
 const FilterBar = ({ value, onChange, onApply }) => (
-  <div className="mx-auto flex max-w-[1305px] items-end justify-between gap-4 px-5 pt-12">
+  <div className="flex items-end justify-between gap-4 border-b border-stone-200 pb-4">
     <div className="w-full max-w-[265px]">
       <label htmlFor="sort-price" className="block text-[13px] text-stone-700">Giá</label>
       <div className="relative mt-2 border-b border-stone-700">
@@ -149,6 +196,8 @@ export const ProductPage = () => {
   const [sort, setSort] = useState('asc');
   const [page, setPage] = useState(1);
   const [liked, setLiked] = useState(() => new Set());
+  const [search, setSearch] = useState('');
+  const [selectedFilters, setSelectedFilters] = useState({ category: [], room: [], material: [], color: [] });
 
   useEffect(() => {
     let active = true;
@@ -162,15 +211,23 @@ export const ProductPage = () => {
     return () => { active = false; };
   }, []);
 
-  const sorted = useMemo(() => {
-    const list = [...products];
+  const filteredProducts = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase('vi');
+    const list = products.filter((product) => {
+      const matchesSearch = !query || [product.name, product.code, product.description]
+        .some((value) => String(value ?? '').toLocaleLowerCase('vi').includes(query));
+      const matchesFilters = filterGroups.every(({ key }) =>
+        selectedFilters[key].length === 0 || selectedFilters[key].includes(product[key]),
+      );
+      return matchesSearch && matchesFilters;
+    });
     if (sort === 'asc') list.sort((a, b) => a.price - b.price);
     if (sort === 'desc') list.sort((a, b) => b.price - a.price);
     return list;
-  }, [products, sort]);
+  }, [products, sort, search, selectedFilters]);
 
-  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
-  const visible = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.ceil(filteredProducts.length / PAGE_SIZE);
+  const visible = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const toggleLike = (id) =>
     setLiked((prev) => {
@@ -184,6 +241,22 @@ export const ProductPage = () => {
     setPage(1);
   };
 
+  const toggleFilter = (key, value) => {
+    setSelectedFilters((current) => ({
+      ...current,
+      [key]: current[key].includes(value)
+        ? current[key].filter((item) => item !== value)
+        : [...current[key], value],
+    }));
+    setPage(1);
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setSelectedFilters({ category: [], room: [], material: [], color: [] });
+    setPage(1);
+  };
+
   const goTo = (p) => {
     setPage(p);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -192,20 +265,26 @@ export const ProductPage = () => {
   return (
     <>
       <Banner />
-      <FilterBar value={sortDraft} onChange={setSortDraft} onApply={apply} />
+      <SearchBar value={search} onChange={(value) => { setSearch(value); setPage(1); }} />
 
       <section className="mx-auto max-w-[1710px] px-5 pb-20 pt-12 lg:px-[4vw]" aria-label="Danh sách sản phẩm">
-        <p className="mb-4 text-sm text-stone-600" aria-live="polite">
-          {loading ? 'Đang tải sản phẩm...' : `${products.length} sản phẩm`}
-        </p>
-        {loadError && <p className="mb-6 text-center text-red-700">{loadError}</p>}
-        {!loading && !loadError && products.length === 0 && <p className="mb-6 text-center">Chưa có sản phẩm.</p>}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
-          {visible.map((p) => (
-            <ProductCard key={p.id} product={p} liked={liked.has(p.id)} onToggle={toggleLike} />
-          ))}
+        <div className="grid items-start gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <FilterSidebar products={products} selected={selectedFilters} onToggle={toggleFilter} onClear={clearFilters} />
+          <div className="min-w-0">
+            <FilterBar value={sortDraft} onChange={setSortDraft} onApply={apply} />
+            <p className="my-4 text-sm text-stone-600" aria-live="polite">
+              {loading ? 'Đang tải sản phẩm...' : `${filteredProducts.length} sản phẩm`}
+            </p>
+            {loadError && <p className="mb-6 text-center text-red-700">{loadError}</p>}
+            {!loading && !loadError && filteredProducts.length === 0 && <p className="mb-6 py-10 text-center text-stone-600">Không tìm thấy sản phẩm phù hợp.</p>}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
+              {visible.map((p) => (
+                <ProductCard key={p.id} product={p} liked={liked.has(p.id)} onToggle={toggleLike} />
+              ))}
+            </div>
+            <Pagination page={page} total={totalPages} onChange={goTo} />
+          </div>
         </div>
-        <Pagination page={page} total={totalPages} onChange={goTo} />
       </section>
     </>
   );

@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, QueryTypes } = require('sequelize');
 const { sequelize } = require('../config/sequelize');
 
 const Product = sequelize.define('Product', {
@@ -34,15 +34,18 @@ const Product = sequelize.define('Product', {
 });
 
 async function getActiveProducts() {
-  return Product.findAll({
-    where: { status: 'ACTIVE' },
-    attributes: [
-      'product_id', 'product_code', 'product_name', 'description', 'price',
-      'stock_quantity', 'image_url', 'product_type', 'category_id',
-    ],
-    order: [['product_id', 'ASC']],
-    raw: true,
-  });
+  return sequelize.query(`
+    SELECT p.product_id, p.product_code, p.product_name, p.description, p.price,
+      p.stock_quantity, p.image_url, p.product_type, p.category_id,
+      c.category_name, r.room_name, m.material_name, co.color_name
+    FROM product p
+    JOIN product_category c ON c.category_id = p.category_id
+    JOIN product_room r ON r.room_id = p.room_id
+    JOIN product_material m ON m.material_id = p.material_id
+    JOIN product_color co ON co.color_id = p.color_id
+    WHERE p.status = 'ACTIVE'
+    ORDER BY p.product_id ASC
+  `, { type: QueryTypes.SELECT });
 }
 
 module.exports = { Product, getActiveProducts };
