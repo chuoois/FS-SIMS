@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 import { DashboardHeader } from './DashboardHeader';
 import { DashboardSidebar } from './DashboardSidebar';
 import { resolveItems, roles } from './Role';
 
 /* Khung chung: Sidebar + Header + <Outlet /> (trang con, index là Tổng quan) */
-const DashboardLayout = ({ role, user = { name: 'Người dùng' }, onLogout }) => {
+const DashboardLayout = ({ role, user: userProp, onLogout: onLogoutProp }) => {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
+  const { user: authUser, logout } = useAuth();
+
+  const user = userProp || { name: authUser?.fullName || 'Người dùng' };
+  const onLogout = onLogoutProp || logout;
 
   const items = resolveItems(role);
-  const current = items.find((i) => (i.end ? pathname === i.to : pathname.startsWith(i.to)));
+  const current = items.find(
+    (i) => i.to !== '#' && (i.end ? pathname === i.to : pathname.startsWith(i.to))
+  );
 
   // Đóng sidebar khi đổi trang hoặc bấm Esc
   useEffect(() => setOpen(false), [pathname]);
@@ -52,3 +59,4 @@ export const OwnerLayout = (props) => <DashboardLayout role={roles.owner} {...pr
 export const SaleLayout = (props) => <DashboardLayout role={roles.sale} {...props} />;
 export const StaffLeaderLayout = (props) => <DashboardLayout role={roles.staffLeader} {...props} />;
 export const AccountantLayout = (props) => <DashboardLayout role={roles.accountant} {...props} />;
+export default DashboardLayout;

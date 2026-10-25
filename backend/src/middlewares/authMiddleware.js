@@ -25,4 +25,32 @@ function authenticate(req, res, next) {
   }
 }
 
-module.exports = { authenticate };
+const { findUserRoleByCode } = require('../models/userRole.model');
+
+function requireRole(...allowedRoles) {
+  const roles = allowedRoles.flat();
+
+  return async function (req, res, next) {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Yêu cầu xác thực. Vui lòng đăng nhập.' });
+    }
+
+    try {
+      const roleRecords = await Promise.all(roles.map((code) => findUserRoleByCode(code)));
+      const allowedRoleIds = roleRecords.filter(Boolean).map((r) => Number(r.role_id));
+
+      if (!allowedRoleIds.includes(Number(req.user.role))) {
+        return res.status(403).json({
+          message: 'Bạn không có quyền truy cập chức năng này.',
+        });
+      }
+
+      return next();
+    } catch (error) {
+      console.error('[authMiddleware.requireRole]', error);
+      return res.status(500).json({ message: 'Lỗi xác thực quyền hạn' });
+    }
+  };
+}
+
+module.exports = { authenticate, requireRole };

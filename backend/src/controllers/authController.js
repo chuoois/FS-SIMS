@@ -33,8 +33,21 @@ function generateAccessToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES });
 }
 
-function isDuplicateEmailError(error) {
-  return error.name === 'SequelizeUniqueConstraintError' || error.original?.code === 'ER_DUP_ENTRY';
+// Role code của nhân sự nội bộ (không được đăng nhập cổng khách hàng)
+const STAFF_ROLE_CODES = ['OWNER', 'SALES', 'LEADERSTAFF'];
+
+let cachedStaffRoleIds = null;
+async function getStaffRoleIds() {
+  if (cachedStaffRoleIds) return cachedStaffRoleIds;
+
+  const ids = [];
+  for (const code of STAFF_ROLE_CODES) {
+    const role = await findUserRoleByCode(code);
+    if (role) ids.push(role.role_id);
+  }
+
+  if (ids.length > 0) cachedStaffRoleIds = ids;
+  return ids;
 }
 
 // =========================================================
@@ -107,6 +120,14 @@ async function login(req, res) {
 
     if (account.status !== 'ACTIVE') {
       return res.status(403).json({ message: 'Tài khoản đã bị vô hiệu hóa' });
+    }
+
+    // ── Kiểm tra role: tài khoản nhân viên không được đăng nhập tại cổng Khách hàng ──
+    const staffRoleIds = await getStaffRoleIds();
+    if (staffRoleIds.includes(Number(account.role_id))) {
+      return res.status(403).json({
+        message: 'Tài khoản này không được cấp quyền truy cập.Vui lòng liên hệ quản trị viên',
+      });
     }
 
     const isPasswordValid = await bcrypt.compare(password, account.password_hash);
@@ -270,4 +291,4 @@ async function forgotPassword(req, res) {
   }
 }
 
-module.exports = { register, login, refreshToken, logout, forgotPassword };
+module.exports = { register, login, refreshToken, logout, forgotPassword };
