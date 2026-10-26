@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ManageProductsPage } from '../pages/owner-pages/ManageProductsPage';
-import * as productService from '../services/productService';
+import * as productService from '../services/productManagerService';
 
-vi.mock('../services/productService');
+vi.mock('../services/productManagerService');
 vi.mock('react-hot-toast', () => ({
   default: {
     success: vi.fn(),

@@ -40,7 +40,7 @@ import {
   deleteProduct,
   createProductMaterial,
   createProductColor,
-} from '../../services/productService';
+} from '../../services/productManagerService';
 import { CreatableCombobox } from '../../components/common/CreatableCombobox';
 import { TablePagination } from '../../components/common/TablePagination';
 
@@ -736,8 +736,8 @@ export const ManageProductsPage = () => {
         selectedProduct.isPartOfSet
           ? `Cập nhật sản phẩm con "${form.product_name}" thành công!`
           : selectedProduct.isSet
-          ? `Cập nhật bộ sản phẩm "${form.product_name}" thành công!`
-          : 'Cập nhật sản phẩm thành công!'
+            ? `Cập nhật bộ sản phẩm "${form.product_name}" thành công!`
+            : 'Cập nhật sản phẩm thành công!'
       );
       setIsEditOpen(false);
       fetchProductsList(currentPage);
@@ -1009,9 +1009,8 @@ export const ManageProductsPage = () => {
                   return (
                     <Fragment key={p.productId}>
                       <tr
-                        className={`hover:bg-stone-50/60 transition ${
-                          p.isSet ? 'cursor-pointer ' : ''
-                        }${p.isSet && isExpanded ? 'bg-stone-100/70' : ''}`}
+                        className={`hover:bg-stone-50/60 transition ${p.isSet ? 'cursor-pointer ' : ''
+                          }${p.isSet && isExpanded ? 'bg-stone-100/70' : ''}`}
                         data-testid={`product-row-${p.productId}`}
                         onClick={() => p.isSet && toggleExpandSet(p.productId)}
                       >
@@ -1120,13 +1119,12 @@ export const ManageProductsPage = () => {
                         {/* Stock Quantity */}
                         <td className="px-4 py-3 text-center">
                           <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                              isOut
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isOut
                                 ? 'bg-rose-50 text-rose-700 border border-rose-200'
                                 : isLow
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              }`}
                           >
                             {p.stockQuantity} cái
                           </span>
@@ -1135,11 +1133,10 @@ export const ManageProductsPage = () => {
                         {/* Status */}
                         <td className="px-4 py-3 text-center">
                           <span
-                            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                              p.status === 'ACTIVE'
+                            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${p.status === 'ACTIVE'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-stone-200 text-stone-700'
-                            }`}
+                              }`}
                           >
                             {p.status === 'ACTIVE' ? 'Kinh doanh' : 'Ngừng'}
                           </span>
@@ -1384,11 +1381,10 @@ export const ManageProductsPage = () => {
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, product_type: 'SINGLE' })}
-                    className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${
-                      form.product_type === 'SINGLE'
+                    className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${form.product_type === 'SINGLE'
                         ? 'border-stone-900 bg-stone-900 text-white shadow-xs'
                         : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
-                    }`}
+                      }`}
                   >
                     <Layers className="h-4 w-4" />
                     <span>Sản phẩm lẻ </span>
@@ -1399,11 +1395,10 @@ export const ManageProductsPage = () => {
                       setForm({ ...form, product_type: 'SET' });
                       loadAvailableSingleProducts();
                     }}
-                    className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${
-                      form.product_type === 'SET'
+                    className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${form.product_type === 'SET'
                         ? 'border-stone-900 bg-stone-900 text-white shadow-xs'
                         : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
-                    }`}
+                      }`}
                   >
                     <Boxes className="h-4 w-4" />
                     <span>Bộ sản phẩm </span>
@@ -1738,11 +1733,10 @@ export const ManageProductsPage = () => {
                         <button
                           type="button"
                           onClick={() => setCreateChildMode('EXISTING')}
-                          className={`rounded-md px-3 py-1 transition ${
-                            createChildMode === 'EXISTING'
+                          className={`rounded-md px-3 py-1 transition ${createChildMode === 'EXISTING'
                               ? 'bg-white text-stone-900 shadow-xs'
                               : 'text-stone-600 hover:text-stone-900'
-                          }`}
+                            }`}
                         >
                           Chọn sản phẩm có sẵn
                         </button>
@@ -1758,11 +1752,10 @@ export const ManageProductsPage = () => {
                               color_id: prev.color_id || form.color_id || metadata.colors[0]?.color_id || '',
                             }));
                           }}
-                          className={`inline-flex items-center gap-1 rounded-md px-3 py-1 transition ${
-                            createChildMode === 'NEW'
+                          className={`inline-flex items-center gap-1 rounded-md px-3 py-1 transition ${createChildMode === 'NEW'
                               ? 'bg-white text-stone-900 shadow-xs'
                               : 'text-stone-600 hover:text-stone-900'
-                          }`}
+                            }`}
                         >
                           <Plus className="h-3 w-3" />
                           Tạo mới sản phẩm con trực tiếp
@@ -2043,8 +2036,8 @@ export const ManageProductsPage = () => {
                   {selectedProduct.isPartOfSet
                     ? 'Chỉnh sửa sản phẩm con: '
                     : selectedProduct.isSet || form.product_type === 'SET'
-                    ? 'Chỉnh sửa bộ sản phẩm: '
-                    : 'Chỉnh sửa sản phẩm: '}
+                      ? 'Chỉnh sửa bộ sản phẩm: '
+                      : 'Chỉnh sửa sản phẩm: '}
                   <span className="font-mono text-stone-600">{selectedProduct.productCode}</span>
                   {selectedProduct.isPartOfSet && selectedProduct.inSets?.[0] && (
                     <span className="text-xs font-semibold text-stone-700 bg-stone-100 rounded-md px-2.5 py-0.5 border border-stone-300">
@@ -2388,11 +2381,10 @@ export const ManageProductsPage = () => {
                         <button
                           type="button"
                           onClick={() => setEditChildMode('EXISTING')}
-                          className={`rounded-md px-3 py-1 transition ${
-                            editChildMode === 'EXISTING'
+                          className={`rounded-md px-3 py-1 transition ${editChildMode === 'EXISTING'
                               ? 'bg-white text-stone-900 shadow-xs'
                               : 'text-stone-600 hover:text-stone-900'
-                          }`}
+                            }`}
                         >
                           Chọn sản phẩm có sẵn
                         </button>
@@ -2408,11 +2400,10 @@ export const ManageProductsPage = () => {
                               color_id: prev.color_id || form.color_id || metadata.colors[0]?.color_id || '',
                             }));
                           }}
-                          className={`inline-flex items-center gap-1 rounded-md px-3 py-1 transition ${
-                            editChildMode === 'NEW'
+                          className={`inline-flex items-center gap-1 rounded-md px-3 py-1 transition ${editChildMode === 'NEW'
                               ? 'bg-white text-stone-900 shadow-xs'
                               : 'text-stone-600 hover:text-stone-900'
-                          }`}
+                            }`}
                         >
                           <Plus className="h-3 w-3" />
                           Tạo mới sản phẩm con trực tiếp
@@ -2705,11 +2696,10 @@ export const ManageProductsPage = () => {
                   </span>
                 )}
                 <span
-                  className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    selectedProduct.status === 'ACTIVE'
+                  className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${selectedProduct.status === 'ACTIVE'
                       ? 'bg-emerald-100 text-emerald-800'
                       : 'bg-stone-200 text-stone-700'
-                  }`}
+                    }`}
                 >
                   {selectedProduct.status === 'ACTIVE' ? 'Đang kinh doanh' : 'Ngừng kinh doanh'}
                 </span>
@@ -2769,13 +2759,12 @@ export const ManageProductsPage = () => {
                         <div className="border-t border-stone-200 pt-2 flex items-center justify-between">
                           <span className="text-stone-500">Tồn kho sẵn có:</span>
                           <span
-                            className={`font-bold px-2 py-0.5 rounded-full ${
-                              selectedProduct.stockQuantity === 0
+                            className={`font-bold px-2 py-0.5 rounded-full ${selectedProduct.stockQuantity === 0
                                 ? 'bg-rose-100 text-rose-700'
                                 : selectedProduct.stockQuantity <= 5
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}
                           >
                             {selectedProduct.stockQuantity} {selectedProduct.isSet ? 'bộ' : 'chiếc'}
                           </span>
@@ -3004,7 +2993,7 @@ export const ManageProductsPage = () => {
                   }}
                   className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700"
                 >
-                 Ngừng kinh doanh
+                  Ngừng kinh doanh
                 </button>
               ) : (
                 <button

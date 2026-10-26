@@ -1468,3 +1468,7 @@ VALUES
 UPDATE raw_material SET quantity_on_hand = 60 WHERE raw_code = 'WOOD-OAK';
 UPDATE raw_material SET quantity_on_hand = 50 WHERE raw_code = 'WOOD-RUBBER';
 UPDATE raw_material SET quantity_on_hand = 30 WHERE raw_code = 'WOOD-WALNUT';
+UPDATE raw_material SET quantity_on_hand = 40 WHERE raw_code = 'PLYWOOD';
+UPDATE raw_material SET quantity_on_hand = 22 WHERE raw_code = 'PAINT-PU';
+UPDATE raw_material SET quantity_on_hand = 17 WHERE raw_code = 'GLUE';
+UPDATE raw_material SET quantity_on_hand = 7  WHERE raw_code = 'SCREW';

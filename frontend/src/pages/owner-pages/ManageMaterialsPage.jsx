@@ -32,7 +32,7 @@ import {
   updateRawMaterial,
   deleteRawMaterial,
 } from '../../services/rawMaterialService';
-import { getProductMetadata } from '../../services/productService';
+import { getProductMetadata } from '../../services/productManagerService';
 import { TablePagination } from '../../components/common/TablePagination';
 
 export const ManageMaterialsPage = () => {
@@ -477,11 +477,10 @@ export const ManageMaterialsPage = () => {
                       {/* Status */}
                       <td className="px-4 py-3 text-center">
                         <span
-                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                            m.status === 'ACTIVE'
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${m.status === 'ACTIVE'
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-stone-200 text-stone-700'
-                          }`}
+                            }`}
                         >
                           {m.status === 'ACTIVE' ? 'Đang dùng' : 'Ngừng'}
                         </span>

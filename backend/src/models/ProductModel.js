@@ -1,9 +1,4 @@
-// =========================================================
-// ProductModel.js
-// Entity Model & Repository Functions for Product (Sản phẩm hàng sẵn)
-// =========================================================
-
-const { DataTypes, Op, QueryTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 const { sequelize } = require('../config/sequelize');
 const { ProductCategory } = require('./ProductCategoryModel');
 const { ProductRoom } = require('./ProductRoomModel');
@@ -117,7 +112,6 @@ const Product = sequelize.define(
     ],
   }
 );
-
 // Setup associations if not already present
 if (!Product.associations || !Product.associations.category) {
   Product.belongsTo(ProductCategory, { foreignKey: 'category_id', as: 'category' });
@@ -204,6 +198,7 @@ async function getProductsWithPagination({
   status,
   stock_status,
   include_children = false,
+  sort,
   page = 1,
   limit = 10,
 } = {}) {
@@ -265,6 +260,13 @@ async function getProductsWithPagination({
     ];
   }
 
+  let orderClause = [['createdate', 'DESC']];
+  if (sort === 'asc' || sort === 'price_asc') {
+    orderClause = [['price', 'ASC']];
+  } else if (sort === 'desc' || sort === 'price_desc') {
+    orderClause = [['price', 'DESC']];
+  }
+
   const { count, rows } = await Product.findAndCountAll({
     where: whereClause,
     include: [
@@ -295,7 +297,7 @@ async function getProductsWithPagination({
         ],
       },
     ],
-    order: [['createdate', 'DESC']],
+    order: orderClause,
     offset,
     limit: limitNum,
     distinct: true,
@@ -459,24 +461,6 @@ async function getProductStockSummary() {
   };
 }
 
-async function getActiveProducts() {
-  return sequelize.query(
-    `
-    SELECT p.product_id, p.product_code, p.product_name, p.description, p.price,
-      p.stock_quantity, p.image_url, p.product_type, p.category_id,
-      c.category_name, r.room_name, m.material_name, co.color_name
-    FROM product p
-    JOIN product_category c ON c.category_id = p.category_id
-    JOIN product_room r ON r.room_id = p.room_id
-    JOIN product_material m ON m.material_id = p.material_id
-    JOIN product_color co ON co.color_id = p.color_id
-    WHERE p.status = 'ACTIVE'
-    ORDER BY p.product_id ASC
-  `,
-    { type: QueryTypes.SELECT }
-  );
-}
-
 module.exports = {
   Product,
   findProductById,
@@ -490,5 +474,4 @@ module.exports = {
   generateNextProductCode,
   getProductMetadata,
   getProductStockSummary,
-  getActiveProducts,
 };

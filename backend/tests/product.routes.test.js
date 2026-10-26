@@ -119,15 +119,54 @@ describe('Product Routes - /api/products', () => {
     });
   });
 
-  describe('GET /api/products', () => {
-    test('trả về 401 khi không có token', async () => {
+  describe('GET /api/products (Public)', () => {
+    test('trả về 200 danh sách sản phẩm công khai không cần token', async () => {
+      getProductsWithPagination.mockResolvedValue({
+        products: [
+          {
+            product_id: 1,
+            product_code: 'TB-001',
+            product_name: 'Bàn ăn gỗ sồi',
+            price: 4500000,
+            stock_quantity: 5,
+            status: 'ACTIVE',
+          },
+        ],
+        totalItems: 1,
+        totalPages: 1,
+        currentPage: 1,
+        itemsPerPage: 10,
+      });
+
       const res = await request(app).get('/api/products');
+      expect(res.status).toBe(200);
+      expect(res.body.message).toMatch(/thành công/);
+      expect(res.body.data).toHaveLength(1);
+    });
+
+    test('trả về metadata công khai cho bộ lọc không cần token', async () => {
+      getProductMetadata.mockResolvedValue({
+        categories: [{ category_id: 1, category_name: 'Bàn' }],
+        rooms: [{ room_id: 1, room_name: 'Phòng ăn' }],
+        materials: [{ material_id: 1, material_name: 'Gỗ sồi' }],
+        colors: [{ color_id: 1, color_name: 'Tự nhiên' }],
+      });
+
+      const res = await request(app).get('/api/products/metadata');
+      expect(res.status).toBe(200);
+      expect(res.body.data.categories).toHaveLength(1);
+    });
+  });
+
+  describe('GET /api/product-manager', () => {
+    test('trả về 401 khi không có token', async () => {
+      const res = await request(app).get('/api/product-manager');
       expect(res.status).toBe(401);
     });
 
     test('trả về 403 khi role không phải OWNER', async () => {
       const res = await request(app)
-        .get('/api/products')
+        .get('/api/product-manager')
         .set('Authorization', `Bearer ${salesToken}`);
       expect(res.status).toBe(403);
     });
@@ -151,7 +190,7 @@ describe('Product Routes - /api/products', () => {
       });
 
       const res = await request(app)
-        .get('/api/products')
+        .get('/api/product-manager')
         .set('Authorization', `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
@@ -161,7 +200,7 @@ describe('Product Routes - /api/products', () => {
     });
   });
 
-  describe('GET /api/products/metadata', () => {
+  describe('GET /api/product-manager/metadata', () => {
     test('trả về metadata danh mục, phòng, chất liệu, màu sắc', async () => {
       getProductMetadata.mockResolvedValue({
         categories: [{ category_id: 1, category_name: 'Bàn' }],
@@ -171,7 +210,7 @@ describe('Product Routes - /api/products', () => {
       });
 
       const res = await request(app)
-        .get('/api/products/metadata')
+        .get('/api/product-manager/metadata')
         .set('Authorization', `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
@@ -179,7 +218,7 @@ describe('Product Routes - /api/products', () => {
     });
   });
 
-  describe('POST /api/products', () => {
+  describe('POST /api/product-manager', () => {
     const validBody = {
       product_code: 'TB-001',
       product_name: 'Bàn ăn gỗ sồi 6 người',
@@ -193,7 +232,7 @@ describe('Product Routes - /api/products', () => {
 
     test('trả về 400 khi thiếu thông tin bắt buộc', async () => {
       const res = await request(app)
-        .post('/api/products')
+        .post('/api/product-manager')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ product_code: 'TB-001' });
 
@@ -205,7 +244,7 @@ describe('Product Routes - /api/products', () => {
       findProductByCode.mockResolvedValue({ product_id: 99, product_code: 'TB-001' });
 
       const res = await request(app)
-        .post('/api/products')
+        .post('/api/product-manager')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send(validBody);
 
@@ -223,7 +262,7 @@ describe('Product Routes - /api/products', () => {
       });
 
       const res = await request(app)
-        .post('/api/products')
+        .post('/api/product-manager')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send(validBody);
 
@@ -233,12 +272,12 @@ describe('Product Routes - /api/products', () => {
     });
   });
 
-  describe('DELETE /api/products/:id', () => {
+  describe('DELETE /api/product-manager/:id', () => {
     test('trả về 404 khi không tìm thấy sản phẩm', async () => {
       findProductById.mockResolvedValue(null);
 
       const res = await request(app)
-        .delete('/api/products/999')
+        .delete('/api/product-manager/999')
         .set('Authorization', `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(404);
@@ -249,7 +288,7 @@ describe('Product Routes - /api/products', () => {
       countProductUsage.mockResolvedValue({ totalUsage: 3, contractCount: 3 });
 
       const res = await request(app)
-        .delete('/api/products/1')
+        .delete('/api/product-manager/1')
         .set('Authorization', `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(400);
@@ -262,7 +301,7 @@ describe('Product Routes - /api/products', () => {
       deleteProduct.mockResolvedValue(true);
 
       const res = await request(app)
-        .delete('/api/products/1')
+        .delete('/api/product-manager/1')
         .set('Authorization', `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
@@ -270,10 +309,10 @@ describe('Product Routes - /api/products', () => {
     });
   });
 
-  describe('POST /api/products/materials', () => {
+  describe('POST /api/product-manager/materials', () => {
     test('trả về 400 nếu thiếu tên chất liệu', async () => {
       const res = await request(app)
-        .post('/api/products/materials')
+        .post('/api/product-manager/materials')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({});
 
@@ -290,7 +329,7 @@ describe('Product Routes - /api/products', () => {
       });
 
       const res = await request(app)
-        .post('/api/products/materials')
+        .post('/api/product-manager/materials')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ material_name: 'Gỗ hương' });
 
@@ -300,10 +339,10 @@ describe('Product Routes - /api/products', () => {
     });
   });
 
-  describe('POST /api/products/colors', () => {
+  describe('POST /api/product-manager/colors', () => {
     test('trả về 400 nếu thiếu tên màu sắc', async () => {
       const res = await request(app)
-        .post('/api/products/colors')
+        .post('/api/product-manager/colors')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({});
 
@@ -320,7 +359,7 @@ describe('Product Routes - /api/products', () => {
       });
 
       const res = await request(app)
-        .post('/api/products/colors')
+        .post('/api/product-manager/colors')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({ color_name: 'Xanh rêu', hex_value: '#2E7D32' });
 

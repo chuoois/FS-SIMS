@@ -320,6 +320,7 @@ function validateProductQueryParams(query = {}) {
     page = 1,
     limit = 10,
     include_children,
+    sort,
   } = query;
 
   const includeChildrenBool =
@@ -337,6 +338,7 @@ function validateProductQueryParams(query = {}) {
     status: status && status !== 'ALL' ? String(status).toUpperCase() : undefined,
     stock_status: stock_status && stock_status !== 'ALL' ? String(stock_status).toUpperCase() : undefined,
     include_children: includeChildrenBool,
+    sort: sort ? String(sort).toLowerCase() : undefined,
     page: Math.max(1, parseInt(page, 10) || 1),
     limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
   };
