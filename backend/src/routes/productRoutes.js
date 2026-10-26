@@ -22,6 +22,13 @@ const upload = require('../middlewares/uploadMiddleware');
 
 const router = express.Router();
 
+// Xóa stale headers để tránh 304 không mong muốn
+router.use((req, res, next) => {
+  delete req.headers['if-none-match'];
+  delete req.headers['if-modified-since'];
+  next();
+});
+
 // Bắt buộc xác thực và kiểm tra vai trò OWNER
 router.use(authenticate, requireRole('OWNER'));
 

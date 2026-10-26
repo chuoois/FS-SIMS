@@ -44,6 +44,7 @@ async function getProducts(req, res) {
     return res.status(200).json({
       message: 'Lấy danh sách sản phẩm thành công',
       data: (result.products || []).map(toProductDTO),
+      products: (result.products || []).map(toProductDTO),
       pagination: {
         totalItems: result.totalItems,
         totalPages: result.totalPages,

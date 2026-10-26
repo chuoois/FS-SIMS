@@ -7,10 +7,27 @@ import api from './api';
 
 /**
  * Lấy danh sách sản phẩm có phân trang, tìm kiếm và lọc
+ * Tương thích cả giao diện catalog (trả về array) và trang quản lý (trả về { data, pagination })
  */
 export async function getProducts(params = {}) {
   const response = await api.get('/products', { params });
-  return response.data;
+  const resData = response.data;
+  const rows = resData?.products ?? resData?.data ?? [];
+
+  if (Array.isArray(rows)) {
+    const list = [...rows];
+    list.data = rows;
+    list.products = rows;
+    list.pagination = resData?.pagination || {
+      totalItems: rows.length,
+      totalPages: 1,
+      currentPage: 1,
+      itemsPerPage: rows.length,
+    };
+    list.message = resData?.message || 'Thành công';
+    return list;
+  }
+  return resData;
 }
 
 /**
@@ -101,3 +118,15 @@ export async function createProductColor(data) {
   return response.data;
 }
 
+export default {
+  getProducts,
+  getProductMetadata,
+  getProductStockSummary,
+  getNextProductCode,
+  getProductDetail,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  createProductMaterial,
+  createProductColor,
+};

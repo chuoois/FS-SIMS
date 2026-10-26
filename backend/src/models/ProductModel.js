@@ -3,7 +3,7 @@
 // Entity Model & Repository Functions for Product (Sản phẩm hàng sẵn)
 // =========================================================
 
-const { DataTypes, Op } = require('sequelize');
+const { DataTypes, Op, QueryTypes } = require('sequelize');
 const { sequelize } = require('../config/sequelize');
 const { ProductCategory } = require('./ProductCategoryModel');
 const { ProductRoom } = require('./ProductRoomModel');
@@ -459,6 +459,24 @@ async function getProductStockSummary() {
   };
 }
 
+async function getActiveProducts() {
+  return sequelize.query(
+    `
+    SELECT p.product_id, p.product_code, p.product_name, p.description, p.price,
+      p.stock_quantity, p.image_url, p.product_type, p.category_id,
+      c.category_name, r.room_name, m.material_name, co.color_name
+    FROM product p
+    JOIN product_category c ON c.category_id = p.category_id
+    JOIN product_room r ON r.room_id = p.room_id
+    JOIN product_material m ON m.material_id = p.material_id
+    JOIN product_color co ON co.color_id = p.color_id
+    WHERE p.status = 'ACTIVE'
+    ORDER BY p.product_id ASC
+  `,
+    { type: QueryTypes.SELECT }
+  );
+}
+
 module.exports = {
   Product,
   findProductById,
@@ -472,4 +490,5 @@ module.exports = {
   generateNextProductCode,
   getProductMetadata,
   getProductStockSummary,
+  getActiveProducts,
 };

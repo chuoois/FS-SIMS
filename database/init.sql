@@ -37,6 +37,7 @@ CREATE DATABASE IF NOT EXISTS db_2026_fssims
     COLLATE utf8mb4_unicode_ci;
 
 USE db_2026_fssims;
+SET NAMES utf8mb4;
 
 
 -- =========================================================
