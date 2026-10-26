@@ -43,8 +43,8 @@ const STAFF_ROLE_CARDS = [
   },
   {
     roleId: ROLES.SALES,
-    title: 'Kinh doanh',
-    subtitle: 'Sales Staff',
+    title: 'Nhân viên kinh doanh',
+    subtitle: 'Sales ',
     icon: Briefcase,
     badgeColor: 'border-sky-400/30 bg-sky-500/10 text-sky-300',
   },
