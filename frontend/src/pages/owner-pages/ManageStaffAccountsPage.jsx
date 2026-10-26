@@ -55,6 +55,7 @@ import {
   deleteStaffAccount,
 } from '../../services/staffAccountService';
 import { ROLES, ROLE_NAMES } from '../../constants/roles';
+import { TablePagination } from '../../components/common/TablePagination';
 
 // Role Badge Helpers (chỉ áp dụng cho nhân viên cấp dưới: Sales, Staff Leader)
 const ROLE_CONFIG = {
@@ -83,6 +84,7 @@ export const ManageStaffAccountsPage = () => {
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [pagination, setPagination] = useState({
     totalItems: 0,
     totalPages: 1,
@@ -139,7 +141,7 @@ export const ManageStaffAccountsPage = () => {
         role: selectedRoleFilter,
         status: selectedStatusFilter,
         page: currentPage,
-        limit: 10,
+        limit: pageSize,
       };
 
       const [accRes, roleRes] = await Promise.all([
@@ -161,7 +163,7 @@ export const ManageStaffAccountsPage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [searchTerm, selectedRoleFilter, selectedStatusFilter, currentPage]);
+  }, [searchTerm, selectedRoleFilter, selectedStatusFilter, currentPage, pageSize]);
 
   useEffect(() => {
     fetchData();
@@ -636,37 +638,21 @@ export const ManageStaffAccountsPage = () => {
         )}
 
         {/* ── Phân trang ── */}
-        {!loading && accounts.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-stone-200 px-6 py-4 bg-stone-50/50 text-xs text-stone-600">
-            <div>
-              Hiển thị <span className="font-semibold text-stone-900">{accounts.length}</span> trên tổng số{' '}
-              <span className="font-semibold text-stone-900">{pagination.totalItems || accounts.length}</span> nhân sự
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage <= 1}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span>Trước</span>
-              </button>
-              <span className="px-2 font-semibold text-stone-800">
-                Trang {pagination.currentPage || 1} / {pagination.totalPages || 1}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages || 1, p + 1))}
-                disabled={currentPage >= (pagination.totalPages || 1)}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <span>Sau</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          currentCount={accounts.length}
+          itemsPerPage={pageSize}
+          pageSizeOptions={[5, 10, 20, 50]}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+          itemLabel="tài khoản"
+          onPageChange={(p) => setCurrentPage(p)}
+          loading={loading}
+        />
       </div>
 
       {/* ═════════════════════════════════════════════════════════ */}

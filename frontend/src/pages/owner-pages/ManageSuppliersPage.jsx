@@ -42,6 +42,7 @@ import {
   updateSupplier,
   deleteSupplier,
 } from '../../services/supplierService';
+import { TablePagination } from '../../components/common/TablePagination';
 
 export const ManageSuppliersPage = () => {
   // ── States ───────────────────────────────────────────────
@@ -53,6 +54,7 @@ export const ManageSuppliersPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [pagination, setPagination] = useState({
     totalItems: 0,
     totalPages: 1,
@@ -102,12 +104,12 @@ export const ManageSuppliersPage = () => {
         search: searchTerm,
         status: selectedStatusFilter,
         page: currentPage,
-        limit: 10,
+        limit: pageSize,
       };
 
       const res = await getSuppliers(params);
       setSuppliers(res.data || []);
-      setPagination(res.pagination || { totalItems: 0, totalPages: 1, currentPage: 1, itemsPerPage: 10 });
+      setPagination(res.pagination || { totalItems: 0, totalPages: 1, currentPage: 1, itemsPerPage: pageSize });
     } catch (error) {
       console.error('[fetchSuppliers]', error);
       toast.error(error.response?.data?.message || 'Không thể tải danh sách nhà cung cấp');
@@ -115,7 +117,7 @@ export const ManageSuppliersPage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [searchTerm, selectedStatusFilter, currentPage]);
+  }, [searchTerm, selectedStatusFilter, currentPage, pageSize]);
 
   useEffect(() => {
     fetchSuppliers();
@@ -551,37 +553,21 @@ export const ManageSuppliersPage = () => {
         )}
 
         {/* ── Phân trang ── */}
-        {!loading && suppliers.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-stone-200 px-6 py-4 bg-stone-50/50 text-xs text-stone-600">
-            <div>
-              Hiển thị <span className="font-semibold text-stone-900">{suppliers.length}</span> trên tổng số{' '}
-              <span className="font-semibold text-stone-900">{pagination.totalItems || suppliers.length}</span> nhà cung cấp
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage <= 1}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span>Trước</span>
-              </button>
-              <span className="px-2 font-semibold text-stone-800">
-                Trang {pagination.currentPage || 1} / {pagination.totalPages || 1}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.min(pagination.totalPages || 1, p + 1))}
-                disabled={currentPage >= (pagination.totalPages || 1)}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <span>Sau</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          currentCount={suppliers.length}
+          itemsPerPage={pageSize}
+          pageSizeOptions={[5, 10, 20, 50]}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setCurrentPage(1);
+          }}
+          itemLabel="nhà cung cấp"
+          onPageChange={(p) => setCurrentPage(p)}
+          loading={loading}
+        />
       </div>
 
       {/* ═════════════════════════════════════════════════════════ */}

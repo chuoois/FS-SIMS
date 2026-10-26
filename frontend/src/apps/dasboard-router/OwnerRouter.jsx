@@ -3,6 +3,8 @@ import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
 import { ManageStaffAccountsPage } from "../../pages/owner-pages/ManageStaffAccountsPage";
 import { ManageSuppliersPage } from "../../pages/owner-pages/ManageSuppliersPage";
+import { ManageProductsPage } from "../../pages/owner-pages/ManageProductsPage";
+import { ManageMaterialsPage } from "../../pages/owner-pages/ManageMaterialsPage";
 
 export const OwnerRouter = {
   path: "/owner",
@@ -30,6 +32,14 @@ export const OwnerRouter = {
         {
           path: "suppliers",
           element: <ManageSuppliersPage />,
+        },
+        {
+          path: "products",
+          element: <ManageProductsPage />,
+        },
+        {
+          path: "materials",
+          element: <ManageMaterialsPage />,
         },
         {
           path: "analytics",

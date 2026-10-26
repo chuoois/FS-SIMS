@@ -719,10 +719,10 @@ CREATE TABLE IF NOT EXISTS supplier (
 
 
 -- =========================================================
--- 20. raw_material  (nguyên vật liệu trong kho: gỗ, ván, sơn, keo, ốc vít...)
+-- 20. raw_material  (nguyên vật liệu gỗ trong kho: gỗ sồi, óc chó, thông, xoài, cao su, tếch...)
 --     Khác với product_material (chất liệu của sản phẩm thành phẩm).
---     material_id: nếu là gỗ thì trỏ tới loại gỗ tương ứng, còn lại để trống.
---     Số lượng dùng INT nên chọn đơn vị đủ nhỏ để không bị lẻ (kg, tấm, thanh, cái...).
+--     material_id: trỏ tới loại gỗ tương ứng trong bảng product_material.
+--     Số lượng dùng INT nên chọn đơn vị chuẩn (BOARD - tấm/thanh, M3...).
 --     quantity_on_hand: tồn kho hiện tại, do service cập nhật khi phiếu nhập/xuất
 --     được CONFIRMED. min_quantity: mức tồn tối thiểu để cảnh báo sắp hết.
 -- =========================================================
@@ -1093,16 +1093,12 @@ ON DUPLICATE KEY UPDATE
 -- =========================================================
 INSERT INTO raw_material (raw_code, raw_name, material_id, unit, min_quantity, description)
 VALUES
-    ('WOOD-OAK',    'Gỗ sồi xẻ',    (SELECT material_id FROM product_material WHERE material_code = 'OAK'),    'BOARD', 20, NULL),
-    ('WOOD-WALNUT', 'Gỗ óc chó xẻ', (SELECT material_id FROM product_material WHERE material_code = 'WALNUT'), 'BOARD', 20, NULL),
-    ('WOOD-PINE',   'Gỗ thông xẻ',  (SELECT material_id FROM product_material WHERE material_code = 'PINE'),   'BOARD', 20, NULL),
-    ('WOOD-RUBBER', 'Gỗ cao su xẻ', (SELECT material_id FROM product_material WHERE material_code = 'RUBBER'), 'BOARD', 20, NULL),
-    ('WOOD-TEAK',   'Gỗ tếch xẻ',   (SELECT material_id FROM product_material WHERE material_code = 'TEAK'),   'BOARD', 20, NULL),
-    ('PLYWOOD',     'Ván ép',       NULL, 'M2', 20, NULL),
-    ('MDF',         'Ván MDF',      NULL, 'M2', 20, NULL),
-    ('PAINT-PU',    'Sơn PU',       NULL, 'L',  10, 'Sơn hoàn thiện'),
-    ('GLUE',        'Keo dán gỗ',   NULL, 'KG', 10, NULL),
-    ('SCREW',       'Ốc vít',       NULL, 'BOX', 5, NULL)
+    ('WOOD-OAK',    'Gỗ sồi xẻ',    (SELECT material_id FROM product_material WHERE material_code = 'OAK'),    'BOARD', 20, 'Gỗ sồi nhập khẩu xẻ sấy'),
+    ('WOOD-WALNUT', 'Gỗ óc chó xẻ', (SELECT material_id FROM product_material WHERE material_code = 'WALNUT'), 'BOARD', 20, 'Gỗ óc chó xẻ quy cách'),
+    ('WOOD-PINE',   'Gỗ thông xẻ',  (SELECT material_id FROM product_material WHERE material_code = 'PINE'),   'BOARD', 20, 'Gỗ thông xẻ thanh'),
+    ('WOOD-MANGO',  'Gỗ xoài xẻ',   (SELECT material_id FROM product_material WHERE material_code = 'MANGO'),  'BOARD', 15, 'Gỗ xoài tấm tự nhiên'),
+    ('WOOD-RUBBER', 'Gỗ cao su xẻ', (SELECT material_id FROM product_material WHERE material_code = 'RUBBER'), 'BOARD', 20, 'Gỗ cao su ghép thanh'),
+    ('WOOD-TEAK',   'Gỗ tếch xẻ',   (SELECT material_id FROM product_material WHERE material_code = 'TEAK'),   'BOARD', 20, 'Gỗ tếch (giá tỵ) xẻ thanh')
 ON DUPLICATE KEY UPDATE
     raw_name    = VALUES(raw_name),
     material_id = VALUES(material_id),
@@ -1189,7 +1185,11 @@ VALUES
     (@c_bed,     @r_bedroom, @m_walnut, @col_walnut,  'GI-001',  'Giường ngủ gỗ óc chó 1m6',  'SINGLE', 'Giường đôi 1m6, đầu giường bọc nệm',    200, 160, 100, 12500000, 2,  'ACTIVE'),
     (@c_shelf,   @r_office,  @m_rubber, @col_honey,   'KE-001',  'Kệ sách gỗ cao su',         'SINGLE', 'Kệ 5 tầng, màu vàng mật ong',           80,  30,  180, 2200000,  8,  'ACTIVE'),
     (@c_table,   @r_office,  @m_rubber, @col_natural, 'TB-002',  'Bàn làm việc gỗ cao su',    'SINGLE', 'Bàn làm việc 1 ngăn kéo',               140, 60,  75,  2800000,  6,  'ACTIVE'),
-    (@c_set,     @r_dining,  @m_oak,    @col_natural, 'SET-001', 'Bộ bàn ăn gỗ sồi 6 ghế',   'SET',    'Gồm 1 bàn ăn 6 người và 6 ghế ăn',      160, 80,  75,  9500000,  0,  'ACTIVE')
+    (@c_set,     @r_dining,  @m_oak,    @col_natural, 'SET-001', 'Bộ bàn ăn gỗ sồi 6 ghế',   'SET',    'Gồm 1 bàn ăn 6 người và 6 ghế ăn',      160, 80,  75,  9500000,  0,  'ACTIVE'),
+    (@c_table,   @r_dining,  @m_walnut, @col_walnut,  'TB-003',  'Bàn ăn gỗ óc chó 1m8',     'SINGLE', 'Mặt bàn nguyên tấm, chân chữ U',         180, 90,  75,  8500000,  5,  'ACTIVE'),
+    (@c_chair,   @r_dining,  @m_walnut, @col_walnut,  'GH-002',  'Ghế ăn gỗ óc chó bọc đệm', 'SINGLE', 'Khung gỗ óc chó, nệm da cao cấp',       48,  52,  88,  1400000,  24, 'ACTIVE'),
+    (@c_chair,   @r_dining,  @m_walnut, @col_walnut,  'GB-001',  'Ghế băng dài gỗ óc chó 1m4','SINGLE', 'Ghế băng dài 3 người ngồi',             140, 40,  45,  2600000,  6,  'ACTIVE'),
+    (@c_set,     @r_dining,  @m_walnut, @col_walnut,  'SET-002', 'Bộ bàn ăn gỗ óc chó 6 món','SET',    'Gồm 1 bàn ăn 1m8, 4 ghế tựa và 1 ghế băng dài', 180, 90, 75, 15800000, 4, 'ACTIVE')
 ON DUPLICATE KEY UPDATE
     product_name = VALUES(product_name),
     price        = VALUES(price);
@@ -1200,16 +1200,23 @@ SET @p_table    = (SELECT product_id FROM product WHERE product_code = 'TB-001')
     @p_bed      = (SELECT product_id FROM product WHERE product_code = 'GI-001'),
     @p_shelf    = (SELECT product_id FROM product WHERE product_code = 'KE-001'),
     @p_desk     = (SELECT product_id FROM product WHERE product_code = 'TB-002'),
-    @p_set      = (SELECT product_id FROM product WHERE product_code = 'SET-001');
+    @p_set      = (SELECT product_id FROM product WHERE product_code = 'SET-001'),
+    @p_tb3      = (SELECT product_id FROM product WHERE product_code = 'TB-003'),
+    @p_gh2      = (SELECT product_id FROM product WHERE product_code = 'GH-002'),
+    @p_gb1      = (SELECT product_id FROM product WHERE product_code = 'GB-001'),
+    @p_set2     = (SELECT product_id FROM product WHERE product_code = 'SET-002');
 
 
 -- =========================================================
--- 38. Sample - product_set_item  (Bộ SET-001 = 1 bàn + 6 ghế)
+-- 38. Sample - product_set_item  (Bộ SET-001 và SET-002 6 món)
 -- =========================================================
 INSERT INTO product_set_item (set_product_id, item_product_id, quantity)
 VALUES
     (@p_set, @p_table, 1),
-    (@p_set, @p_chair, 6)
+    (@p_set, @p_chair, 6),
+    (@p_set2, @p_tb3, 1),
+    (@p_set2, @p_gh2, 4),
+    (@p_set2, @p_gb1, 1)
 ON DUPLICATE KEY UPDATE
     quantity = VALUES(quantity);
 
@@ -1363,8 +1370,8 @@ VALUES
 -- =========================================================
 INSERT INTO supplier (supplier_code, supplier_name, phone_number, address, note)
 VALUES
-    ('SUP-001', 'Công ty Vật tư Gỗ Sài Gòn',  '0281234567', 'KCN Tân Bình, TP.HCM',    'Cung cấp gỗ, ván, sơn, keo, ốc vít'),
-    ('SUP-002', 'Xưởng Gỗ Thông Bình Dương',  '0274987654', 'Thuận An, Bình Dương',    'Chuyên gỗ thông')
+    ('SUP-001', 'Công ty Gỗ Sài Gòn',         '0281234567', 'KCN Tân Bình, TP.HCM',    'Cung cấp các loại gỗ xẻ sấy tự nhiên'),
+    ('SUP-002', 'Xưởng Gỗ Thông Bình Dương',  '0274987654', 'Thuận An, Bình Dương',    'Chuyên gỗ thông xẻ sấy')
 ON DUPLICATE KEY UPDATE
     supplier_name = VALUES(supplier_name),
     phone_number  = VALUES(phone_number);
@@ -1373,23 +1380,20 @@ SET @sup1 = (SELECT supplier_id FROM supplier WHERE supplier_code = 'SUP-001'),
     @sup2 = (SELECT supplier_id FROM supplier WHERE supplier_code = 'SUP-002');
 
 SET @rm_oak     = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'WOOD-OAK'),
+    @rm_walnut  = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'WOOD-WALNUT'),
     @rm_pine    = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'WOOD-PINE'),
-    @rm_rubber  = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'WOOD-RUBBER'),
-    @rm_plywood = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'PLYWOOD'),
-    @rm_paint   = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'PAINT-PU'),
-    @rm_glue    = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'GLUE'),
-    @rm_screw   = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'SCREW');
+    @rm_rubber  = (SELECT raw_material_id FROM raw_material WHERE raw_code = 'WOOD-RUBBER');
 
 
 -- =========================================================
--- 48. Sample - material_receipt & material_receipt_item  (nhập nguyên vật liệu)
+-- 48. Sample - material_receipt & material_receipt_item  (nhập nguyên vật liệu gỗ)
 --     RCP-...-0001: đã CONFIRMED -> đã cộng vào tồn kho
 --     RCP-...-0002: còn DRAFT    -> chưa cộng vào tồn kho
 -- =========================================================
 INSERT INTO material_receipt (receipt_code, supplier_id, receipt_date, total_amount, status, received_by, note)
 VALUES
-    ('RCP-20261001-0001', @sup1, '2026-10-01', 59950000, 'CONFIRMED', @leader, 'Nhập đầu tháng 10'),
-    ('RCP-20261022-0002', @sup2, '2026-10-22', 10800000, 'DRAFT',     @leader, 'Phiếu nháp, chờ hàng về');
+    ('RCP-20261001-0001', @sup1, '2026-10-01', 61000000, 'CONFIRMED', @leader, 'Nhập gỗ đầu tháng 10'),
+    ('RCP-20261022-0002', @sup2, '2026-10-22', 10800000, 'DRAFT',     @leader, 'Phiếu nháp, chờ gỗ về');
 
 SET @rcp1 = (SELECT receipt_id FROM material_receipt WHERE receipt_code = 'RCP-20261001-0001'),
     @rcp2 = (SELECT receipt_id FROM material_receipt WHERE receipt_code = 'RCP-20261022-0002');
@@ -1398,10 +1402,7 @@ INSERT INTO material_receipt_item (receipt_id, raw_material_id, quantity, unit_p
 VALUES
     (@rcp1, @rm_oak,     100, 350000, 'Gỗ sồi xẻ (tấm)'),
     (@rcp1, @rm_rubber,  50,  250000, 'Gỗ cao su xẻ (tấm)'),
-    (@rcp1, @rm_plywood, 40,  180000, 'Ván ép (m2)'),
-    (@rcp1, @rm_paint,   30,  120000, 'Sơn PU (lít)'),
-    (@rcp1, @rm_glue,    20,  60000,  'Keo dán gỗ (kg)'),
-    (@rcp1, @rm_screw,   10,  45000,  'Ốc vít (hộp)'),
+    (@rcp1, @rm_walnut,  30,  450000, 'Gỗ óc chó xẻ (tấm)'),
     (@rcp2, @rm_pine,    60,  180000, 'Gỗ thông xẻ (tấm)');
 
 
@@ -1425,26 +1426,20 @@ VALUES
 
 
 -- =========================================================
--- 50. Sample - material_issue & material_issue_item  (xuất nguyên vật liệu cho gia công)
+-- 50. Sample - material_issue & material_issue_item  (xuất gỗ cho gia công)
 -- =========================================================
 INSERT INTO material_issue (issue_code, production_id, issue_date, status, issued_by, note)
 VALUES
-    ('ISS-20261021-0001', @prd1, '2026-10-21', 'CONFIRMED', @leader, 'Xuất vật tư làm tủ giày'),
-    ('ISS-20261005-0002', @prd2, '2026-10-05', 'CONFIRMED', @leader, 'Xuất vật tư làm 20 ghế ăn');
+    ('ISS-20261021-0001', @prd1, '2026-10-21', 'CONFIRMED', @leader, 'Xuất gỗ làm tủ giày'),
+    ('ISS-20261005-0002', @prd2, '2026-10-05', 'CONFIRMED', @leader, 'Xuất gỗ làm 20 ghế ăn');
 
 SET @iss1 = (SELECT issue_id FROM material_issue WHERE issue_code = 'ISS-20261021-0001'),
     @iss2 = (SELECT issue_id FROM material_issue WHERE issue_code = 'ISS-20261005-0002');
 
 INSERT INTO material_issue_item (issue_id, raw_material_id, quantity, note)
 VALUES
-    (@iss1, @rm_oak,   10, NULL),
-    (@iss1, @rm_paint, 3,  NULL),
-    (@iss1, @rm_glue,  1,  NULL),
-    (@iss1, @rm_screw, 1,  NULL),
-    (@iss2, @rm_oak,   30, NULL),
-    (@iss2, @rm_paint, 5,  NULL),
-    (@iss2, @rm_glue,  2,  NULL),
-    (@iss2, @rm_screw, 2,  NULL);
+    (@iss1, @rm_oak, 10, 'Gỗ sồi xẻ làm tủ giày'),
+    (@iss2, @rm_oak, 30, 'Gỗ sồi xẻ làm 20 ghế ăn');
 
 
 -- =========================================================
@@ -1466,15 +1461,9 @@ VALUES
 --     Tồn = nhập (RCP-0001) - xuất (ISS-0001 + ISS-0002)
 --       WOOD-OAK    : 100 - 10 - 30 = 60
 --       WOOD-RUBBER : 50
---       PLYWOOD     : 40
---       PAINT-PU    : 30 - 3 - 5    = 22
---       GLUE        : 20 - 1 - 2    = 17
---       SCREW       : 10 - 1 - 2    = 7
+--       WOOD-WALNUT : 30
 --     (RCP-0002 còn DRAFT nên WOOD-PINE vẫn = 0)
 -- =========================================================
 UPDATE raw_material SET quantity_on_hand = 60 WHERE raw_code = 'WOOD-OAK';
 UPDATE raw_material SET quantity_on_hand = 50 WHERE raw_code = 'WOOD-RUBBER';
-UPDATE raw_material SET quantity_on_hand = 40 WHERE raw_code = 'PLYWOOD';
-UPDATE raw_material SET quantity_on_hand = 22 WHERE raw_code = 'PAINT-PU';
-UPDATE raw_material SET quantity_on_hand = 17 WHERE raw_code = 'GLUE';
-UPDATE raw_material SET quantity_on_hand = 7  WHERE raw_code = 'SCREW';
+UPDATE raw_material SET quantity_on_hand = 30 WHERE raw_code = 'WOOD-WALNUT';
