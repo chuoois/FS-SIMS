@@ -14,4 +14,4 @@ export async function getProducts(params = {}) {
 export async function getProductMetadata() {
     const response = await api.get('/products/metadata');
     return response.data;
-}
+}
