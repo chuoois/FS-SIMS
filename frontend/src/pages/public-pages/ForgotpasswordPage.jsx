@@ -94,7 +94,7 @@ export const ForgotPasswordPage = () => {
                   type="email"
                   required
                   autoComplete="email"
-                  placeholder="ten@email.com"
+                  placeholder="Nhập email của bạn"
                   className="h-11 w-full border border-stone-300 bg-white pl-9 pr-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-2 focus:outline-stone-900"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

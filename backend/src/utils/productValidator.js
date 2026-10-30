@@ -5,6 +5,17 @@
 
 const PRODUCT_CODE_REGEX = /^[A-Za-z0-9_-]{3,50}$/;
 
+function parseBoolean(value) {
+  if (value === true || value === 1 || value === '1') return true;
+  if (value === false || value === 0 || value === '0') return false;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  return null;
+}
+
 /**
  * Validate dữ liệu đầu vào khi tạo mới sản phẩm
  */
@@ -27,6 +38,11 @@ function validateCreateProductInput(data = {}) {
     status = 'ACTIVE',
     set_items,
   } = data;
+
+  const isFavorite = data.is_favorite === undefined ? false : parseBoolean(data.is_favorite);
+  if (isFavorite === null) {
+    return { isValid: false, error: 'Trạng thái yêu thích không hợp lệ.' };
+  }
 
   // 1. Validate product_code
   let normalizedCode = null;
@@ -151,6 +167,7 @@ function validateCreateProductInput(data = {}) {
     height_cm: parseDimension(height_cm),
     description: description ? String(description).trim() : null,
     image_url: image_url || null,
+    is_favorite: isFavorite,
     status: normalizedStatus,
   };
 
@@ -182,11 +199,20 @@ function validateUpdateProductInput(data = {}) {
     height_cm,
     description,
     image_url,
+    is_favorite,
     status,
     set_items,
   } = data;
 
   const value = {};
+
+  if (is_favorite !== undefined) {
+    const isFavorite = parseBoolean(is_favorite);
+    if (isFavorite === null) {
+      return { isValid: false, error: 'Trạng thái yêu thích không hợp lệ.' };
+    }
+    value.is_favorite = isFavorite;
+  }
 
   if (product_name !== undefined) {
     if (typeof product_name !== 'string' || product_name.trim().length === 0) {
@@ -350,6 +376,7 @@ function validateProductQueryParams(query = {}) {
 function toProductDTO(product) {
   if (!product) return null;
   const raw = typeof product.toJSON === 'function' ? product.toJSON() : product;
+  const isFavorite = parseBoolean(raw.is_favorite);
 
   const setItems = (raw.setItems || []).map((si) => {
     const item = typeof si.toJSON === 'function' ? si.toJSON() : si;
@@ -403,6 +430,7 @@ function toProductDTO(product) {
         : null,
     },
     imageUrl: raw.image_url,
+    isFavorite: isFavorite === true,
     description: raw.description,
     status: raw.status,
     categoryId: raw.category_id,
@@ -500,4 +528,3 @@ module.exports = {
   validateCreateColorInput,
   toProductDTO,
 };
-

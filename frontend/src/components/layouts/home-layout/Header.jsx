@@ -220,22 +220,6 @@ export const Header = ({ favoriteCount = 0, cartCount = 0 }) => {
             </NavLink>
           ))}
         </nav>
-
-        <form
-          role="search"
-          onSubmit={(e) => e.preventDefault()}
-          className="ml-auto flex h-10 w-full max-w-[272px] items-center rounded-full border border-stone-200 bg-stone-50 pl-5 pr-3 transition-colors focus-within:border-stone-400 focus-within:bg-white"
-        >
-          <input
-            type="search"
-            placeholder="Tìm sản phẩm"
-            aria-label="Tìm sản phẩm"
-            className="w-full bg-transparent text-sm text-stone-700 placeholder:text-stone-400 focus:outline-none"
-          />
-          <button type="submit" aria-label="Tìm kiếm" className={`text-stone-900 ${focusRing}`}>
-            <Search className="size-5" strokeWidth={2.2} aria-hidden="true" />
-          </button>
-        </form>
       </div>
 
       {/* Menu di động / khi thu gọn */}

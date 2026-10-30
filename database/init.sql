@@ -199,6 +199,7 @@ CREATE TABLE IF NOT EXISTS product (
     price         INT            NOT NULL DEFAULT 0,
     stock_quantity INT           NOT NULL DEFAULT 0,        -- tồn kho thành phẩm
     image_url     VARCHAR(255)   NULL,
+    is_favorite   TINYINT(1)     NOT NULL DEFAULT 0,
     status        VARCHAR(20)    NOT NULL DEFAULT 'ACTIVE',
     createdate    DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modifiedate   DATETIME       NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,

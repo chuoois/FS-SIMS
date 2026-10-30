@@ -1,41 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Heart } from 'lucide-react';
+import { getProducts } from '../../services/productService';
 
-/* ---------- Dữ liệu mẫu (thay bằng API / dữ liệu thật) ---------- */
-const bestSellers = [
-  { id: 1, name: 'Thảm Delicate 08', price: 21900000, image: '' },
-  { id: 2, name: 'Thảm Delicate 06', price: 21900000, image: '' },
-  { id: 3, name: 'Thảm Ultimate 04', price: 21900000, image: '' },
-  { id: 4, name: 'Gương Specchi', price: 59900000, image: '' },
-  { id: 5, name: 'Sofa da Nova 2 chỗ', price: 38500000, image: '' },
-  { id: 6, name: 'Ghế ăn Tania', price: 7200000, image: '' },
-  { id: 7, name: 'Đèn thả Pirce', price: 12800000, image: '' },
-  { id: 8, name: 'Bàn trà Nami', price: 9600000, image: '' },
-];
+const IN_STORE_PARAMS = { page: 1, limit: 8 };
+const NEW_ARRIVAL_PARAMS = { page: 1, limit: 4, is_new: true, sort_by: 'newest' };
 
-const newArrivals = [
-  { id: 11, name: 'Nến thơm Côte Noire', price: 1250000, image: '' },
-  { id: 12, name: 'Bình hoa gốm Aria', price: 3400000, image: '' },
-  { id: 13, name: 'Gối tựa Lino', price: 1850000, image: '' },
-  { id: 14, name: 'Đèn bàn Orbit', price: 6900000, image: '' },
-];
-
-const categories = [
-  { name: 'Sofa & Ghế', href: '#san-pham', tone: 'bg-stone-300', image: '' },
-  { name: 'Thảm', href: '#san-pham', tone: 'bg-amber-100', image: '' },
-  { name: 'Đèn', href: '#san-pham', tone: 'bg-stone-200', image: '' },
-  { name: 'Gương', href: '#san-pham', tone: 'bg-orange-100', image: '' },
-  { name: 'Bàn', href: '#san-pham', tone: 'bg-stone-300', image: '' },
-  { name: 'Hoa & Hương thơm', href: '#san-pham', tone: 'bg-amber-100', image: '' },
-];
-
-const heroSlides = [
+const HERO_SLIDES = [
   {
     eyebrow: 'BỘ SƯU TẬP PHÒNG KHÁCH',
     title: 'Tinh Hoa',
     accent: 'Gỗ Tự Nhiên',
     text: 'Không gian phòng khách sang trọng, ấm cúng với sofa gỗ, bàn trà chế tác tinh xảo từ gỗ sồi và óc chó tuyển chọn.',
-    href: '#san-pham',
+    href: '/products',
     image: '/assets/slide_phong_khach.jpg',
   },
   {
@@ -43,7 +19,7 @@ const heroSlides = [
     title: 'Bữa Cơm',
     accent: 'Sum Vầy',
     text: 'Bàn ghế ăn gỗ nguyên khối bền chắc cùng năm tháng, kết nối những khoảnh khắc yêu thương của gia đình.',
-    href: '#san-pham',
+    href: '/products',
     image: '/assets/slide_ban_an.png',
   },
   {
@@ -51,29 +27,108 @@ const heroSlides = [
     title: 'Chốn Về',
     accent: 'Bình Yên',
     text: 'Giường ngủ, tủ áo và táp đầu giường từ gỗ cao cấp – kiến tạo không gian thư thái cho giấc ngủ an lành.',
-    href: '#san-pham',
+    href: '/products',
     image: '/assets/slide_phong_ngu.png',
   },
 ];
 
-const formatVnd = (n) => `${n.toLocaleString('en-US')} VND`;
+const STORY = {
+  title: 'Mỗi góc nhà đều có câu chuyện riêng',
+  text: 'Góc Nhà chọn từng món đồ nội thất và trang trí từ các nhà thiết kế, xưởng thủ công mà chúng tôi tin tưởng. Khám phá từng bộ sưu tập để tìm món đồ hợp với căn nhà của bạn.',
+  cta: 'Khám phá sản phẩm',
+  href: '/products',
+  image: '',
+};
+
+/* ---------- Tiện ích ---------- */
+const formatVnd = (n) => {
+  const num = Number(n);
+  if (n === null || n === undefined || Number.isNaN(num)) return 'Liên hệ';
+  return `${num.toLocaleString('vi-VN')} ₫`;
+};
+
+/* Chuẩn hoá sản phẩm từ API (hỗ trợ camelCase & snake_case) */
+const normalizeProduct = (p) => {
+  const stock = p.stockQuantity ?? p.stock_quantity;
+  return {
+    id: p.productId ?? p.product_id ?? p.id,
+    name: p.productName ?? p.product_name ?? p.name ?? 'Sản phẩm',
+    image: p.imageUrl ?? p.image_url ?? p.image ?? '',
+    price: p.price,
+    oldPrice: p.oldPrice ?? p.old_price ?? null,
+    isNew: Boolean(p.isNew ?? p.is_new),
+    outOfStock: stock !== undefined && stock !== null && Number(stock) <= 0,
+  };
+};
+
+/* Hook tải danh sách sản phẩm theo tham số (params nên là hằng số bên ngoài component) */
+const useProductList = (params) => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    getProducts(params)
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setItems(list.map(normalizeProduct));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error('[HomePage] Lỗi lấy sản phẩm:', err);
+        setError('Không thể tải sản phẩm. Vui lòng thử lại.');
+      })
+      .finally(() => !cancelled && setLoading(false));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params, reloadKey]);
+
+  const retry = useCallback(() => setReloadKey((k) => k + 1), []);
+  return { items, loading, error, retry };
+};
 
 /* ---------- Thành phần nhỏ ---------- */
-const Photo = ({ src, alt, tone, className = '' }) =>
-  src ? (
-    <img src={src} alt={alt} loading="lazy" className={`object-cover ${className}`} />
-  ) : (
-    <div className={`${tone ?? 'bg-stone-200'} ${className}`} role="img" aria-label={alt} />
-  );
+const Photo = ({ src, alt, tone = 'bg-stone-200', className = '' }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
 
-const SectionHeading = ({ id, children, href = '#san-pham', linkText = 'xem tất cả' }) => (
-  <div className="flex items-baseline gap-5 border-b border-stone-200 pb-2">
-    <h2 id={id} className="border-b border-orange-700 pb-2 text-[15px] font-medium uppercase text-stone-900">
-      {children}
-    </h2>
+  return src && !failed ? (
+    <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`object-cover ${className}`} />
+  ) : (
+    <div
+      className={`grid place-items-center text-[11px] uppercase tracking-widest text-stone-400 ${tone} ${className}`}
+      role="img"
+      aria-label={alt}
+    >
+      Chưa có ảnh
+    </div>
+  );
+};
+
+const SectionHeading = ({ id, eyebrow, children, href = '/products', linkText = 'Xem tất cả' }) => (
+  <div className="flex items-end justify-between gap-4 border-b border-stone-200 pb-4">
+    <div>
+      {eyebrow && (
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-orange-700">{eyebrow}</p>
+      )}
+      <h2 id={id} className="mt-1 text-2xl font-light tracking-tight text-stone-900 md:text-3xl">
+        {children}
+      </h2>
+    </div>
     {href && (
-      <a href={href} className="inline-flex items-center gap-1 text-[11px] font-bold text-stone-900 hover:text-orange-700">
-        {linkText} <ChevronRight className="size-3" aria-hidden="true" />
+      <a
+        href={href}
+        className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold uppercase tracking-wider text-stone-900 hover:text-orange-700"
+      >
+        {linkText} <ChevronRight className="size-3.5" aria-hidden="true" />
       </a>
     )}
   </div>
@@ -81,32 +136,75 @@ const SectionHeading = ({ id, children, href = '#san-pham', linkText = 'xem tấ
 
 const ProductCard = ({ product, liked, onToggle }) => (
   <article className="group relative flex flex-col">
-    <button
-      type="button"
-      onClick={() => onToggle(product.id)}
-      aria-pressed={liked}
-      aria-label={`Yêu thích ${product.name}`}
-      className="absolute right-2 top-2 z-10 text-stone-600 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
-    >
-      <Heart className="size-4" strokeWidth={1.6} fill={liked ? '#dc2626' : 'none'} stroke={liked ? '#dc2626' : 'currentColor'} aria-hidden="true" />
-    </button>
-    <a href={`#san-pham-${product.id}`} className="flex flex-col">
-      <Photo
-        src={product.image}
-        alt={product.name}
-        tone="bg-stone-100"
-        className="aspect-[4/3] w-full transition-transform duration-300 group-hover:scale-[1.02]"
-      />
-      <h3 className="mt-5 text-[13px] font-bold text-stone-900">{product.name}</h3>
-      <p className="mt-4 text-[11px] font-bold text-stone-800">{formatVnd(product.price)}</p>
+    <div className="relative overflow-hidden bg-stone-100">
+      <a href={`/products/${product.id}`} aria-label={product.name} className="block">
+        <Photo
+          src={product.image}
+          alt={product.name}
+          tone="bg-stone-100"
+          className="aspect-[4/3] w-full transition-transform duration-500 group-hover:scale-105"
+        />
+      </a>
+
+      <div className="pointer-events-none absolute left-2 top-2 flex gap-1.5">
+        {product.isNew && (
+          <span className="bg-stone-900 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+            Mới
+          </span>
+        )}
+        {product.outOfStock && (
+          <span className="bg-white/90 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-500">
+            Hết hàng
+          </span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onToggle(product.id)}
+        aria-pressed={liked}
+        aria-label={`Yêu thích ${product.name}`}
+        className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-white/90 text-stone-600 shadow-sm transition hover:bg-white hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+      >
+        <Heart
+          className="size-4"
+          strokeWidth={1.6}
+          fill={liked ? '#dc2626' : 'none'}
+          stroke={liked ? '#dc2626' : 'currentColor'}
+          aria-hidden="true"
+        />
+      </button>
+    </div>
+
+    <a href={`/products/${product.id}`} className="mt-4 flex flex-col">
+      <h3 className="line-clamp-2 text-[14px] font-semibold text-stone-900 group-hover:underline">{product.name}</h3>
+      <div className="mt-2 flex items-baseline gap-2">
+        <p className="text-[13px] font-bold text-stone-900">{formatVnd(product.price)}</p>
+        {product.oldPrice && Number(product.oldPrice) > Number(product.price) && (
+          <p className="text-[11px] text-stone-400 line-through">{formatVnd(product.oldPrice)}</p>
+        )}
+      </div>
     </a>
   </article>
 );
 
+const SkeletonGrid = ({ count, cols }) => (
+  <div className={`mt-8 grid grid-cols-2 gap-x-6 gap-y-10 ${cols}`} aria-busy="true">
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="animate-pulse">
+        <div className="aspect-[4/3] w-full bg-stone-100" />
+        <div className="mt-4 h-4 w-3/4 bg-stone-100" />
+        <div className="mt-3 h-3 w-1/3 bg-stone-100" />
+      </div>
+    ))}
+  </div>
+);
+
+/* ---------- Hero ---------- */
 const Hero = () => {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const count = heroSlides.length;
+  const count = HERO_SLIDES.length;
   const go = (i) => setIndex((i + count) % count);
 
   useEffect(() => {
@@ -117,11 +215,11 @@ const Hero = () => {
   }, [paused, count]);
 
   const arrow =
-    'absolute top-1/2 z-20 grid size-10 -translate-y-1/2 place-items-center border border-white/70 text-white transition-colors hover:bg-white hover:text-[#323139] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
+    'absolute top-1/2 z-20 hidden size-11 -translate-y-1/2 place-items-center border border-white/70 text-white transition-colors hover:bg-white hover:text-[#323139] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white md:grid';
 
   return (
     <section
-      className="relative isolate min-h-[420px] overflow-hidden bg-stone-700 md:min-h-[640px]"
+      className="relative isolate min-h-[460px] overflow-hidden bg-stone-700 md:min-h-[640px]"
       aria-roledescription="carousel"
       aria-label="Banner nổi bật"
       onMouseEnter={() => setPaused(true)}
@@ -129,33 +227,39 @@ const Hero = () => {
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
     >
-      {heroSlides.map((slide, i) => (
+      {HERO_SLIDES.map((slide, i) => (
         <div
           key={slide.title}
           role="group"
           aria-roledescription="slide"
           aria-label={`${i + 1} / ${count}`}
           aria-hidden={i !== index}
-          className={`absolute inset-0 flex items-end transition-opacity duration-700 ${i === index ? 'z-10 opacity-100' : 'pointer-events-none opacity-0'}`}
+          className={`absolute inset-0 flex items-end transition-opacity duration-700 ${i === index ? 'z-10 opacity-100' : 'pointer-events-none opacity-0'
+            }`}
         >
           {slide.image ? (
             <img src={slide.image} alt="" className="absolute inset-0 -z-20 size-full object-cover" />
           ) : (
             <div className={`absolute inset-0 -z-20 ${i % 2 ? 'bg-stone-600' : 'bg-stone-700'}`} aria-hidden="true" />
           )}
-          <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/40 to-black/25" aria-hidden="true" />
+          <div
+            className="absolute inset-0 -z-10 bg-gradient-to-t from-black/80 via-black/40 to-black/20"
+            aria-hidden="true"
+          />
 
-          <div className="w-full px-5 pb-16 text-white md:pb-24 lg:px-[4vw]">
+          <div className="w-full px-5 pb-20 text-white md:pb-28 lg:px-[4vw]">
             <div className="max-w-[640px]">
-              <p className="text-xs font-bold tracking-wider text-amber-400 uppercase sm:text-sm">{slide.eyebrow}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-400 sm:text-sm">{slide.eyebrow}</p>
               <h2 className="mt-3 text-4xl font-light italic tracking-tight sm:text-5xl md:mt-4 md:text-7xl">
                 {slide.title} <span className="text-amber-400">{slide.accent}</span>
               </h2>
-              <p className="mt-4 max-w-[480px] text-sm font-medium leading-relaxed text-stone-100 sm:text-base md:mt-6 md:text-lg">{slide.text}</p>
+              <p className="mt-4 max-w-[480px] text-sm leading-relaxed text-stone-100 sm:text-base md:mt-6 md:text-lg">
+                {slide.text}
+              </p>
               <a
                 href={slide.href}
                 tabIndex={i === index ? 0 : -1}
-                className="mt-6 inline-flex h-9 items-center gap-2 border border-white px-5 text-xs font-bold transition-colors hover:bg-white hover:text-[#323139] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+                className="mt-7 inline-flex h-11 items-center gap-2 bg-white px-6 text-xs font-bold uppercase tracking-widest text-stone-900 transition-colors hover:bg-amber-400 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
               >
                 Khám phá ngay
                 <ChevronRight className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
@@ -172,15 +276,16 @@ const Hero = () => {
         <ChevronRight className="size-5" aria-hidden="true" />
       </button>
 
-      <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 gap-2">
-        {heroSlides.map((slide, i) => (
+      <div className="absolute bottom-7 left-5 z-20 flex items-center gap-2 lg:left-[4vw]">
+        {HERO_SLIDES.map((slide, i) => (
           <button
             key={slide.title}
             type="button"
             aria-label={`Xem ảnh ${i + 1}`}
             aria-current={i === index}
             onClick={() => setIndex(i)}
-            className={`h-1.5 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${i === index ? 'w-8 bg-white' : 'w-4 bg-white/50 hover:bg-white/80'}`}
+            className={`h-1.5 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${i === index ? 'w-10 bg-amber-400' : 'w-5 bg-white/50 hover:bg-white/80'
+              }`}
           />
         ))}
       </div>
@@ -188,79 +293,115 @@ const Hero = () => {
   );
 };
 
-/* ---------- Mới: danh mục ---------- */
-const Categories = () => (
-  <section aria-labelledby="danh-muc">
-    <SectionHeading id="danh-muc" href={null}>Mua theo danh mục</SectionHeading>
-    <ul className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-      {categories.map((c) => (
-        <li key={c.name}>
-          <a href={c.href} className="group relative block overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900">
-            <Photo src={c.image} alt={c.name} tone={c.tone} className="aspect-[3/4] w-full transition-transform duration-500 group-hover:scale-[1.04]" />
-            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-3 pb-3 pt-10 text-[13px] font-bold text-white">
-              {c.name}
-            </span>
-          </a>
-        </li>
-      ))}
-    </ul>
-  </section>
-);
-
-/* ---------- Danh sách sản phẩm dùng lại cho nhiều mục ---------- */
-const ProductSection = ({ id, anchor, title, products, cols = 'md:grid-cols-3 xl:grid-cols-4' }) => {
-  const [liked, setLiked] = useState(() => new Set());
-  const toggle = (pid) =>
-    setLiked((prev) => {
-      const next = new Set(prev);
-      next.has(pid) ? next.delete(pid) : next.add(pid);
-      return next;
-    });
+/* ---------- Mục sản phẩm (dùng cho cả 2 nhóm) ---------- */
+const ProductSection = ({ id, anchor, eyebrow, title, params, count, cols, liked, onToggle, emptyText }) => {
+  const { items, loading, error, retry } = useProductList(params);
 
   return (
     <section aria-labelledby={id} id={anchor}>
-      <SectionHeading id={id}>{title}</SectionHeading>
-      <div className={`mt-8 grid grid-cols-2 gap-x-6 gap-y-10 ${cols}`}>
-        {products.map((p) => (
-          <ProductCard key={p.id} product={p} liked={liked.has(p.id)} onToggle={toggle} />
-        ))}
-      </div>
+      <SectionHeading id={id} eyebrow={eyebrow}>
+        {title}
+      </SectionHeading>
+
+      {loading && <SkeletonGrid count={count} cols={cols} />}
+
+      {!loading && error && (
+        <div className="mt-8 border border-stone-200 py-14 text-center">
+          <p className="text-sm text-stone-600">{error}</p>
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-4 h-10 bg-stone-900 px-6 text-[12px] font-bold uppercase tracking-widest text-white hover:bg-black"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && items.length === 0 && (
+        <div className="mt-8 border border-stone-200 py-14 text-center text-sm text-stone-500">{emptyText}</div>
+      )}
+
+      {!loading && !error && items.length > 0 && (
+        <div className={`mt-8 grid grid-cols-2 gap-x-6 gap-y-10 ${cols}`}>
+          {items.map((p) => (
+            <ProductCard key={p.id} product={p} liked={liked.has(p.id)} onToggle={onToggle} />
+          ))}
+        </div>
+      )}
     </section>
   );
 };
 
-/* ---------- Mới: banner xen giữa (ảnh + chữ chia đôi) ---------- */
+/* ---------- Banner xen giữa ---------- */
 const Story = () => (
   <section aria-labelledby="cau-chuyen" className="grid overflow-hidden bg-stone-100 md:grid-cols-2">
-    <Photo src="" alt="Không gian phòng khách tại Góc Nhà" tone="bg-stone-300" className="min-h-[280px] w-full md:min-h-[420px]" />
-    <div className="flex flex-col justify-center px-6 py-10 md:px-14">
+    <Photo
+      src={STORY.image}
+      alt="Không gian phòng khách tại Góc Nhà"
+      tone="bg-stone-300"
+      className="min-h-[280px] w-full md:min-h-[440px]"
+    />
+    <div className="flex flex-col justify-center px-6 py-12 md:px-16">
       <h2 id="cau-chuyen" className="text-3xl font-light italic tracking-tight text-stone-900 md:text-4xl">
-        Mỗi góc nhà đều có câu chuyện riêng
+        {STORY.title}
       </h2>
-      <p className="mt-5 max-w-[440px] text-[14px] leading-relaxed text-stone-700">
-        Góc Nhà chọn từng món đồ nội thất và trang trí từ các nhà thiết kế, xưởng thủ công mà chúng tôi tin tưởng. Khám phá từng bộ sưu tập để tìm món đồ hợp với căn nhà của bạn.
-      </p>
-      <div className="mt-7">
+      <p className="mt-5 max-w-[440px] text-[14px] leading-relaxed text-stone-700">{STORY.text}</p>
+      <div className="mt-8">
         <a
-          href="#san-pham"
-          className="inline-flex h-9 items-center border border-[#323139] px-5 text-xs font-bold text-[#323139] transition-colors hover:bg-[#323139] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#323139]"
+          href={STORY.href}
+          className="inline-flex h-11 items-center border border-[#323139] px-6 text-xs font-bold uppercase tracking-widest text-[#323139] transition-colors hover:bg-[#323139] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#323139]"
         >
-          Khám phá sản phẩm
+          {STORY.cta}
         </a>
       </div>
     </div>
   </section>
 );
 
-/* ---------- Trang Home (đặt làm route index trong HomeLayout) ---------- */
-export const HomePage = () => (
-  <>
-    <Hero />
-    <div className="mx-auto max-w-[1500px] space-y-16 px-5 py-12 lg:space-y-20 lg:px-[4vw]">
-      <Categories />
-      <ProductSection id="ban-chay" anchor="san-pham" title="Bán chạy nhất" products={bestSellers} />
-      <Story />
-      <ProductSection id="hang-moi" title="Hàng mới về" products={newArrivals} cols="md:grid-cols-4" />
-    </div>
-  </>
-);
+/* ---------- Trang Home ---------- */
+export const HomePage = () => {
+  const [liked, setLiked] = useState(() => new Set());
+  const toggleLike = useCallback((id) => {
+    setLiked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  return (
+    <>
+      <Hero />
+      <div className="mx-auto max-w-[1500px] space-y-16 px-5 py-14 lg:space-y-24 lg:px-[4vw]">
+        <ProductSection
+          id="dang-ban"
+          anchor="products"
+          eyebrow="Tại cửa hàng"
+          title="Sản phẩm đang bán"
+          params={IN_STORE_PARAMS}
+          count={IN_STORE_PARAMS.limit}
+          cols="md:grid-cols-3 xl:grid-cols-4"
+          liked={liked}
+          onToggle={toggleLike}
+          emptyText="Hiện chưa có sản phẩm nào đang bán."
+        />
+
+        <Story />
+
+        <ProductSection
+          id="hang-moi"
+          eyebrow="Mới cập nhật"
+          title="Sản phẩm mới về"
+          params={NEW_ARRIVAL_PARAMS}
+          count={NEW_ARRIVAL_PARAMS.limit}
+          cols="md:grid-cols-4"
+          liked={liked}
+          onToggle={toggleLike}
+          emptyText="Chưa có sản phẩm mới về."
+        />
+      </div>
+    </>
+  );
+};

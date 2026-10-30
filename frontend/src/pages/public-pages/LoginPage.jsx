@@ -56,7 +56,7 @@ export const LoginPage = () => {
             type="email"
             required
             autoComplete="email"
-            placeholder="ten@email.com"
+            placeholder="Nhập email của bạn"
             className={inputClass}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
