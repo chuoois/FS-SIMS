@@ -83,11 +83,6 @@ const Product = sequelize.define(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
-    is_favorite: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
-    },
     status: {
       type: DataTypes.STRING(20),
       allowNull: false,
