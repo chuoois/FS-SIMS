@@ -42,6 +42,12 @@ cp frontend/.env.example frontend/.env
 
 ## Chạy project
 
+Nếu database đã được khởi tạo trước khi thêm trường yêu thích sản phẩm và cột chưa tồn tại, chạy migration một lần trên MySQL:
+```sql
+ALTER TABLE product
+    ADD COLUMN is_favorite TINYINT(1) NOT NULL DEFAULT 0;
+```
+
 ### Chế độ Development (hot-reload)
 ```bash
 docker-compose up --build

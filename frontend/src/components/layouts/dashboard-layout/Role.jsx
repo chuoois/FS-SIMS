@@ -41,9 +41,9 @@ export const roles = {
     label: 'Nhân viên bán hàng',
     base: '/sale',
     items: [
-      { label: 'Tổng quan', path: '', icon: LayoutDashboard },
-      { label: 'Đơn hàng', path: '#', icon: Package },
-      { label: 'Báo giá', path: '#', icon: FileText },
+      { label: 'Tạo đơn hàng (POS)', path: 'create-order', icon: Receipt },
+      { label: 'Đơn hàng', path: 'orders', icon: Package },
+      { label: 'Hợp đồng', path: 'contracts', icon: FileText },
       { label: 'Khách hàng', path: '#', icon: Users },
       { label: 'Lịch hẹn tư vấn', path: '#', icon: CalendarCheck },
       { label: 'Sản phẩm', path: '#', icon: Boxes },

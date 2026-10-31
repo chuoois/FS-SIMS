@@ -13,6 +13,8 @@ const productRoutes = require('./routes/productRoutes');
 const rawMaterialRoutes = require('./routes/rawMaterialRoutes');
 const purchaseReceiptRoutes = require('./routes/purchaseReceiptRoutes');
 const materialExportRoutes = require('./routes/materialExportRoutes');
+const saleOrderRoutes = require('./routes/saleOrderRoutes');
+
 
 const app = express();
 
@@ -39,6 +41,8 @@ app.use('/api/products', productRoutes);
 app.use('/api/raw-materials', rawMaterialRoutes);
 app.use('/api/purchase-receipts', purchaseReceiptRoutes);
 app.use('/api/material-exports', materialExportRoutes);
+app.use('/api/sale-orders', saleOrderRoutes);
+
 
 // Middleware xử lý lỗi tập trung
 app.use((err, req, res, next) => {

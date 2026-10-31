@@ -1,6 +1,9 @@
 import { SaleLayout } from "../../components/layouts/dashboard-layout/DashboardLayout";
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
+import { CreateOrderPage } from "../../pages/sale-pages/CreateOrderPage";
+import { OrdersPage } from "../../pages/sale-pages/OrdersPage";
+import { ContractsPage } from "../../pages/sale-pages/ContractsPage";
 
 export const SaleRouter = {
   path: "/sale",
@@ -11,22 +14,23 @@ export const SaleRouter = {
       children: [
         {
           index: true,
-          element: (
-            <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-stone-900">Tổng quan Kinh doanh</h2>
-              <p className="mt-2 text-sm text-stone-600">
-                Chào mừng bạn đến với khu vực Quản lý Bán hàng & Chăm sóc Khách hàng Góc Nhà.
-              </p>
-            </div>
-          ),
+          element: <CreateOrderPage />,
+        },
+        {
+          path: "create-order",
+          element: <CreateOrderPage />,
+        },
+        {
+          path: "orders/create",
+          element: <CreateOrderPage />,
         },
         {
           path: "orders",
-          element: (
-            <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-stone-900">Danh sách Đơn hàng</h2>
-            </div>
-          ),
+          element: <OrdersPage />,
+        },
+        {
+          path: "contracts",
+          element: <ContractsPage />,
         },
       ],
     },

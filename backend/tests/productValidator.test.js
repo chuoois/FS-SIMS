@@ -34,7 +34,20 @@ describe('productValidator - validateCreateProductInput', () => {
     expect(res.value.product_name).toBe('Bàn ăn gỗ sồi 6 người');
     expect(res.value.price).toBe(4500000);
     expect(res.value.stock_quantity).toBe(10);
+    expect(res.value.is_favorite).toBe(false);
     expect(res.value.status).toBe('ACTIVE');
+  });
+
+  test('nhận và chuẩn hóa is_favorite khi tạo sản phẩm', () => {
+    const res = validateCreateProductInput({ ...validData, is_favorite: 'true' });
+    expect(res.isValid).toBe(true);
+    expect(res.value.is_favorite).toBe(true);
+  });
+
+  test('báo lỗi nếu is_favorite không phải giá trị boolean hợp lệ', () => {
+    const res = validateCreateProductInput({ ...validData, is_favorite: 'yes' });
+    expect(res.isValid).toBe(false);
+    expect(res.error).toMatch(/Trạng thái yêu thích không hợp lệ/);
   });
 
   test('tự động gán null cho product_code khi không truyền để hệ thống tự sinh mã', () => {
@@ -89,6 +102,12 @@ describe('productValidator - validateUpdateProductInput', () => {
     expect(res.value.status).toBe('INACTIVE');
   });
 
+  test('chấp nhận cập nhật is_favorite mà không thay đổi các trường khác', () => {
+    const res = validateUpdateProductInput({ is_favorite: '1' });
+    expect(res.isValid).toBe(true);
+    expect(res.value).toEqual({ is_favorite: true });
+  });
+
   test('báo lỗi nếu giá âm khi cập nhật', () => {
     const res = validateUpdateProductInput({ price: -1 });
     expect(res.isValid).toBe(false);
@@ -134,6 +153,7 @@ describe('productValidator - toProductDTO', () => {
       width_cm: 80,
       height_cm: 75,
       image_url: 'https://cloudinary.com/test.jpg',
+      is_favorite: true,
       status: 'ACTIVE',
       category: { category_name: 'Bàn' },
       room: { room_name: 'Phòng ăn' },
@@ -144,9 +164,15 @@ describe('productValidator - toProductDTO', () => {
     const dto = toProductDTO(mockProduct);
     expect(dto.productId).toBe(1);
     expect(dto.productCode).toBe('TB-001');
+    expect(dto.isFavorite).toBe(true);
     expect(dto.categoryName).toBe('Bàn');
     expect(dto.roomName).toBe('Phòng ăn');
     expect(dto.materialName).toBe('Gỗ sồi');
     expect(dto.dimensions.formatted).toBe('160 x 80 x 75 cm');
+  });
+
+  test('không đánh dấu yêu thích khi database trả về is_favorite = 0', () => {
+    const dto = toProductDTO({ product_id: 2, is_favorite: 0 });
+    expect(dto.isFavorite).toBe(false);
   });
 });
