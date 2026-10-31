@@ -59,19 +59,6 @@ const Supplier = sequelize.define(
   },
 );
 
-const { MaterialReceipt } = require('./MaterialReceiptModel');
-
-if (!Supplier.associations || !Supplier.associations.materialReceiptSupplierIdRecords) {
-  Supplier.hasMany(MaterialReceipt, {
-    foreignKey: 'supplier_id',
-    as: 'materialReceiptSupplierIdRecords',
-  });
-  MaterialReceipt.belongsTo(Supplier, {
-    foreignKey: 'supplier_id',
-    as: 'materialReceiptSupplierId',
-  });
-}
-
 // =========================================================
 // Repository / Query Functions (Data Access Layer)
 // =========================================================
@@ -142,6 +129,19 @@ async function getSuppliersWithPagination({ search, status, page = 1, limit = 10
 async function getSupplierWithReceiptHistory(supplierId) {
   const MaterialReceiptModel =
     sequelize.models.MaterialReceipt || require('./MaterialReceiptModel').MaterialReceipt;
+
+  if (isSequelizeModel(Supplier) && isSequelizeModel(MaterialReceiptModel)) {
+    if (!Supplier.associations || !Supplier.associations.materialReceiptSupplierIdRecords) {
+      Supplier.hasMany(MaterialReceiptModel, {
+        foreignKey: 'supplier_id',
+        as: 'materialReceiptSupplierIdRecords',
+      });
+      MaterialReceiptModel.belongsTo(Supplier, {
+        foreignKey: 'supplier_id',
+        as: 'materialReceiptSupplierId',
+      });
+    }
+  }
 
   const supplier = await Supplier.findByPk(supplierId, {
     include: [

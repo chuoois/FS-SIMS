@@ -4,7 +4,7 @@ import { getProducts, getProductMetadata } from '../../services/productService';
 
 /* ---------- Dữ liệu cấu hình & phân trang ---------- */
 const banner = { title: 'Sản phẩm', image: '' };
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 8;
 
 const sortOptions = [
   { value: '', label: 'Mặc định' },
