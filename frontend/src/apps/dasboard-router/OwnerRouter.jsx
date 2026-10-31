@@ -5,6 +5,8 @@ import { ManageStaffAccountsPage } from "../../pages/owner-pages/ManageStaffAcco
 import { ManageSuppliersPage } from "../../pages/owner-pages/ManageSuppliersPage";
 import { ManageProductsPage } from "../../pages/owner-pages/ManageProductsPage";
 import { ManageMaterialsPage } from "../../pages/owner-pages/ManageMaterialsPage";
+import { ManagePurchaseReceiptsPage } from "../../pages/owner-pages/ManagePurchaseReceiptsPage";
+import { ManageMaterialExportPage } from "../../pages/owner-pages/ManageMaterialExportPage";
 
 export const OwnerRouter = {
   path: "/owner",
@@ -40,6 +42,14 @@ export const OwnerRouter = {
         {
           path: "materials",
           element: <ManageMaterialsPage />,
+        },
+        {
+          path: "purchase-receipts",
+          element: <ManagePurchaseReceiptsPage />,
+        },
+        {
+          path: "material-exports",
+          element: <ManageMaterialExportPage />,
         },
         {
           path: "analytics",

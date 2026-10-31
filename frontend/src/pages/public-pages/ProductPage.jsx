@@ -236,11 +236,10 @@ const Pagination = ({ page, total, onChange }) => {
             onClick={() => onChange(p)}
             aria-current={p === page ? 'page' : undefined}
             aria-label={`Trang ${p}`}
-            className={`${pageBtn} ${
-              p === page
+            className={`${pageBtn} ${p === page
                 ? 'border-stone-900 bg-stone-900 text-white'
                 : 'border-stone-300 text-stone-800 hover:border-stone-900'
-            }`}
+              }`}
           >
             {p}
           </button>
@@ -272,9 +271,8 @@ const FilterGroup = ({ title, children }) => (
 
 const OptionRow = ({ name, checked, onChange, label }) => (
   <label
-    className={`flex cursor-pointer items-center justify-between px-2 py-1.5 text-[14px] transition-colors hover:text-orange-700 ${
-      checked ? 'font-semibold text-stone-900' : 'text-stone-600'
-    }`}
+    className={`flex cursor-pointer items-center justify-between px-2 py-1.5 text-[14px] transition-colors hover:text-orange-700 ${checked ? 'font-semibold text-stone-900' : 'text-stone-600'
+      }`}
   >
     <span className="flex items-center gap-2.5">
       <input

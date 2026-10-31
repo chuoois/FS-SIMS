@@ -232,6 +232,11 @@ function toRawMaterialDTO(mat) {
     status: raw.status,
     createdAt: raw.createdate,
     updatedAt: raw.modifiedate,
+    raw_material_id: raw.raw_material_id,
+    raw_code: raw.raw_code,
+    raw_name: raw.raw_name,
+    quantity_on_hand: qty,
+    min_quantity: min,
   };
 }
 

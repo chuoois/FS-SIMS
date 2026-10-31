@@ -29,6 +29,8 @@ export const roles = {
       { label: 'Nhà cung cấp', path: 'suppliers', icon: Building2 },
       { label: 'Sản phẩm', path: 'products', icon: Boxes },
       { label: 'Quản lý nguyên vật liệu', path: 'materials', icon: Package },
+      { label: 'Phiếu nhập hàng', path: 'purchase-receipts', icon: Receipt },
+      { label: 'Phiếu xuất kho', path: 'material-exports', icon: FileText },
       { label: 'Doanh thu & báo cáo', path: '#', icon: BarChart3 },
       { label: 'Đơn hàng', path: '#', icon: ClipboardList },
       { label: 'Khách hàng', path: '#', icon: Users },
