@@ -720,7 +720,7 @@ export const CreateOrderPage = () => {
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-stone-700">
-                  Ghi chú đơn hàng
+                  Ghi chú đơn hàng test
                 </label>
                 <textarea
                   rows="2"
