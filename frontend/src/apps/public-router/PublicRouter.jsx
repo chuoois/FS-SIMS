@@ -11,7 +11,10 @@ import { AboutPage, ContactPage } from "../../pages/public-pages/InfoPages";
 import { CartPage } from "../../pages/public-pages/Cartpage";
 import { ProductFavoritePage } from "../../pages/public-pages/ProductFavoritePage";
 import { ProfilePage } from "../../pages/public-pages/Profilepage";
+import { CustomerOrdersPage } from "../../pages/public-pages/CustomerOrdersPage";
+import { CustomerOrderDetailPage } from "../../pages/public-pages/CustomerOrderDetailPage";
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
+import { ROLES } from "../../constants/roles";
 
 export const PublicRouter = {
   path: "/",
@@ -78,6 +81,19 @@ export const PublicRouter = {
         {
           path: "profile",
           element: <ProfilePage />,
+        },
+      ],
+    },
+    {
+      element: <ProtectedRoute roles={[ROLES.CUSTOMER]} />,
+      children: [
+        {
+          path: "my-orders",
+          element: <CustomerOrdersPage />,
+        },
+        {
+          path: "my-orders/:id",
+          element: <CustomerOrderDetailPage />,
         },
       ],
     },
