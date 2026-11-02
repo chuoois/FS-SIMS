@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Heart, LogOut, Menu, Phone, Search, ShoppingBag, Star, User, X } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import { useCart } from '../../../context/CartContext';
 
 const navigation = [
   { label: 'Sản phẩm', to: '/products' },
@@ -111,11 +112,12 @@ const navLinkClass = ({ isActive }) =>
   }`;
 
 /* favoriteCount / cartCount: truyền từ store; mặc định 0 thì không hiện số */
-export const Header = ({ favoriteCount = 0, cartCount = 0 }) => {
+export const Header = ({ favoriteCount = 0 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
   const { user, isAuthenticated } = useAuth();
+  const { itemCount: cartCount } = useCart();
 
   // Đóng dropdown khi click bên ngoài
   useEffect(() => {

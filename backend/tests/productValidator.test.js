@@ -175,4 +175,49 @@ describe('productValidator - toProductDTO', () => {
     const dto = toProductDTO({ product_id: 2, is_favorite: 0 });
     expect(dto.isFavorite).toBe(false);
   });
+
+  test('chuyển đầy đủ chi tiết từng sản phẩm thành phần của bộ', () => {
+    const dto = toProductDTO({
+      product_id: 3,
+      product_type: 'SET',
+      setItems: [{
+        set_item_id: 7,
+        item_product_id: 4,
+        quantity: 2,
+        itemProduct: {
+          product_code: 'GHE-004',
+          product_name: 'Ghế gỗ sồi',
+          description: 'Ghế gỗ tự nhiên.',
+          length_cm: 50,
+          width_cm: 45,
+          height_cm: 90,
+          price: 1200000,
+          image_url: 'https://example.com/chair.jpg',
+          stock_quantity: 8,
+          status: 'ACTIVE',
+          category: { category_name: 'Ghế' },
+          room: { room_name: 'Phòng ăn' },
+          material: { material_name: 'Gỗ sồi' },
+          color: { color_name: 'Tự nhiên', hex_value: '#D2B48C' },
+        },
+      }],
+    });
+
+    expect(dto.setItems[0]).toMatchObject({
+      productId: 4,
+      productCode: 'GHE-004',
+      productName: 'Ghế gỗ sồi',
+      description: 'Ghế gỗ tự nhiên.',
+      quantity: 2,
+      unitPrice: 1200000,
+      imageUrl: 'https://example.com/chair.jpg',
+      stockQuantity: 8,
+      dimensions: '50 x 45 x 90 cm',
+      categoryName: 'Ghế',
+      roomName: 'Phòng ăn',
+      materialName: 'Gỗ sồi',
+      colorName: 'Tự nhiên',
+      colorHex: '#D2B48C',
+    });
+  });
 });

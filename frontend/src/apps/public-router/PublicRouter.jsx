@@ -6,6 +6,7 @@ import { ForgotPasswordPage } from "../../pages/public-pages/ForgotpasswordPage"
 import { HomePage } from "../../pages/public-pages/HomePage";
 import { InteriorDesignPage } from "../../pages/public-pages/InteriorDesignPage";
 import { ProductPage } from "../../pages/public-pages/ProductPage";
+import { ProductDetailPage } from "../../pages/public-pages/ProductDetailPage";
 import { AboutPage, ContactPage } from "../../pages/public-pages/InfoPages";
 import { CartPage } from "../../pages/public-pages/Cartpage";
 import { ProductFavoritePage } from "../../pages/public-pages/ProductFavoritePage";
@@ -44,6 +45,14 @@ export const PublicRouter = {
     {
       path: "products",
       element: <ProductPage />,
+    },
+    {
+      path: "products/:id",
+      element: <ProductDetailPage />,
+    },
+    {
+      path: "san-pham/:id",
+      element: <ProductDetailPage />,
     },
     {
       path: "about",
