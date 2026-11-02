@@ -185,10 +185,11 @@ async function signContract(req, res) {
     }
 
     const validation = validateSignContractInput(req.body);
-    const { signed_place } = validation.value;
+    const { signed_place, contract_file_url } = validation.value;
 
     const contract = await signContractModel(contractId, {
       signedPlace: signed_place,
+      contractFileUrl: contract_file_url,
       signedBy: req.user?.sub,
       modifieBy: req.user?.email || 'STAFF',
     });

@@ -68,6 +68,25 @@ describe('saleOrderValidator - validateCreateOfflineContractInput', () => {
   });
 });
 
+describe('saleOrderValidator - validateSignContractInput', () => {
+  test('nhận signed_place và contract_file_url hợp lệ khi ký hợp đồng', () => {
+    const res = validateSignContractInput({
+      signed_place: 'Cửa hàng Góc Nhà - Chi nhánh 1',
+      contract_file_url: 'https://example.com/contract-signed.pdf',
+    });
+    expect(res.isValid).toBe(true);
+    expect(res.value.signed_place).toBe('Cửa hàng Góc Nhà - Chi nhánh 1');
+    expect(res.value.contract_file_url).toBe('https://example.com/contract-signed.pdf');
+  });
+
+  test('fallback mặc định signed_place nếu không truyền', () => {
+    const res = validateSignContractInput({});
+    expect(res.isValid).toBe(true);
+    expect(res.value.signed_place).toBe('Cửa hàng Góc Nhà');
+    expect(res.value.contract_file_url).toBeNull();
+  });
+});
+
 describe('saleOrderValidator - validateCreateOrderFromContractInput', () => {
   test('trả về lỗi khi contractId không phải số hợp lệ', () => {
     const res = validateCreateOrderFromContractInput('abc');
