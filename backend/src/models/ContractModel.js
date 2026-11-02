@@ -189,7 +189,7 @@ async function createOfflineContract({
 /**
  * Ký và chốt hợp đồng (Chuyển trạng thái sang SIGNED)
  */
-async function signContract(contractId, { signedPlace, signedBy, modifieBy } = {}) {
+async function signContract(contractId, { signedPlace, signedBy, modifieBy, contractFileUrl } = {}) {
   const contract = await Contract.findByPk(contractId);
   if (!contract) {
     return null;
@@ -206,7 +206,8 @@ async function signContract(contractId, { signedPlace, signedBy, modifieBy } = {
   contract.signed_date = today;
   if (signedPlace) contract.signed_place = signedPlace;
   if (signedBy) contract.signed_by = signedBy;
-  if (modifieBy) contract.modifieby = modifieBy;
+    if (modifieBy) contract.modifieby = modifieBy;
+  if (contractFileUrl) contract.contract_file_url = contractFileUrl;
 
   await contract.save();
   return findContractById(contractId);
