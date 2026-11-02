@@ -319,6 +319,80 @@ async function getOrdersWithPagination({ page = 1, limit = 10, status, order_typ
   };
 }
 
+/**
+ * Lấy danh sách đơn hàng thuộc về một tài khoản khách hàng.
+ */
+async function getCustomerOrdersWithPagination(customerAccountId, { page = 1, limit = 10 } = {}) {
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
+  const offset = (pageNum - 1) * limitNum;
+
+  const { rows, count } = await CustomerOrder.findAndCountAll({
+    where: { customer_account_id: customerAccountId },
+    include: [
+      {
+        model: Contract,
+        as: 'contract',
+        attributes: ['contract_id', 'contract_code'],
+      },
+      {
+        model: CustomerOrderItem,
+        as: 'items',
+        include: [
+          {
+            model: Product,
+            as: 'product',
+            attributes: ['product_id', 'product_code', 'product_name', 'image_url'],
+          },
+        ],
+      },
+    ],
+    order: [['order_id', 'DESC']],
+    limit: limitNum,
+    offset,
+    distinct: true,
+  });
+
+  return {
+    orders: rows,
+    totalItems: count,
+    totalPages: Math.ceil(count / limitNum) || 1,
+    currentPage: pageNum,
+    itemsPerPage: limitNum,
+  };
+}
+
+/**
+ * Chỉ tìm đơn hàng nếu đơn đó thuộc về tài khoản khách hàng đang đăng nhập.
+ */
+async function findCustomerOrderById(orderId, customerAccountId) {
+  return CustomerOrder.findOne({
+    where: { order_id: orderId, customer_account_id: customerAccountId },
+    include: [
+      {
+        model: Contract,
+        as: 'contract',
+      },
+      {
+        model: CustomerOrderItem,
+        as: 'items',
+        include: [
+          {
+            model: Product,
+            as: 'product',
+            attributes: ['product_id', 'product_code', 'product_name', 'price', 'image_url'],
+          },
+        ],
+      },
+      {
+        model: UserAccount,
+        as: 'staff',
+        attributes: ['user_account_id', 'full_name'],
+      },
+    ],
+  });
+}
+
 module.exports = {
   CustomerOrder,
   generateNextOrderCode,
@@ -327,4 +401,6 @@ module.exports = {
   findOrderByCode,
   findOrderByContractId,
   getOrdersWithPagination,
+  getCustomerOrdersWithPagination,
+  findCustomerOrderById,
 };
