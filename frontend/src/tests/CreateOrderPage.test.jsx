@@ -3,6 +3,7 @@
 // Unit tests cho trang POS Tạo đơn hàng (Sale role)
 // Sử dụng saleOrderService (Controller riêng biệt)
 // Kiểm tra luồng KÝ NGOÀI BẢN GIẤY (không dùng chữ ký số)
+// Kiểm tra quy tắc: Đơn > 10 triệu mặc định cọc 30%, không có nút chọn cọc nhanh
 // =========================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -11,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { CreateOrderPage } from '../pages/sale-pages/CreateOrderPage';
 import * as saleOrderService from '../services/saleOrderService';
+import toast from 'react-hot-toast';
 
 vi.mock('../services/saleOrderService');
 vi.mock('react-hot-toast', () => ({
@@ -137,6 +139,58 @@ describe('CreateOrderPage (POS)', () => {
     });
   });
 
+  it('Tự động tính cọc: đơn <= 10 triệu cọc 0đ, đơn > 10 triệu tự động cọc 30%, không có nút chọn cọc', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('Bàn ăn cao cấp gỗ sồi')).toBeInTheDocument();
+    });
+
+    // 1. Không còn các nút bấm chọn nhanh cọc
+    expect(screen.queryByRole('button', { name: /0đ/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Cọc 30%/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Cọc 50%/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Trả hết 100%/i })).not.toBeInTheDocument();
+
+    // 2. Thêm sản phẩm 1 (5.000.000đ <= 10 triệu)
+    const addButtons = screen.getAllByRole('button', { name: /Chọn mua/i });
+    await user.click(addButtons[0]);
+
+    await waitFor(() => {
+      // Đơn hàng <= 10 triệu -> badge thông báo không bắt buộc cọc
+      expect(screen.getByText(/Không bắt buộc cọc \(Đơn ≤ 10 triệu\)/i)).toBeInTheDocument();
+    });
+
+    // 3. Thêm sản phẩm 2 (9.500.000đ -> Tổng 14.500.000đ > 10 triệu)
+    await user.click(addButtons[1]);
+
+    await waitFor(() => {
+      // Đơn hàng > 10 triệu -> badge thông báo mặc định cọc 30%
+      expect(screen.getByText(/Mặc định cọc 30% \(Đơn > 10 triệu\)/i)).toBeInTheDocument();
+      // Hiển thị phần trăm (30%) trong tóm tắt giỏ hàng
+      expect(screen.getByText('(30%)')).toBeInTheDocument();
+    });
+
+    // 4. Nếu sale cố tình giảm tiền cọc < 30% và bấm tạo hợp đồng -> Báo lỗi
+    const nameInput = screen.getByPlaceholderText(/Ví dụ: Nguyễn Văn A/i);
+    const phoneInput = screen.getByPlaceholderText(/Ví dụ: 0912345678/i);
+    await user.type(nameInput, 'Nguyễn Văn Test');
+    await user.type(phoneInput, '0912345678');
+
+    // Tìm input tiền cọc và sửa thành số tiền nhỏ hơn 30% (ví dụ 1.000.000)
+    const depositInput = screen.getByDisplayValue('4350000'); // 30% của 14.500.000
+    await user.clear(depositInput);
+    await user.type(depositInput, '1000000');
+
+    const submitBtn = screen.getByRole('button', { name: /TẠO HỢP ĐỒNG & CHỐT ĐƠN/i });
+    await user.click(submitBtn);
+
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/yêu cầu đặt cọc tối thiểu 30%/)
+    );
+  });
+
   it('Mở modal xem chi tiết sản phẩm bộ SET và hiển thị đúng thành phần các món con, không bị undefined', async () => {
     const user = userEvent.setup();
     renderComponent();
@@ -171,8 +225,8 @@ describe('CreateOrderPage (POS)', () => {
       customerName: 'Nguyễn Văn A',
       customerPhone: '0912345678',
       totalAmount: 5000000,
-      depositAmount: 1000000,
-      remainingAmount: 4000000,
+      depositAmount: 0,
+      remainingAmount: 5000000,
       status: 'DRAFT',
       items: [
         {

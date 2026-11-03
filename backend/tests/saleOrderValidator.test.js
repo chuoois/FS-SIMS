@@ -53,7 +53,7 @@ describe('saleOrderValidator - validateCreateOfflineContractInput', () => {
     expect(res.error).toMatch(/không được vượt quá tổng giá trị/);
   });
 
-  test('hợp lệ khi truyền đúng các trường bắt buộc', () => {
+  test('hợp lệ khi truyền đúng các trường bắt buộc (đơn <= 10 triệu)', () => {
     const res = validateCreateOfflineContractInput({
       customer_name: '  Nguyễn Văn A  ',
       customer_phone: '0912345678',
@@ -65,6 +65,51 @@ describe('saleOrderValidator - validateCreateOfflineContractInput', () => {
     expect(res.value.customer_name).toBe('Nguyễn Văn A');
     expect(res.value.total_amount).toBe(5000000);
     expect(res.value.deposit_amount).toBe(1000000);
+  });
+
+  test('đơn hàng <= 10 triệu không truyền tiền cọc -> mặc định cọc 0đ', () => {
+    const res = validateCreateOfflineContractInput({
+      customer_name: 'Nguyễn Văn B',
+      customer_phone: '0912345678',
+      items: [{ product_id: 1, quantity: 1, unit_price: 8000000 }],
+    });
+    expect(res.isValid).toBe(true);
+    expect(res.value.total_amount).toBe(8000000);
+    expect(res.value.deposit_amount).toBe(0);
+  });
+
+  test('đơn hàng > 10 triệu không truyền tiền cọc -> tự động mặc định cọc 30%', () => {
+    const res = validateCreateOfflineContractInput({
+      customer_name: 'Nguyễn Văn C',
+      customer_phone: '0912345678',
+      items: [{ product_id: 1, quantity: 1, unit_price: 15000000 }],
+    });
+    expect(res.isValid).toBe(true);
+    expect(res.value.total_amount).toBe(15000000);
+    expect(res.value.deposit_amount).toBe(4500000); // 30% của 15.000.000
+  });
+
+  test('đơn hàng > 10 triệu cọc dưới 30% -> trả về lỗi yêu cầu cọc tối thiểu 30%', () => {
+    const res = validateCreateOfflineContractInput({
+      customer_name: 'Nguyễn Văn D',
+      customer_phone: '0912345678',
+      deposit_amount: 1000000, // Nhỏ hơn 30% của 20 triệu (6 triệu)
+      items: [{ product_id: 1, quantity: 2, unit_price: 10000000 }],
+    });
+    expect(res.isValid).toBe(false);
+    expect(res.error).toMatch(/tối thiểu 30%/);
+  });
+
+  test('đơn hàng > 10 triệu cọc từ 30% trở lên -> hợp lệ', () => {
+    const res = validateCreateOfflineContractInput({
+      customer_name: 'Nguyễn Văn E',
+      customer_phone: '0912345678',
+      deposit_amount: 6000000, // Đúng 30% của 20 triệu
+      items: [{ product_id: 1, quantity: 2, unit_price: 10000000 }],
+    });
+    expect(res.isValid).toBe(true);
+    expect(res.value.total_amount).toBe(20000000);
+    expect(res.value.deposit_amount).toBe(6000000);
   });
 });
 
@@ -152,4 +197,3 @@ describe('saleOrderValidator - DTO converters', () => {
     expect(dto.remainingAmount).toBe(3000000);
   });
 });
-
