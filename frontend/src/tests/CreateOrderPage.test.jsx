@@ -2,6 +2,8 @@
 // CreateOrderPage.test.jsx
 // Unit tests cho trang POS Tạo đơn hàng (Sale role)
 // Sử dụng saleOrderService (Controller riêng biệt)
+// Kiểm tra luồng KÝ NGOÀI BẢN GIẤY (không dùng chữ ký số)
+// Kiểm tra quy tắc: Đơn > 10 triệu mặc định cọc 30%, không có nút chọn cọc nhanh
 // =========================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -10,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { CreateOrderPage } from '../pages/sale-pages/CreateOrderPage';
 import * as saleOrderService from '../services/saleOrderService';
+import toast from 'react-hot-toast';
 
 vi.mock('../services/saleOrderService');
 vi.mock('react-hot-toast', () => ({
@@ -36,16 +39,39 @@ describe('CreateOrderPage (POS)', () => {
     },
     {
       productId: 2,
-      productCode: 'PRD-0002',
-      productName: 'Ghế gỗ sồi',
-      price: 1200000,
+      productCode: 'SET-0001',
+      productName: 'Bộ bàn ăn 6 ghế gỗ sồi',
+      price: 9500000,
       stockQuantity: 4,
-      categoryId: 2,
-      categoryName: 'Ghế',
+      categoryId: 1,
+      categoryName: 'Bàn ghế',
       roomId: 1,
       roomName: 'Phòng ăn',
       imageUrl: '',
-      isSet: false,
+      isSet: true,
+      totalSetItems: 7,
+      setItems: [
+        {
+          setItemId: 101,
+          productId: 10,
+          productCode: 'TB-01',
+          productName: 'Bàn ăn gỗ sồi mặt kính',
+          quantity: 1,
+          unitPrice: 4500000,
+          imageUrl: '',
+          dimensions: '160 x 80 x 75 cm',
+        },
+        {
+          setItemId: 102,
+          productId: 11,
+          productCode: 'GH-01',
+          productName: 'Ghế ăn gỗ sồi nệm da',
+          quantity: 6,
+          unitPrice: 900000,
+          imageUrl: '',
+          dimensions: '45 x 45 x 90 cm',
+        },
+      ],
     },
   ];
 
@@ -65,8 +91,9 @@ describe('CreateOrderPage (POS)', () => {
       pagination: { totalItems: 2, totalPages: 1, currentPage: 1, itemsPerPage: 12 },
     });
 
-    saleOrderService.getProductDetail.mockResolvedValue({
-      data: mockProducts[0],
+    saleOrderService.getProductDetail.mockImplementation(async (id) => {
+      const found = mockProducts.find((p) => p.productId === id) || mockProducts[0];
+      return { data: found };
     });
   });
 
@@ -86,7 +113,7 @@ describe('CreateOrderPage (POS)', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Bàn ăn cao cấp gỗ sồi')).toBeInTheDocument();
-      expect(screen.getByText('Ghế gỗ sồi')).toBeInTheDocument();
+      expect(screen.getByText('Bộ bàn ăn 6 ghế gỗ sồi')).toBeInTheDocument();
     });
 
     // Kiểm tra hiển thị giá và số lượng tồn kho
@@ -112,7 +139,7 @@ describe('CreateOrderPage (POS)', () => {
     });
   });
 
-  it('Mở modal xem chi tiết sản phẩm khi bấm nút Chi tiết', async () => {
+  it('Tự động tính cọc: đơn <= 10 triệu cọc 0đ, đơn > 10 triệu tự động cọc 30%, không có nút chọn cọc', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -120,15 +147,76 @@ describe('CreateOrderPage (POS)', () => {
       expect(screen.getByText('Bàn ăn cao cấp gỗ sồi')).toBeInTheDocument();
     });
 
+    // 1. Không còn các nút bấm chọn nhanh cọc
+    expect(screen.queryByRole('button', { name: /0đ/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Cọc 30%/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Cọc 50%/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Trả hết 100%/i })).not.toBeInTheDocument();
+
+    // 2. Thêm sản phẩm 1 (5.000.000đ <= 10 triệu)
+    const addButtons = screen.getAllByRole('button', { name: /Chọn mua/i });
+    await user.click(addButtons[0]);
+
+    await waitFor(() => {
+      // Đơn hàng <= 10 triệu -> badge thông báo không bắt buộc cọc
+      expect(screen.getByText(/Không bắt buộc cọc \(Đơn ≤ 10 triệu\)/i)).toBeInTheDocument();
+    });
+
+    // 3. Thêm sản phẩm 2 (9.500.000đ -> Tổng 14.500.000đ > 10 triệu)
+    await user.click(addButtons[1]);
+
+    await waitFor(() => {
+      // Đơn hàng > 10 triệu -> badge thông báo mặc định cọc 30%
+      expect(screen.getByText(/Mặc định cọc 30% \(Đơn > 10 triệu\)/i)).toBeInTheDocument();
+      // Hiển thị phần trăm (30%) trong tóm tắt giỏ hàng
+      expect(screen.getByText('(30%)')).toBeInTheDocument();
+    });
+
+    // 4. Nếu sale cố tình giảm tiền cọc < 30% và bấm tạo hợp đồng -> Báo lỗi
+    const nameInput = screen.getByPlaceholderText(/Ví dụ: Nguyễn Văn A/i);
+    const phoneInput = screen.getByPlaceholderText(/Ví dụ: 0912345678/i);
+    await user.type(nameInput, 'Nguyễn Văn Test');
+    await user.type(phoneInput, '0912345678');
+
+    // Tìm input tiền cọc và sửa thành số tiền nhỏ hơn 30% (ví dụ 1.000.000)
+    const depositInput = screen.getByDisplayValue('4350000'); // 30% của 14.500.000
+    await user.clear(depositInput);
+    await user.type(depositInput, '1000000');
+
+    const submitBtn = screen.getByRole('button', { name: /TẠO HỢP ĐỒNG & CHỐT ĐƠN/i });
+    await user.click(submitBtn);
+
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/yêu cầu đặt cọc tối thiểu 30%/)
+    );
+  });
+
+  it('Mở modal xem chi tiết sản phẩm bộ SET và hiển thị đúng thành phần các món con, không bị undefined', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('Bộ bàn ăn 6 ghế gỗ sồi')).toBeInTheDocument();
+    });
+
+    // Bấm nút "Chi tiết" của sản phẩm thứ 2 (Bộ bàn ăn SET-0001)
     const detailButtons = screen.getAllByRole('button', { name: /Chi tiết/i });
-    await user.click(detailButtons[0]);
+    await user.click(detailButtons[1]);
 
     await waitFor(() => {
       expect(screen.getByText('Chi tiết sản phẩm trong kho')).toBeInTheDocument();
+      expect(screen.getByText(/Thành phần trong bộ/i)).toBeInTheDocument();
+      // Kiểm tra tên các món con được render chính xác
+      expect(screen.getByText('Bàn ăn gỗ sồi mặt kính')).toBeInTheDocument();
+      expect(screen.getByText('Ghế ăn gỗ sồi nệm da')).toBeInTheDocument();
+      expect(screen.getByText('x1 cái')).toBeInTheDocument();
+      expect(screen.getByText('x6 cái')).toBeInTheDocument();
+      // Đảm bảo tuyệt đối không có từ undefined nào xuất hiện
+      expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
     });
   });
 
-  it('Quy trình Tạo hợp đồng -> Ký hợp đồng -> Tạo đơn hàng', async () => {
+  it('Quy trình Tạo hợp đồng -> In/Xuất bản giấy -> Ký ngoài bản giấy -> Tạo đơn hàng', async () => {
     const user = userEvent.setup();
 
     const mockContractDraft = {
@@ -137,8 +225,8 @@ describe('CreateOrderPage (POS)', () => {
       customerName: 'Nguyễn Văn A',
       customerPhone: '0912345678',
       totalAmount: 5000000,
-      depositAmount: 1000000,
-      remainingAmount: 4000000,
+      depositAmount: 0,
+      remainingAmount: 5000000,
       status: 'DRAFT',
       items: [
         {
@@ -192,11 +280,16 @@ describe('CreateOrderPage (POS)', () => {
     await waitFor(() => {
       expect(screen.getByText(/Biên Bản Hợp Đồng Bán Hàng Tại Quầy/i)).toBeInTheDocument();
       expect(screen.getByText(/BIÊN BẢN CHỜ KÝ \(DRAFT\)/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /CHỐT HỢP ĐỒNG & KÝ NHẬN TẠI QUẦY/i })).toBeInTheDocument();
+      // Hiển thị hướng dẫn quy trình ký ngoài bản giấy
+      expect(screen.getByText(/Quy trình ký hợp đồng bản giấy ngoài quầy/i)).toBeInTheDocument();
+      // Nút in bản giấy
+      expect(screen.getAllByRole('button', { name: /In /i }).length).toBeGreaterThan(0);
+      // Nút xác nhận đã ký bản giấy
+      expect(screen.getByRole('button', { name: /XÁC NHẬN ĐÃ KÝ BẢN GIẤY TẠI QUẦY/i })).toBeInTheDocument();
     });
 
-    // 5. Bấm Chốt & Ký hợp đồng
-    const signBtn = screen.getByRole('button', { name: /CHỐT HỢP ĐỒNG & KÝ NHẬN TẠI QUẦY/i });
+    // 5. Bấm Xác nhận đã ký bản giấy
+    const signBtn = screen.getByRole('button', { name: /XÁC NHẬN ĐÃ KÝ BẢN GIẤY TẠI QUẦY/i });
     await user.click(signBtn);
 
     // 6. Hợp đồng chuyển sang SIGNED -> Nút "TẠO ĐƠN HÀNG NGAY" xuất hiện

@@ -2,6 +2,7 @@
 // ContractsPage.jsx
 // Danh sách hợp đồng bán hàng dành cho nhân viên kinh doanh (Role Sale)
 // Sử dụng saleOrderService (Controller riêng biệt)
+// Hỗ trợ In / Xuất file bản giấy và Xác nhận đã ký ngoài bằng bút mực
 // =========================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -17,8 +18,8 @@ import {
   XCircle,
   Package,
   X,
-  ShieldCheck,
   ArrowRight,
+  Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -28,6 +29,7 @@ import {
   createOrderFromContract,
 } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
+import { PrintContractModal } from '../../components/common/PrintContractModal';
 
 const formatVND = (val) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(val || 0);
@@ -77,6 +79,11 @@ export const ContractsPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
 
+  // States hỗ trợ in hợp đồng bản giấy
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [contractToPrint, setContractToPrint] = useState(null);
+  const [paperFileUrl, setPaperFileUrl] = useState('');
+
   const fetchContractsList = useCallback(async () => {
     try {
       setLoading(true);
@@ -110,14 +117,31 @@ export const ContractsPage = () => {
     }
   };
 
+  const handleOpenPrint = async (contract) => {
+    try {
+      let full = contract;
+      if (!contract.items || contract.items.length === 0) {
+        const res = await getContractById(contract.contractId);
+        if (res.data) full = res.data;
+      }
+      setContractToPrint(full);
+      setPrintModalOpen(true);
+    } catch (err) {
+      console.error('Lỗi khi mở bản in hợp đồng:', err);
+      toast.error('Không thể tải chi tiết hợp đồng để in');
+    }
+  };
+
   const handleSign = async () => {
     if (!selectedContract) return;
     try {
       setLoadingAction(true);
-      const res = await signContract(selectedContract.contractId);
+      const res = await signContract(selectedContract.contractId, {
+        contract_file_url: paperFileUrl.trim() || null,
+      });
       if (res.data) {
         setSelectedContract(res.data);
-        toast.success('Ký hợp đồng thành công!');
+        toast.success('Xác nhận khách đã ký bản giấy thành công!');
         fetchContractsList();
       }
     } catch (err) {
@@ -155,7 +179,7 @@ export const ContractsPage = () => {
           <div>
             <h1 className="text-xl font-bold text-stone-900">Danh Sách Hợp Đồng</h1>
             <p className="text-xs text-stone-500">
-              Biên bản hợp đồng ký kết tại quầy và trực tuyến
+              Biên bản hợp đồng bán hàng tại quầy (ký ngoài bản giấy) và trực tuyến
             </p>
           </div>
         </div>
@@ -261,13 +285,24 @@ export const ContractsPage = () => {
                     </td>
                     <td className="px-4 py-3 text-center">{getContractBadge(c.status)}</td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => handleViewDetail(c)}
-                        className="inline-flex items-center gap-1 rounded border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
-                      >
-                        <Eye className="h-3 w-3 text-stone-500" />
-                        Xem & Ký
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleViewDetail(c)}
+                          className="inline-flex items-center gap-1 rounded border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
+                          title="Xem chi tiết biên bản hợp đồng"
+                        >
+                          <Eye className="h-3 w-3 text-stone-500" />
+                          Chi tiết
+                        </button>
+                        <button
+                          onClick={() => handleOpenPrint(c)}
+                          className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100 transition"
+                          title="In / Xuất hợp đồng bản giấy khổ A4"
+                        >
+                          <Printer className="h-3 w-3 text-amber-700" />
+                          In HĐ
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -289,10 +324,18 @@ export const ContractsPage = () => {
         )}
       </div>
 
+      {/* Modal In hợp đồng bản giấy A4 */}
+      <PrintContractModal
+        isOpen={printModalOpen}
+        onClose={() => setPrintModalOpen(false)}
+        contract={contractToPrint}
+      />
+
       {/* Modal chi tiết & thao tác hợp đồng */}
       {modalOpen && selectedContract && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            {/* Header Modal */}
             <div className="flex items-center justify-between border-b border-stone-200 bg-stone-900 px-5 py-3.5 text-white">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-amber-400" />
@@ -300,15 +343,63 @@ export const ContractsPage = () => {
                   Biên bản hợp đồng #{selectedContract.contractCode}
                 </h3>
               </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenPrint(selectedContract)}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-amber-800 transition"
+                  title="In bản giấy để ký ngoài bằng bút mực"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  In bản giấy (A4)
+                </button>
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
+            {/* Thân Modal */}
             <div className="overflow-y-auto p-5 text-xs text-stone-800">
+              {/* Banner hướng dẫn ký ngoài bản giấy */}
+              <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-3.5 mb-4 text-xs text-amber-950">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-amber-900">
+                    <Printer className="h-4 w-4 text-amber-700" />
+                    <span>Ký hợp đồng ngoài quầy (Bản giấy in bằng bút mực)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPrint(selectedContract)}
+                    className="flex items-center gap-1 rounded bg-amber-800 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-amber-900"
+                  >
+                    <Printer className="h-3 w-3" />
+                    In ngay
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-stone-600">
+                  Hợp đồng mua bán được in ra giấy để hai bên ký bút mực trực tiếp, không sử dụng chữ ký số.
+                </p>
+                {selectedContract.status === 'DRAFT' && (
+                  <div className="mt-2.5 border-t border-amber-200/80 pt-2">
+                    <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                      Link ảnh scan/chụp hợp đồng giấy đã ký (tùy chọn):
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://... (đường dẫn lưu trữ file scan hợp đồng giấy)"
+                      value={paperFileUrl}
+                      onChange={(e) => setPaperFileUrl(e.target.value)}
+                      className="w-full rounded border border-stone-300 bg-white px-2 py-1 text-xs text-stone-800 placeholder-stone-400 focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Trạng thái & Khách hàng */}
               <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 p-3 mb-4">
                 <div>
                   <span className="text-stone-500">Trạng thái:</span>
@@ -320,6 +411,7 @@ export const ContractsPage = () => {
                 </div>
               </div>
 
+              {/* Danh sách sản phẩm */}
               <h4 className="font-bold text-stone-900 mb-2">Danh sách sản phẩm:</h4>
               <div className="rounded-lg border border-stone-200 overflow-hidden mb-4">
                 <table className="w-full text-left">
@@ -361,23 +453,36 @@ export const ContractsPage = () => {
               </div>
             </div>
 
+            {/* Modal Footer */}
             <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50 px-5 py-3">
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
-              >
-                Đóng
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenPrint(selectedContract)}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition"
+                >
+                  <Printer className="h-4 w-4 text-amber-700" />
+                  In / Xuất bản giấy
+                </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 {selectedContract.status === 'DRAFT' && (
                   <button
                     disabled={loadingAction}
                     onClick={handleSign}
+                    title="Xác nhận khách hàng đã ký tên bằng bút mực trên bản giấy"
                     className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
                   >
-                    <ShieldCheck className="h-4 w-4" />
-                    Chốt & Ký hợp đồng
+                    <CheckCircle2 className="h-4 w-4" />
+                    Xác nhận đã ký bản giấy
                   </button>
                 )}
                 {selectedContract.status === 'SIGNED' && (

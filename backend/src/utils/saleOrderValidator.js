@@ -14,7 +14,7 @@ function validateCreateOfflineContractInput(data = {}) {
     customer_name,
     customer_phone,
     customer_address,
-    deposit_amount = 0,
+    deposit_amount,
     delivery_date,
     signed_place,
     terms,
@@ -40,9 +40,12 @@ function validateCreateOfflineContractInput(data = {}) {
     return { isValid: false, error: 'Số điện thoại không hợp lệ (từ 7 đến 20 ký tự số).' };
   }
 
-  // 3. Tiền đặt cọc
-  const deposit = Number(deposit_amount) || 0;
-  if (isNaN(deposit) || deposit < 0) {
+  // 3. Tiền đặt cọc sơ bộ (nếu có truyền)
+  let deposit =
+    deposit_amount !== undefined && deposit_amount !== null && deposit_amount !== ''
+      ? Number(deposit_amount)
+      : null;
+  if (deposit !== null && (isNaN(deposit) || deposit < 0)) {
     return { isValid: false, error: 'Tiền đặt cọc phải là số không âm.' };
   }
 
@@ -81,6 +84,18 @@ function validateCreateOfflineContractInput(data = {}) {
   if (totalAmount <= 0) {
     return { isValid: false, error: 'Tổng giá trị hợp đồng phải lớn hơn 0.' };
   }
+
+  // Quy định đặt cọc: Đơn hàng > 10.000.000 VNĐ mặc định cọc 30%
+  const minRequiredDeposit = totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0;
+  if (deposit === null) {
+    deposit = minRequiredDeposit;
+  } else if (totalAmount > 10000000 && deposit < minRequiredDeposit) {
+    return {
+      isValid: false,
+      error: `Đơn hàng trên 10 triệu đồng yêu cầu đặt cọc tối thiểu 30% (${minRequiredDeposit.toLocaleString('vi-VN')} VND).`,
+    };
+  }
+
   if (deposit > totalAmount) {
     return { isValid: false, error: 'Số tiền đặt cọc không được vượt quá tổng giá trị hợp đồng.' };
   }
@@ -106,12 +121,13 @@ function validateCreateOfflineContractInput(data = {}) {
  * Validate khi chốt và ký hợp đồng
  */
 function validateSignContractInput(data = {}) {
-  const { signed_place, note } = data;
+  const { signed_place, note, contract_file_url } = data;
   return {
     isValid: true,
     value: {
       signed_place: signed_place ? String(signed_place).trim().slice(0, 255) : 'Cửa hàng Góc Nhà',
       note: note ? String(note).trim().slice(0, 500) : null,
+      contract_file_url: contract_file_url ? String(contract_file_url).trim().slice(0, 500) : null,
     },
   };
 }
@@ -223,4 +239,3 @@ module.exports = {
   toContractDTO,
   toOrderDTO,
 };
-

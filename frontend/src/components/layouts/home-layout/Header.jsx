@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Heart, LogOut, Menu, Phone, Search, ShoppingBag, Star, User, X } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import { useCart } from '../../../context/CartContext';
+import { ROLES } from '../../../constants/roles';
 
 const navigation = [
   { label: 'Sản phẩm', to: '/products' },
@@ -76,6 +78,18 @@ const UserMenu = ({ user, onClose }) => {
 
       {/* Các tuỳ chọn */}
       <ul className="py-1">
+        {Number(user.roleId) === ROLES.CUSTOMER && (
+          <li role="none">
+            <Link
+              to="/my-orders"
+              role="menuitem"
+              onClick={onClose}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-stone-700 transition-colors hover:bg-stone-50 hover:text-stone-900"
+            >
+              Đơn hàng của tôi
+            </Link>
+          </li>
+        )}
         <li role="none">
           <Link
             to="/profile"
@@ -111,11 +125,12 @@ const navLinkClass = ({ isActive }) =>
   }`;
 
 /* favoriteCount / cartCount: truyền từ store; mặc định 0 thì không hiện số */
-export const Header = ({ favoriteCount = 0, cartCount = 0 }) => {
+export const Header = ({ favoriteCount = 0 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
   const { user, isAuthenticated } = useAuth();
+  const { itemCount: cartCount } = useCart();
 
   // Đóng dropdown khi click bên ngoài
   useEffect(() => {

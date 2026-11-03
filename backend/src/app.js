@@ -15,6 +15,9 @@ const purchaseReceiptRoutes = require('./routes/purchaseReceiptRoutes');
 const materialExportRoutes = require('./routes/materialExportRoutes');
 const saleOrderRoutes = require('./routes/saleOrderRoutes');
 const productionOrderRoutes = require('./routes/productionOrderRoutes');
+const cartRoutes = require('./routes/cartRoutes');
+const customerOrderRoutes = require('./routes/customerOrderRoutes');
+
 
 
 const app = express();
@@ -44,6 +47,9 @@ app.use('/api/purchase-receipts', purchaseReceiptRoutes);
 app.use('/api/material-exports', materialExportRoutes);
 app.use('/api/sale-orders', saleOrderRoutes);
 app.use('/api/production-orders', productionOrderRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/customer-orders', customerOrderRoutes);
+
 
 
 // Middleware xử lý lỗi tập trung

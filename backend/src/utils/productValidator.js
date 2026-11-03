@@ -387,11 +387,17 @@ function toProductDTO(product) {
       productId: item.item_product_id,
       productCode: prod.product_code,
       productName: prod.product_name,
+      description: prod.description,
       quantity: item.quantity,
       unitPrice: prod.price,
       imageUrl: prod.image_url,
       stockQuantity: prod.stock_quantity,
       dimensions: dim ? `${dim} cm` : null,
+      categoryName: prod.category?.category_name || null,
+      roomName: prod.room?.room_name || null,
+      materialName: prod.material?.material_name || null,
+      colorName: prod.color?.color_name || null,
+      colorHex: prod.color?.hex_value || null,
       status: prod.status || 'ACTIVE',
     };
   });

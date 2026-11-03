@@ -37,7 +37,10 @@ import {
   ArrowRight,
   ShieldCheck,
   Sparkles,
+  Printer,
+  PenTool,
 } from 'lucide-react';
+import { PrintContractModal } from '../../components/common/PrintContractModal';
 import toast from 'react-hot-toast';
 import {
   getWarehouseProducts,
@@ -104,6 +107,8 @@ export const CreateOrderPage = () => {
   const [isSigning, setIsSigning] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [orderCreatedResult, setOrderCreatedResult] = useState(null);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [paperSignedContractFileUrl, setPaperSignedContractFileUrl] = useState('');
 
   // ── Lấy danh mục, phòng phục vụ lọc ────────────────────────
   useEffect(() => {
@@ -240,11 +245,17 @@ export const CreateOrderPage = () => {
     );
   }, [cartItems]);
 
-  // Cập nhật số tiền cọc gợi ý
-  const setQuickDeposit = (percent) => {
-    const calculated = Math.round((totalAmount * percent) / 100);
-    setCustomerInfo((prev) => ({ ...prev, depositAmount: calculated }));
-  };
+  // ── Tự động tính tiền cọc theo quy tắc nghiệp vụ ──────────
+  // Đơn hàng > 10.000.000 VNĐ: mặc định cọc 30%
+  // Đơn hàng ≤ 10.000.000 VNĐ: mặc định cọc 0đ (không bắt buộc)
+  useEffect(() => {
+    if (totalAmount > 10000000) {
+      const defaultDeposit = Math.round(totalAmount * 0.3);
+      setCustomerInfo((prev) => ({ ...prev, depositAmount: defaultDeposit }));
+    } else {
+      setCustomerInfo((prev) => ({ ...prev, depositAmount: 0 }));
+    }
+  }, [totalAmount]);
 
   // ── BƯỚC 1: BẤM NÚT TẠO HỢP ĐỒNG ────────────────────────────
   const handleStartContractCreation = async (e) => {
@@ -262,6 +273,14 @@ export const CreateOrderPage = () => {
 
     if (!customerInfo.customerPhone.trim()) {
       toast.error('Vui lòng nhập số điện thoại khách hàng.');
+      return;
+    }
+
+    const minRequiredDeposit = totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0;
+    if (totalAmount > 10000000 && Number(customerInfo.depositAmount) < minRequiredDeposit) {
+      toast.error(
+        `Đơn hàng trên 10 triệu yêu cầu đặt cọc tối thiểu 30% (${formatVND(minRequiredDeposit)}).`
+      );
       return;
     }
 
@@ -549,9 +568,14 @@ export const CreateOrderPage = () => {
                   <span className="text-sm font-bold text-stone-900">{formatVND(totalAmount)}</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-xs text-stone-600">
-                  <span>Tiền cọc dự kiến:</span>
+                  <span>Tiền cọc mặc định:</span>
                   <span className="font-semibold text-amber-800">
                     {formatVND(customerInfo.depositAmount)}
+                    {totalAmount > 10000000 && (
+                      <span className="ml-1 rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-bold text-amber-800">
+                        (30%)
+                      </span>
+                    )}
                   </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between border-t border-stone-200 pt-2 text-xs font-bold text-stone-900">
@@ -666,14 +690,25 @@ export const CreateOrderPage = () => {
 
               {/* Tiền đặt cọc */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-stone-700">
-                  Tiền đặt cọc trước (VND)
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-stone-700">
+                    Tiền đặt cọc trước (VND)
+                  </label>
+                  {totalAmount > 10000000 ? (
+                    <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                      Mặc định cọc 30% (Đơn > 10 triệu)
+                    </span>
+                  ) : (
+                    <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
+                      Không bắt buộc cọc (Đơn ≤ 10 triệu)
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
                   <input
                     type="number"
-                    min="0"
+                    min={totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0}
                     max={totalAmount}
                     value={customerInfo.depositAmount}
                     onChange={(e) =>
@@ -685,37 +720,11 @@ export const CreateOrderPage = () => {
                     className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs font-bold text-amber-800 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                 </div>
-                {/* Nút chọn nhanh cọc */}
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setQuickDeposit(0)}
-                    className="rounded bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 hover:bg-stone-200"
-                  >
-                    0đ (Chưa cọc)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickDeposit(30)}
-                    className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
-                  >
-                    Cọc 30%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickDeposit(50)}
-                    className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
-                  >
-                    Cọc 50%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickDeposit(100)}
-                    className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-200"
-                  >
-                    Trả hết 100%
-                  </button>
-                </div>
+                <p className="mt-1 text-[11px] text-stone-500">
+                  {totalAmount > 10000000
+                    ? `* Theo chính sách bán hàng: Đơn trên 10 triệu mặc định cọc 30% (${formatVND(Math.round(totalAmount * 0.3))}).`
+                    : '* Đơn hàng từ 10 triệu trở xuống không yêu cầu đặt cọc trước.'}
+                </p>
               </div>
 
               <div>
@@ -1139,31 +1148,66 @@ export const CreateOrderPage = () => {
                         <h4 className="text-xs font-bold text-stone-800">
                           Thành phần trong bộ ({selectedProduct.totalSetItems || selectedProduct.setItems.length} món):
                         </h4>
-                        <div className="mt-1.5 flex flex-col gap-1.5 max-h-36 overflow-y-auto">
-                          {selectedProduct.setItems.map((item, idx) => (
-                            <div
-                              key={idx}
-                              className="flex items-center justify-between rounded-lg border border-stone-200 bg-white p-2 text-xs"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div className="h-8 w-8 rounded bg-stone-100 flex-shrink-0 overflow-hidden">
-                                  {item.itemProduct?.image_url && (
-                                    <img
-                                      src={item.itemProduct.image_url}
-                                      alt=""
-                                      className="h-full w-full object-cover"
-                                    />
-                                  )}
+                        <div className="mt-1.5 flex flex-col gap-1.5 max-h-44 overflow-y-auto pr-1">
+                          {selectedProduct.setItems.map((item, idx) => {
+                            const itemName =
+                              item.productName ||
+                              item.product_name ||
+                              item.itemProduct?.product_name ||
+                              `Món con #${item.productId || item.item_product_id || item.setItemId || idx + 1}`;
+                            const itemCode =
+                              item.productCode ||
+                              item.product_code ||
+                              item.itemProduct?.product_code ||
+                              '';
+                            const itemImg =
+                              item.imageUrl ||
+                              item.image_url ||
+                              item.itemProduct?.image_url ||
+                              '';
+                            const itemQty = item.quantity || 1;
+                            const itemDim =
+                              item.dimensions ||
+                              (item.itemProduct
+                                ? [item.itemProduct.length_cm, item.itemProduct.width_cm, item.itemProduct.height_cm]
+                                    .filter(Boolean)
+                                    .join(' x ')
+                                : null);
+
+                            return (
+                              <div
+                                key={item.setItemId || item.productId || idx}
+                                className="flex items-center justify-between rounded-lg border border-stone-200 bg-white p-2 text-xs hover:bg-stone-50/80 transition"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="h-9 w-9 rounded-md bg-stone-100 flex-shrink-0 overflow-hidden border border-stone-200 flex items-center justify-center">
+                                    {itemImg ? (
+                                      <img
+                                        src={itemImg}
+                                        alt={itemName}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <Package className="h-4 w-4 text-stone-400" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="truncate font-semibold text-stone-900" title={itemName}>
+                                      {itemName}
+                                    </p>
+                                    <div className="flex items-center gap-1.5 font-mono text-[10px] text-stone-500">
+                                      {itemCode && <span className="text-amber-800 font-semibold">{itemCode}</span>}
+                                      {itemCode && itemDim && <span>•</span>}
+                                      {itemDim && <span>{itemDim}</span>}
+                                    </div>
+                                  </div>
                                 </div>
-                                <span className="font-semibold text-stone-900">
-                                  {item.itemProduct?.product_name || `Món con #${item.itemProductId}`}
+                                <span className="font-bold text-amber-800 flex-shrink-0 ml-2 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                  x{itemQty} cái
                                 </span>
                               </div>
-                              <span className="font-bold text-amber-800">
-                                x{item.quantity} cái
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -1198,6 +1242,15 @@ export const CreateOrderPage = () => {
           </div>
         </div>
       )}
+
+      {/* ═════════════════════════════════════════════════════════
+          MODAL IN HỢP ĐỒNG BẢN GIẤY KHỔ A4 (PrintContractModal)
+          ═════════════════════════════════════════════════════════ */}
+      <PrintContractModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        contract={currentContract}
+      />
 
       {/* ═════════════════════════════════════════════════════════
           MODAL 2: BIÊN BẢN HỢP ĐỒNG & CHỐT ĐƠN (ContractSigningModal)
@@ -1269,6 +1322,52 @@ export const CreateOrderPage = () => {
                 </div>
               ) : (
                 <div className="flex flex-col gap-6">
+                  {/* Hướng dẫn Quy trình ký ngoài bản giấy */}
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-xs text-amber-950">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex-1">
+                        <h4 className="flex items-center gap-2 font-bold text-amber-900">
+                          <PenTool className="h-4 w-4 text-amber-700" />
+                          Quy trình ký hợp đồng bản giấy ngoài quầy (Không dùng chữ ký số):
+                        </h4>
+                        <ol className="mt-1.5 list-decimal pl-4 space-y-1 text-stone-700">
+                          <li>
+                            Bấm nút <strong>"In / Xuất bản giấy (A4)"</strong> để in hợp đồng ra máy in hoặc lưu file PDF.
+                          </li>
+                          <li>
+                            Khách hàng và nhân viên bán hàng <strong>ký tên trực tiếp bằng bút mực</strong> trên bản giấy in.
+                          </li>
+                          <li>
+                            Sau khi đã ký tay bản giấy xong, bấm nút <strong>"Xác nhận đã ký bản giấy tại quầy"</strong> bên dưới để mở khóa tạo đơn hàng.
+                          </li>
+                        </ol>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsPrintModalOpen(true)}
+                        className="flex items-center justify-center gap-1.5 rounded-lg bg-amber-800 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-900 transition shrink-0"
+                      >
+                        <Printer className="h-4 w-4" />
+                        In hợp đồng giấy
+                      </button>
+                    </div>
+
+                    {currentContract.status === 'DRAFT' && (
+                      <div className="mt-3 border-t border-amber-200/80 pt-2.5">
+                        <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                          Link ảnh chụp / scan hợp đồng giấy đã ký (tùy chọn lưu trữ):
+                        </label>
+                        <input
+                          type="url"
+                          placeholder="https://... (đường dẫn lưu trữ hình ảnh hoặc bản scan hợp đồng giấy nếu có)"
+                          value={paperSignedContractFileUrl}
+                          onChange={(e) => setPaperSignedContractFileUrl(e.target.value)}
+                          className="w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-800 placeholder-stone-400 focus:border-amber-600 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   {/* Trạng thái hợp đồng */}
                   <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 p-4">
                     <div>
@@ -1412,29 +1511,38 @@ export const CreateOrderPage = () => {
             {/* Modal Footer: Nút bấm quy trình nghiệp vụ */}
             {!orderCreatedResult && (
               <div className="flex flex-col gap-2 border-t border-stone-200 bg-stone-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <button
-                  type="button"
-                  onClick={handleCloseContractModal}
-                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-100"
-                >
-                  Đóng lại
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseContractModal}
+                    className="rounded-lg border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-100"
+                  >
+                    Đóng lại
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPrintModalOpen(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition"
+                  >
+                    <Printer className="h-4 w-4 text-amber-700" />
+                    In / Xuất bản giấy
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-3">
-                  {/* Nếu hợp đồng đang là DRAFT -> Nút Chốt và ký */}
+                  {/* Nếu hợp đồng đang là DRAFT -> Nút Xác nhận đã ký bản giấy */}
                   {currentContract.status === 'DRAFT' && (
                     <button
                       type="button"
                       disabled={isSigning}
                       onClick={handleSignContract}
                       className="flex items-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white shadow transition hover:bg-emerald-800 disabled:opacity-50"
+                      title="Xác nhận khách hàng và nhân viên đã ký tay bằng bút mực trên bản in giấy"
                     >
-                      <ShieldCheck className="h-4 w-4" />
-                      {isSigning ? 'Đang ký hợp đồng...' : 'CHỐT HỢP ĐỒNG & KÝ NHẬN TẠI QUẦY'}
+                      <CheckCircle2 className="h-4 w-4" />
+                      {isSigning ? 'Đang xác nhận...' : 'XÁC NHẬN ĐÃ KÝ BẢN GIẤY TẠI QUẦY'}
                     </button>
                   )}
-
-                  {/* Nếu hợp đồng đã SIGNED -> Mở khóa nút TẠO ĐƠN HÀNG NGAY */}
                   {currentContract.status === 'SIGNED' && (
                     <button
                       type="button"

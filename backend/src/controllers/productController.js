@@ -1,6 +1,7 @@
 
 const {
     getProductsWithPagination,
+    findProductById,
     getProductMetadata: getProductMetadataModel,
 } = require('../models/ProductModel');
 
@@ -42,6 +43,36 @@ async function getProducts(req, res) {
 }
 
 /**
+ * GET /api/products/:id
+ * Lấy chi tiết sản phẩm đang được công khai
+ */
+async function getProductById(req, res) {
+    try {
+        const productId = Number(req.params.id);
+        if (!Number.isInteger(productId) || productId <= 0) {
+            return res.status(400).json({ message: 'Mã sản phẩm không hợp lệ.' });
+        }
+
+        const product = await findProductById(productId);
+        const data = toProductDTO(product);
+        if (!data || data.status !== 'ACTIVE') {
+            return res.status(404).json({ message: 'Không tìm thấy sản phẩm yêu cầu.' });
+        }
+
+        return res.status(200).json({
+            message: 'Lấy chi tiết sản phẩm thành công',
+            data,
+        });
+    } catch (error) {
+        console.error('[productController.getProductById]', error);
+        return res.status(500).json({
+            message: 'Lỗi máy chủ khi lấy chi tiết sản phẩm',
+            error: error.message,
+        });
+    }
+}
+
+/**
  * GET /api/products/metadata
  * Lấy danh mục, phòng, chất liệu, màu sắc cho bộ lọc khách hàng
  */
@@ -63,5 +94,6 @@ async function getProductMetadata(req, res) {
 
 module.exports = {
     getProducts,
+    getProductById,
     getProductMetadata,
 };

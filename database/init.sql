@@ -312,7 +312,7 @@ CREATE TABLE IF NOT EXISTS cart_item (
 --    SINGLE = sản phẩm đơn (vd: 1 cái tủ), SET = bộ nhiều món (vd: bàn + ghế)
 --
 --  status:
---    NEW             -> khách vừa gửi
+--    PENDING         -> khách vừa gửi, chờ sale xử lý
 --    REVIEWING       -> sale đang xem xét
 --    QUOTED          -> sale đã báo giá (chỉ CUSTOM, quoted_price)
 --    APPROVED        -> sale chấp nhận yêu cầu  => lập biên bản hợp đồng
@@ -340,7 +340,7 @@ CREATE TABLE IF NOT EXISTS order_request (
     budget_max           INT            NULL,
     expected_date        DATE           NULL,           -- ngày khách muốn nhận
 
-    status               VARCHAR(30)    NOT NULL DEFAULT 'NEW',
+    status               VARCHAR(30)    NOT NULL DEFAULT 'PENDING',
     assigned_to          BIGINT         NULL,           -- sale phụ trách
     quoted_price         INT            NULL,
     quoted_at            DATETIME       NULL,
@@ -1257,7 +1257,7 @@ VALUES
      'CONVERTED', @sales, 3500000, '2026-10-19 10:00:00', '2026-10-19 15:00:00', 'Đã báo giá 3.5 triệu, khách đồng ý'),
     ('RQ-20261021-0003', 'CUSTOM', 'SET',    @cus1, 'Phạm Minh Khách', '0900000011', 'customer1@fssims.local', '45 Lê Lợi, Quận 1, TP.HCM',
      'Bộ bàn ghế phòng khách đặt riêng', 'Muốn bộ bàn trà và ghế sofa gỗ óc chó cùng phong cách', 20000000, 30000000, '2026-12-15',
-     'NEW', NULL, NULL, NULL, NULL, NULL);
+     'PENDING', NULL, NULL, NULL, NULL, NULL);
 
 SET @rq1 = (SELECT request_id FROM order_request WHERE request_code = 'RQ-20261015-0001'),
     @rq2 = (SELECT request_id FROM order_request WHERE request_code = 'RQ-20261018-0002'),
