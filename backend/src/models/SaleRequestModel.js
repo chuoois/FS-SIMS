@@ -150,13 +150,19 @@ async function findRequestById(requestId) {
 
 /**
  * Chuyển đổi request thành hợp đồng (DRAFT).
+ * - Cho phép sale điền/sửa thông tin khách hàng (tên, SĐT, địa chỉ giao hàng)
+ * - Cho phép sale chỉnh sửa giỏ hàng (số lượng, đơn giá)
  * - Tạo contract mới với source = 'ONLINE', contract_type = order_type của request
- * - Tạo ContractItem từ các OrderRequestItem (dùng unit_price đã có sẵn hoặc quoted_price)
- * - Cập nhật request status → 'PROCESSING'
+ * - Tạo ContractItem từ các OrderRequestItem / items cập nhật
+ * - Cập nhật request: bổ sung địa chỉ, tên, SĐT và status → 'CONVERTED'
  * - Gắn request_id vào contract
  */
 async function convertRequestToContract({
   requestId,
+  customerName,
+  customerPhone,
+  customerAddress,
+  items,
   depositAmount,
   deliveryDate,
   signedPlace,
@@ -188,7 +194,12 @@ async function convertRequestToContract({
       err.statusCode = 409;
       throw err;
     }
-    if (!request.items || request.items.length === 0) {
+
+    const itemsToProcess = (Array.isArray(items) && items.length > 0)
+      ? items
+      : (request.items || []);
+
+    if (itemsToProcess.length === 0) {
       const err = new Error('Yêu cầu không có sản phẩm nào, không thể tạo hợp đồng.');
       err.statusCode = 400;
       throw err;
@@ -206,8 +217,8 @@ async function convertRequestToContract({
     }
 
     // Tính tổng tiền từ các item
-    const totalAmount = request.items.reduce((sum, item) => {
-      const price = Number(item.unit_price) || 0;
+    const totalAmount = itemsToProcess.reduce((sum, item) => {
+      const price = Number(item.unit_price ?? item.unitPrice) || 0;
       const qty = Number(item.quantity) || 1;
       return sum + price * qty;
     }, 0);
@@ -217,6 +228,11 @@ async function convertRequestToContract({
     const finalDeposit = depositAmount !== null && depositAmount !== undefined
       ? Number(depositAmount)
       : minDeposit;
+
+    // Thông tin khách hàng (ưu tiên thông tin sale vừa điền/sửa)
+    const finalCustomerName = (customerName && String(customerName).trim()) || request.contact_name;
+    const finalCustomerPhone = (customerPhone && String(customerPhone).trim()) || request.contact_phone;
+    const finalCustomerAddress = (customerAddress && String(customerAddress).trim()) || request.delivery_address || null;
 
     // Sinh mã hợp đồng
     const { generateNextContractCode } = require('./ContractModel');
@@ -229,9 +245,9 @@ async function convertRequestToContract({
       contract_type: request.order_type || 'READY',
       request_id: requestId,
       customer_account_id: request.customer_account_id || null,
-      customer_name: request.contact_name,
-      customer_phone: request.contact_phone,
-      customer_address: request.delivery_address || null,
+      customer_name: finalCustomerName,
+      customer_phone: finalCustomerPhone,
+      customer_address: finalCustomerAddress,
       total_amount: totalAmount,
       deposit_amount: finalDeposit,
       status: 'DRAFT',
@@ -244,22 +260,24 @@ async function convertRequestToContract({
     }, { transaction });
 
     // Tạo contract items
-    const contractItemsData = request.items.map((item) => {
-      const hasProductId = Boolean(item.product_id);
+    const contractItemsData = itemsToProcess.map((item) => {
+      const productId = item.product_id || item.productId || null;
+      const hasProductId = Boolean(productId);
+      const reqItemId = item.request_item_id || item.requestItemId || null;
       return {
         contract_id: contract.contract_id,
-        product_id: hasProductId ? item.product_id : null,
-        request_item_id: hasProductId ? null : (item.request_item_id || null),
-        item_name: item.item_name,
-        category_id: item.category_id || null,
-        room_id: item.room_id || null,
-        material_id: item.material_id || null,
-        color_id: item.color_id || null,
-        length_cm: item.length_cm || null,
-        width_cm: item.width_cm || null,
-        height_cm: item.height_cm || null,
+        product_id: hasProductId ? productId : null,
+        request_item_id: hasProductId ? null : reqItemId,
+        item_name: item.item_name || item.itemName || 'Sản phẩm',
+        category_id: item.category_id || item.categoryId || null,
+        room_id: item.room_id || item.roomId || null,
+        material_id: item.material_id || item.materialId || null,
+        color_id: item.color_id || item.colorId || null,
+        length_cm: item.length_cm || item.lengthCm || null,
+        width_cm: item.width_cm || item.widthCm || null,
+        height_cm: item.height_cm || item.heightCm || null,
         quantity: Number(item.quantity) || 1,
-        unit_price: Number(item.unit_price) || 0,
+        unit_price: Number(item.unit_price ?? item.unitPrice) || 0,
         description: item.description || null,
         createby: createBy,
       };
@@ -267,10 +285,13 @@ async function convertRequestToContract({
 
     await ContractItem.bulkCreate(contractItemsData, { transaction });
 
-    // Cập nhật trạng thái request
+    // Cập nhật trạng thái và thông tin bổ sung cho request
     request.status = 'CONVERTED';
     request.approved_at = new Date();
     request.modifieby = createBy;
+    if (finalCustomerAddress) request.delivery_address = finalCustomerAddress;
+    if (finalCustomerName) request.contact_name = finalCustomerName;
+    if (finalCustomerPhone) request.contact_phone = finalCustomerPhone;
     await request.save({ transaction });
 
     await transaction.commit();
@@ -294,4 +315,3 @@ module.exports = {
   findRequestById,
   convertRequestToContract,
 };
-

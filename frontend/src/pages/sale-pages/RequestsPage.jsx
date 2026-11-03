@@ -2,6 +2,9 @@
 // RequestsPage.jsx
 // Trang quản lý yêu cầu mua hàng của khách (Role Sale)
 // Sale xem, duyệt và chuyển yêu cầu thành hợp đồng DRAFT
+// Giao diện chuyển hợp đồng mô phỏng đầy đủ cột trái trang POS:
+// - Giỏ hàng sản phẩm (hiển thị, chỉnh số lượng, tính tổng)
+// - Thông tin khách hàng & Giao nhận (tên, SĐT, điền nốt địa chỉ, ngày giao, cọc...)
 // =========================================================
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -24,6 +27,11 @@ import {
   MapPin,
   Calendar,
   FileText,
+  ShoppingCart,
+  DollarSign,
+  Plus,
+  Minus,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -184,12 +192,19 @@ function RequestDetailModal({ requestId, onClose, onConvert }) {
                       <p className="font-medium text-stone-800">{detail.customerEmail}</p>
                     </div>
                   )}
-                  {detail.deliveryAddress && (
+                  {detail.deliveryAddress ? (
                     <div className="col-span-2">
                       <p className="text-xs text-stone-400">Địa chỉ giao hàng</p>
                       <p className="font-medium text-stone-800 flex items-start gap-1">
                         <MapPin className="h-3.5 w-3.5 text-stone-400 mt-0.5 shrink-0" />
                         {detail.deliveryAddress}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="col-span-2">
+                      <p className="text-xs text-stone-400">Địa chỉ giao hàng</p>
+                      <p className="text-xs font-medium text-amber-700 bg-amber-50 rounded px-2 py-1 inline-block">
+                        Chưa có địa chỉ — Sale sẽ điền khi chuyển thành hợp đồng
                       </p>
                     </div>
                   )}
@@ -313,40 +328,121 @@ function RequestDetailModal({ requestId, onClose, onConvert }) {
   );
 }
 
-// ─── Convert Modal ─────────────────────────────────────────
+// ─── Convert Modal (Mô phỏng giao diện bên trái trang POS) ───
 function ConvertToContractModal({ request, onClose, onSuccess }) {
+  // 1. Giỏ hàng sản phẩm (khởi tạo từ request.items)
+  const [cartItems, setCartItems] = useState(() => {
+    return (request?.items || []).map((it) => ({
+      requestItemId: it.requestItemId || it.request_item_id,
+      productId: it.productId || it.product_id || null,
+      productCode: it.productCode || (it.productId ? `PRD-${String(it.productId).padStart(4, '0')}` : 'CUSTOM'),
+      productName: it.itemName || it.item_name || 'Sản phẩm',
+      imageUrl: it.imageUrl || it.image_url || null,
+      quantity: Number(it.quantity) || 1,
+      unitPrice: Number(it.unitPrice ?? it.unit_price) || 0,
+      description: it.description || '',
+    }));
+  });
+
+  // Tính tổng số lượng và tổng tiền hàng
+  const totalQuantity = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+  }, [cartItems]);
+
   const totalAmount = useMemo(() => {
-    if (!request?.items?.length) return 0;
-    return request.items.reduce((s, it) => s + (it.unitPrice || 0) * (it.quantity || 1), 0);
-  }, [request]);
+    return cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
+  }, [cartItems]);
 
   const minDeposit = totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0;
-  const [depositAmount, setDepositAmount] = useState(() => minDeposit > 0 ? String(minDeposit) : '0');
-  const [deliveryDate, setDeliveryDate] = useState(request?.expectedDate || '');
+
+  // 2. Form Thông tin khách hàng & Giao nhận (pre-filled từ request, cho phép sale chỉnh sửa hoặc điền nốt)
+  const [customerName, setCustomerName] = useState(request?.customerName || request?.contact_name || '');
+  const [customerPhone, setCustomerPhone] = useState(request?.customerPhone || request?.contact_phone || '');
+  const [customerAddress, setCustomerAddress] = useState(request?.deliveryAddress || request?.delivery_address || '');
+  const [deliveryDate, setDeliveryDate] = useState(request?.expectedDate || request?.expected_date || '');
   const [signedPlace, setSignedPlace] = useState('Cửa hàng Góc Nhà');
-  const [note, setNote] = useState('');
+  const [depositAmount, setDepositAmount] = useState(() => minDeposit > 0 ? String(minDeposit) : '0');
+  const [note, setNote] = useState(request?.description || '');
   const [submitting, setSubmitting] = useState(false);
 
-  const depositNum = parseInt(depositAmount.replace(/\D/g, ''), 10) || 0;
+  // Tự động cập nhật tiền cọc 30% khi tổng tiền thay đổi (đơn > 10M)
+  useEffect(() => {
+    if (totalAmount > 10000000) {
+      setDepositAmount(String(Math.round(totalAmount * 0.3)));
+    } else {
+      setDepositAmount('0');
+    }
+  }, [totalAmount]);
+
+  // Bộ điều khiển số lượng giỏ hàng
+  const handleUpdateQuantity = (idx, newQty) => {
+    if (newQty < 1) return;
+    setCartItems((prev) => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], quantity: newQty };
+      return updated;
+    });
+  };
+
+  // Xóa sản phẩm khỏi giỏ hàng
+  const handleRemoveItem = (idx) => {
+    if (cartItems.length <= 1) {
+      toast.error('Hợp đồng phải có ít nhất một sản phẩm.');
+      return;
+    }
+    setCartItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const depositNum = parseInt(String(depositAmount).replace(/\D/g, ''), 10) || 0;
   const depositError = useMemo(() => {
     if (totalAmount > 10000000 && depositNum < minDeposit) {
       return `Đơn trên 10 triệu cần đặt cọc tối thiểu 30% (${formatVND(minDeposit)})`;
     }
-    if (depositNum > totalAmount) return 'Tiền cọc không được vượt tổng giá trị.';
+    if (depositNum > totalAmount) return 'Tiền cọc không được vượt tổng giá trị hợp đồng.';
     return null;
   }, [depositNum, minDeposit, totalAmount]);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (depositError) return;
+
+    if (!customerName.trim()) {
+      toast.error('Vui lòng nhập họ và tên khách hàng.');
+      return;
+    }
+    if (!customerPhone.trim()) {
+      toast.error('Vui lòng nhập số điện thoại liên hệ.');
+      return;
+    }
+    if (cartItems.length === 0) {
+      toast.error('Giỏ hàng không có sản phẩm nào.');
+      return;
+    }
+    if (depositError) {
+      toast.error(depositError);
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const res = await convertRequestToContract(request.requestId, {
+      const payload = {
+        customer_name: customerName.trim(),
+        customer_phone: customerPhone.trim(),
+        customer_address: customerAddress.trim() || undefined,
         deposit_amount: depositNum,
         delivery_date: deliveryDate || undefined,
         signed_place: signedPlace || undefined,
-        note: note || undefined,
-      });
+        note: note.trim() || undefined,
+        items: cartItems.map((item) => ({
+          request_item_id: item.requestItemId,
+          product_id: item.productId,
+          item_name: item.productName,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          description: item.description,
+        })),
+      };
+
+      const res = await convertRequestToContract(request.requestId, payload);
       toast.success(`Đã tạo hợp đồng ${res.data?.contractCode || ''} thành công!`);
       onSuccess(res.data);
     } catch (err) {
@@ -358,129 +454,370 @@ function ConvertToContractModal({ request, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-xl bg-white shadow-2xl overflow-hidden"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
-          <div className="flex items-center gap-2">
-            <ArrowRight className="h-5 w-5 text-amber-600" />
-            <h2 className="text-lg font-bold text-stone-800">Chuyển thành Hợp đồng</h2>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 hover:bg-stone-100">
-            <X className="h-5 w-5 text-stone-500" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          {/* Tóm tắt yêu cầu */}
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
-            <p className="font-semibold text-amber-800 mb-1">
-              Yêu cầu: <span className="font-mono">{request.requestCode}</span>
-            </p>
-            <p className="text-amber-700">
-              Khách hàng: {request.customerName} · {request.customerPhone}
-            </p>
-            {totalAmount > 0 && (
-              <p className="text-amber-700 mt-1">
-                Tổng giá trị: <span className="font-bold">{formatVND(totalAmount)}</span>
-              </p>
-            )}
-          </div>
-
-          {/* Tiền đặt cọc */}
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">
-              Tiền đặt cọc
-              {totalAmount > 10000000 && (
-                <span className="ml-2 text-xs text-amber-600 font-normal">
-                  (Tối thiểu 30% = {formatVND(minDeposit)})
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-5 backdrop-blur-sm">
+      <div className="relative w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden rounded-2xl bg-stone-100 shadow-2xl border border-stone-200">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-stone-200 bg-white px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <ShoppingCart className="h-5 w-5 text-amber-700" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-stone-900">Chuyển yêu cầu thành Hợp đồng</h2>
+                <span className="font-mono text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  {request.requestCode}
                 </span>
-              )}
-            </label>
-            <input
-              type="number"
-              min={0}
-              value={depositAmount}
-              onChange={(e) => setDepositAmount(e.target.value)}
-              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
-                depositError
-                  ? 'border-red-400 focus:ring-red-300'
-                  : 'border-stone-300 focus:ring-amber-400'
-              }`}
-              placeholder="0"
-            />
-            {depositError && <p className="mt-1 text-xs text-red-600">{depositError}</p>}
+              </div>
+              <p className="text-[11px] text-stone-500">
+                Kiểm tra sản phẩm trong giỏ, bổ sung địa chỉ và thông tin còn thiếu trước khi lập hợp đồng
+              </p>
+            </div>
           </div>
-
-          {/* Ngày giao hàng */}
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">
-              Ngày dự kiến giao hàng
-            </label>
-            <input
-              type="date"
-              value={deliveryDate}
-              onChange={(e) => setDeliveryDate(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-          </div>
-
-          {/* Nơi ký kết */}
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Nơi ký kết</label>
-            <input
-              type="text"
-              value={signedPlace}
-              onChange={(e) => setSignedPlace(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-              placeholder="Cửa hàng Góc Nhà"
-            />
-          </div>
-
-          {/* Ghi chú */}
-          <div>
-            <label className="block text-sm font-medium text-stone-700 mb-1">Ghi chú</label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={2}
-              className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
-              placeholder="Ghi chú thêm (tuỳ chọn)..."
-            />
-          </div>
-
-          <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-700">
-            Sau khi chuyển, hợp đồng sẽ ở trạng thái <strong>DRAFT</strong>. Bạn vào trang{' '}
-            <strong>Hợp đồng</strong> để in, ký kết và tạo đơn hàng.
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 border-t border-stone-200 px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
           >
-            Hủy
-          </button>
-          <button
-            type="submit"
-            disabled={submitting || !!depositError}
-            className="flex items-center gap-2 rounded-lg bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? (
-              <RotateCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <ArrowRight className="h-4 w-4" />
-            )}
-            Tạo Hợp đồng
+            <X className="h-5 w-5" />
           </button>
         </div>
-      </form>
+
+        {/* Modal Body: Bố cục Giỏ hàng & Form thông tin khách hàng giống POS */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          {/* ═════════════════════════════════════════════════════
+              PHẦN 1: GIỎ HÀNG SẢN PHẨM (Mô phỏng POS bên trên)
+              ═════════════════════════════════════════════════════ */}
+          <div className="flex flex-col rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+            {/* Card Header Giỏ hàng */}
+            <div className="flex items-center justify-between border-b border-stone-200 bg-stone-50/80 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4 text-amber-700" />
+                <h3 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
+                  Giỏ hàng sản phẩm
+                </h3>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                  {totalQuantity} món
+                </span>
+              </div>
+              <span className="text-[11px] text-stone-500">
+                Điều chỉnh số lượng nếu khách thay đổi
+              </span>
+            </div>
+
+            {/* Danh sách các món trong giỏ */}
+            <div className="max-h-[260px] divide-y divide-stone-100 overflow-y-auto p-2">
+              {cartItems.map((item, idx) => (
+                <div
+                  key={item.requestItemId || idx}
+                  className="flex items-center justify-between gap-3 p-2.5 transition hover:bg-stone-50/80 rounded-lg"
+                >
+                  {/* Ảnh & thông tin sản phẩm */}
+                  <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                    <div className="h-11 w-11 flex-shrink-0 overflow-hidden rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.productName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Package className="h-5 w-5 text-stone-400" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-semibold text-amber-700">
+                          {item.productCode}
+                        </span>
+                        {item.productId ? (
+                          <span className="rounded bg-emerald-50 px-1 text-[9px] font-medium text-emerald-700">
+                            Hàng kho
+                          </span>
+                        ) : (
+                          <span className="rounded bg-stone-100 px-1 text-[9px] font-medium text-stone-600">
+                            Đặt riêng
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-xs font-semibold text-stone-900" title={item.productName}>
+                        {item.productName}
+                      </p>
+                      <p className="text-xs font-bold text-amber-800">
+                        {formatVND(item.unitPrice)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Stepper số lượng & thành tiền */}
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="flex items-center rounded-lg border border-stone-200 bg-white">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateQuantity(idx, item.quantity - 1)}
+                        disabled={item.quantity <= 1}
+                        className="flex h-7 w-7 items-center justify-center text-stone-600 hover:bg-stone-100 disabled:opacity-30"
+                        title="Giảm số lượng"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="w-8 text-center text-xs font-bold text-stone-900">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateQuantity(idx, item.quantity + 1)}
+                        className="flex h-7 w-7 items-center justify-center text-stone-600 hover:bg-stone-100"
+                        title="Tăng số lượng"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    <div className="text-right min-w-[85px]">
+                      <p className="text-xs font-bold text-stone-900">
+                        {formatVND(item.quantity * item.unitPrice)}
+                      </p>
+                      {cartItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          className="text-[11px] text-red-500 hover:underline inline-flex items-center gap-0.5"
+                        >
+                          <Trash2 className="h-3 w-3" /> Xóa
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tóm tắt tiền hàng (giống hệt POS) */}
+            <div className="border-t border-stone-200 bg-stone-50/70 p-4">
+              <div className="flex items-center justify-between text-xs text-stone-600">
+                <span>Tổng số lượng sản phẩm:</span>
+                <span className="font-semibold text-stone-900">{totalQuantity} cái</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs text-stone-600">
+                <span>Tổng tiền hàng:</span>
+                <span className="text-sm font-bold text-stone-900">{formatVND(totalAmount)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs text-stone-600">
+                <span>Tiền cọc mặc định:</span>
+                <span className="font-semibold text-amber-800">
+                  {formatVND(depositNum)}
+                  {totalAmount > 10000000 && (
+                    <span className="ml-1 rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-bold text-amber-800">
+                      (30%)
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between border-t border-stone-200 pt-2 text-xs font-bold text-stone-900">
+                <span>Còn lại cần thu:</span>
+                <span className="text-sm font-extrabold text-stone-900">
+                  {formatVND(Math.max(0, totalAmount - depositNum))}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ═════════════════════════════════════════════════════
+              PHẦN 2: FORM THÔNG TIN KHÁCH HÀNG & GIAO NHẬN (Mô phỏng POS bên dưới)
+              ═════════════════════════════════════════════════════ */}
+          <div className="flex flex-col rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-amber-700" />
+                <h3 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
+                  Thông tin khách hàng & Giao nhận
+                </h3>
+              </div>
+              <span className="text-[11px] text-stone-400">
+                * Điền nốt hoặc sửa thông tin
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {/* Họ tên khách hàng */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-stone-700">
+                  Họ và tên khách hàng <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ví dụ: Nguyễn Văn A"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Số điện thoại */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-stone-700">
+                  Số điện thoại liên hệ <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
+                  <input
+                    type="tel"
+                    required
+                    placeholder="Ví dụ: 0912345678"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Địa chỉ giao hàng - Rất quan trọng khi request chưa có */}
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-stone-700">
+                    Địa chỉ giao hàng (nếu có)
+                  </label>
+                  {!customerAddress.trim() && (
+                    <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      Khách chưa có địa chỉ — Sale vui lòng điền nốt
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
+                  <input
+                    type="text"
+                    placeholder="Địa chỉ số nhà, đường, phường, thành phố..."
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    className={`w-full rounded-lg border py-2 pl-9 pr-3 text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-1 ${
+                      !customerAddress.trim()
+                        ? 'border-amber-300 bg-amber-50/30 focus:border-amber-500 focus:ring-amber-500'
+                        : 'border-stone-200 focus:border-amber-500 focus:ring-amber-500'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Ngày hẹn giao & Nơi ký kết */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-stone-700">
+                    Ngày hẹn giao (dự kiến)
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
+                    <input
+                      type="date"
+                      value={deliveryDate}
+                      onChange={(e) => setDeliveryDate(e.target.value)}
+                      className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-stone-700">
+                    Địa điểm ký kết
+                  </label>
+                  <input
+                    type="text"
+                    value={signedPlace}
+                    onChange={(e) => setSignedPlace(e.target.value)}
+                    className="w-full rounded-lg border border-stone-200 py-2 px-3 text-xs text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Tiền đặt cọc trước */}
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-stone-700">
+                    Tiền đặt cọc trước (VND)
+                  </label>
+                  {totalAmount > 10000000 ? (
+                    <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                      Mặc định cọc 30% (Đơn > 10 triệu)
+                    </span>
+                  ) : (
+                    <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
+                      Không bắt buộc cọc (Đơn ≤ 10 triệu)
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
+                  <input
+                    type="number"
+                    min={minDeposit}
+                    max={totalAmount}
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    className={`w-full rounded-lg border py-2 pl-9 pr-3 text-xs font-bold text-amber-800 placeholder-stone-400 focus:outline-none focus:ring-1 ${
+                      depositError
+                        ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
+                        : 'border-stone-200 focus:border-amber-500 focus:ring-amber-500'
+                    }`}
+                  />
+                </div>
+                {depositError ? (
+                  <p className="mt-1 text-[11px] font-medium text-red-600">{depositError}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-stone-500">
+                    {totalAmount > 10000000
+                      ? `* Theo chính sách bán hàng: Đơn trên 10 triệu mặc định cọc 30% (${formatVND(minDeposit)}).`
+                      : '* Đơn hàng từ 10 triệu trở xuống không yêu cầu đặt cọc trước.'}
+                  </p>
+                )}
+              </div>
+
+              {/* Ghi chú */}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-stone-700">
+                  Ghi chú đơn hàng
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ghi chú thêm về vận chuyển, đóng gói, bảo quản..."
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="w-full rounded-lg border border-stone-200 p-2 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
+            Sau khi bấm <strong>Tạo Hợp đồng</strong>, hệ thống sẽ lập biên bản hợp đồng (trạng thái <strong>DRAFT</strong>) và tự động chuyển sang trang <strong>Quản lý Hợp đồng</strong> để in và tiến hành ký kết.
+          </div>
+
+          {/* Modal Footer */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-stone-300 px-4 py-2.5 text-xs font-medium text-stone-700 hover:bg-white"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !customerName.trim() || !customerPhone.trim() || !!depositError || cartItems.length === 0}
+              className="flex items-center gap-2 rounded-lg bg-amber-800 px-6 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-amber-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {submitting ? (
+                <RotateCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowRight className="h-4 w-4" />
+              )}
+              Tạo Hợp đồng (DRAFT)
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -566,7 +903,7 @@ export function RequestsPage() {
     setPage(1);
   }
 
-  function handleConvertSuccess(contractData) {
+  function handleConvertSuccess() {
     setConvertRequest(null);
     setDetailId(null);
     fetchRequests();
@@ -811,4 +1148,3 @@ export function RequestsPage() {
 }
 
 export default RequestsPage;
-
