@@ -25,6 +25,12 @@ const {
 } = require('../models/CustomerOrderModel');
 
 const {
+  getRequestsWithPagination: getRequestsModel,
+  findRequestById: findRequestByIdModel,
+  convertRequestToContract: convertRequestToContractModel,
+} = require('../models/SaleRequestModel');
+
+const {
   validateCreateOfflineContractInput,
   validateSignContractInput,
   validateCreateOrderFromContractInput,
@@ -403,6 +409,178 @@ async function getOrderById(req, res) {
   }
 }
 
+/**
+ * 11. GET /api/sale-orders/requests
+ * Lấy danh sách yêu cầu của khách hàng
+ */
+async function getRequests(req, res) {
+  try {
+    const {
+      search,
+      search_by,
+      status,
+      order_type,
+      page = 1,
+      limit = 10,
+    } = req.query;
+
+    const result = await getRequestsModel({
+      search: typeof search === 'string' ? search.trim() : '',
+      search_by: typeof search_by === 'string' ? search_by.trim().toUpperCase() : 'ALL',
+      status: typeof status === 'string' ? status.trim().toUpperCase() : 'ALL',
+      order_type: typeof order_type === 'string' ? order_type.trim().toUpperCase() : 'ALL',
+      page: Math.max(1, parseInt(page, 10) || 1),
+      limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
+    });
+
+    return res.status(200).json({
+      message: 'Lấy danh sách yêu cầu khách hàng thành công',
+      data: (result.requests || []).map(toRequestDTO),
+      pagination: {
+        totalItems: result.totalItems,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        itemsPerPage: result.itemsPerPage,
+      },
+    });
+  } catch (error) {
+    console.error('[saleOrderController.getRequests]', error);
+    return res.status(500).json({
+      message: 'Lỗi khi lấy danh sách yêu cầu',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * 12. GET /api/sale-orders/requests/:id
+ * Lấy chi tiết 1 yêu cầu
+ */
+async function getRequestById(req, res) {
+  try {
+    const { id } = req.params;
+    const requestId = parseInt(id, 10);
+    if (!requestId || isNaN(requestId) || requestId <= 0) {
+      return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
+    }
+    const request = await findRequestByIdModel(requestId);
+    if (!request) {
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu.' });
+    }
+    return res.status(200).json({
+      message: 'Lấy chi tiết yêu cầu thành công',
+      data: toRequestDTO(request),
+    });
+  } catch (error) {
+    console.error('[saleOrderController.getRequestById]', error);
+    return res.status(500).json({
+      message: 'Lỗi máy chủ khi lấy chi tiết yêu cầu',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * 13. POST /api/sale-orders/requests/:id/convert-to-contract
+ * Chuyển yêu cầu thành hợp đồng DRAFT
+ */
+async function convertRequestToContract(req, res) {
+  try {
+    const { id } = req.params;
+    const requestId = parseInt(id, 10);
+    if (!requestId || isNaN(requestId) || requestId <= 0) {
+      return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
+    }
+
+    const { deposit_amount, delivery_date, signed_place, terms, note } = req.body;
+
+    const result = await convertRequestToContractModel({
+      requestId,
+      depositAmount: deposit_amount !== undefined && deposit_amount !== '' ? Number(deposit_amount) : null,
+      deliveryDate: delivery_date || null,
+      signedPlace: signed_place || null,
+      terms: terms || null,
+      note: note || null,
+      signedBy: req.user?.sub,
+      createBy: req.user?.email || 'STAFF',
+    });
+
+    return res.status(201).json({
+      message: 'Chuyển yêu cầu thành hợp đồng thành công',
+      data: result,
+    });
+  } catch (error) {
+    console.error('[saleOrderController.convertRequestToContract]', error);
+    const statusCode = error.statusCode || (
+      error.message && (
+        error.message.includes('đã được chuyển') ? 409 :
+        error.message.includes('không tìm thấy') || error.message.includes('Không tìm thấy') ? 404 :
+        400
+      )
+    ) || 500;
+    return res.status(statusCode).json({
+      message: error.message || 'Lỗi hệ thống khi chuyển yêu cầu thành hợp đồng',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * DTO chuyển đổi OrderRequest sang JSON trả về FE
+ */
+function toRequestDTO(raw) {
+  if (!raw) return null;
+  const r = raw.toJSON ? raw.toJSON() : raw;
+  return {
+    requestId: r.request_id,
+    requestCode: r.request_code,
+    orderType: r.order_type,
+    requestType: r.request_type,
+    customerAccountId: r.customer_account_id,
+    customerName: r.contact_name,
+    customerPhone: r.contact_phone,
+    customerEmail: r.contact_email,
+    deliveryAddress: r.delivery_address,
+    title: r.title,
+    description: r.description,
+    budgetMin: r.budget_min ? Number(r.budget_min) : null,
+    budgetMax: r.budget_max ? Number(r.budget_max) : null,
+    expectedDate: r.expected_date,
+    status: r.status,
+    quotedPrice: r.quoted_price ? Number(r.quoted_price) : null,
+    quotedAt: r.quoted_at,
+    approvedAt: r.approved_at,
+    staffNote: r.staff_note,
+    rejectReason: r.reject_reason,
+    assignedTo: r.assigned_to,
+    assigneeName: r.assignee?.full_name || null,
+    customerFullName: r.customer?.full_name || r.contact_name,
+    createdAt: r.createdate,
+    updatedAt: r.modifiedate,
+    contract: r.contract ? {
+      contractId: r.contract.contract_id,
+      contractCode: r.contract.contract_code,
+      status: r.contract.status,
+    } : null,
+    items: (r.items || []).map((it) => ({
+      requestItemId: it.request_item_id,
+      productId: it.product_id,
+      itemName: it.item_name,
+      quantity: it.quantity,
+      unitPrice: it.unit_price ? Number(it.unit_price) : null,
+      description: it.description,
+      lengthCm: it.length_cm,
+      widthCm: it.width_cm,
+      heightCm: it.height_cm,
+    })),
+    images: (r.images || []).map((img) => ({
+      imageId: img.request_image_id,
+      imageUrl: img.image_url,
+      sortOrder: img.sort_order,
+    })),
+  };
+}
+
 module.exports = {
   getWarehouseProducts,
   getProductDetail,
@@ -414,5 +592,8 @@ module.exports = {
   createOrderFromContract,
   getOrders,
   getOrderById,
+  getRequests,
+  getRequestById,
+  convertRequestToContract,
 };
 

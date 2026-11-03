@@ -85,3 +85,26 @@ export async function getOrderById(orderId) {
   return response.data;
 }
 
+/**
+ * 11. Lấy danh sách yêu cầu của khách hàng (dành cho Sale)
+ */
+export async function getRequests(params = {}) {
+  const response = await api.get('/sale-orders/requests', { params });
+  return response.data;
+}
+
+/**
+ * 12. Lấy chi tiết 1 yêu cầu
+ */
+export async function getRequestById(requestId) {
+  const response = await api.get(`/sale-orders/requests/${requestId}`);
+  return response.data;
+}
+
+/**
+ * 13. Chuyển yêu cầu thành hợp đồng DRAFT
+ */
+export async function convertRequestToContract(requestId, payload = {}) {
+  const response = await api.post(`/sale-orders/requests/${requestId}/convert-to-contract`, payload);
+  return response.data;
+}
