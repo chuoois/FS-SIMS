@@ -318,10 +318,26 @@ async function createOrderFromContract(req, res) {
  */
 async function getOrders(req, res) {
   try {
-    const { search, status, page = 1, limit = 10 } = req.query;
+    const {
+      search,
+      search_by,
+      order_code,
+      customer_name,
+      status,
+      order_type,
+      sort,
+      page = 1,
+      limit = 10,
+    } = req.query;
+
     const result = await getOrdersModel({
       search: typeof search === 'string' ? search.trim() : '',
+      search_by: typeof search_by === 'string' ? search_by.trim().toUpperCase() : 'ALL',
+      order_code: typeof order_code === 'string' ? order_code.trim() : '',
+      customer_name: typeof customer_name === 'string' ? customer_name.trim() : '',
       status: typeof status === 'string' ? status.trim().toUpperCase() : 'ALL',
+      order_type: typeof order_type === 'string' ? order_type.trim().toUpperCase() : 'ALL',
+      sort: typeof sort === 'string' ? sort.trim().toUpperCase() : 'NEWEST',
       page: Math.max(1, parseInt(page, 10) || 1),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
     });
