@@ -492,10 +492,24 @@ async function convertRequestToContract(req, res) {
       return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
     }
 
-    const { deposit_amount, delivery_date, signed_place, terms, note } = req.body;
+    const {
+      customer_name,
+      customer_phone,
+      customer_address,
+      items,
+      deposit_amount,
+      delivery_date,
+      signed_place,
+      terms,
+      note,
+    } = req.body;
 
     const result = await convertRequestToContractModel({
       requestId,
+      customerName: customer_name,
+      customerPhone: customer_phone,
+      customerAddress: customer_address,
+      items,
       depositAmount: deposit_amount !== undefined && deposit_amount !== '' ? Number(deposit_amount) : null,
       deliveryDate: delivery_date || null,
       signedPlace: signed_place || null,

@@ -31,7 +31,7 @@ const mockRequests = [
     customerName: 'Nguyễn Văn A',
     customerPhone: '0912345678',
     customerEmail: 'nguyenvana@gmail.com',
-    deliveryAddress: '123 Lê Lợi, Q1, TP.HCM',
+    deliveryAddress: '', // Khách chưa có địa chỉ lúc gửi yêu cầu
     orderType: 'READY',
     status: 'PENDING',
     createdAt: '2026-11-03T10:00:00.000Z',
@@ -165,7 +165,7 @@ describe('RequestsPage Component', () => {
     });
   });
 
-  it('opens convert modal and converts request to contract', async () => {
+  it('opens convert modal, displays POS-like cart and customer form, allows filling missing address', async () => {
     const user = userEvent.setup();
 
     render(
@@ -180,9 +180,24 @@ describe('RequestsPage Component', () => {
 
     await user.click(screen.getByText('Tạo HĐ'));
 
+    // Modal opens
     await waitFor(() => {
-      expect(screen.getByText('Chuyển thành Hợp đồng')).toBeInTheDocument();
+      expect(screen.getByText('Chuyển yêu cầu thành Hợp đồng')).toBeInTheDocument();
+      // Check POS-like cart header
+      expect(screen.getByText('Giỏ hàng sản phẩm')).toBeInTheDocument();
+      // Check item in cart
+      expect(screen.getByText('Bàn ăn thông minh')).toBeInTheDocument();
+      // Check customer form header
+      expect(screen.getByText('Thông tin khách hàng & Giao nhận')).toBeInTheDocument();
     });
+
+    // Pre-filled customer name
+    const nameInput = screen.getByDisplayValue('Nguyễn Văn A');
+    expect(nameInput).toBeInTheDocument();
+
+    // Fill in missing address
+    const addressInput = screen.getByPlaceholderText(/Địa chỉ số nhà, đường/i);
+    await user.type(addressInput, '789 Điện Biên Phủ, Q3, TP.HCM');
 
     const submitBtn = screen.getByRole('button', { name: /Tạo Hợp đồng/i });
     expect(submitBtn).toBeInTheDocument();
@@ -193,7 +208,11 @@ describe('RequestsPage Component', () => {
       expect(saleOrderService.convertRequestToContract).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
+          customer_name: 'Nguyễn Văn A',
+          customer_phone: '0912345678',
+          customer_address: '789 Điện Biên Phủ, Q3, TP.HCM',
           deposit_amount: expect.any(Number),
+          items: expect.any(Array),
         })
       );
     });
@@ -222,4 +241,3 @@ describe('RequestsPage Component', () => {
     });
   });
 });
-
