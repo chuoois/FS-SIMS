@@ -44,6 +44,7 @@ export const roles = {
       { label: 'Tạo đơn hàng (POS)', path: 'create-order', icon: Receipt },
       { label: 'Đơn hàng', path: 'orders', icon: Package },
       { label: 'Hợp đồng', path: 'contracts', icon: FileText },
+      { label: 'Yêu cầu của khách', path: 'requests', icon: ClipboardList },
       { label: 'Khách hàng', path: '#', icon: Users },
       { label: 'Lịch hẹn tư vấn', path: '#', icon: CalendarCheck },
       { label: 'Sản phẩm', path: '#', icon: Boxes },

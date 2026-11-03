@@ -4,6 +4,7 @@ import { ROLES } from "../../constants/roles";
 import { CreateOrderPage } from "../../pages/sale-pages/CreateOrderPage";
 import { OrdersPage } from "../../pages/sale-pages/OrdersPage";
 import { ContractsPage } from "../../pages/sale-pages/ContractsPage";
+import { RequestsPage } from "../../pages/sale-pages/RequestsPage";
 
 export const SaleRouter = {
   path: "/sale",
@@ -31,6 +32,10 @@ export const SaleRouter = {
         {
           path: "contracts",
           element: <ContractsPage />,
+        },
+        {
+          path: "requests",
+          element: <RequestsPage />,
         },
       ],
     },
