@@ -245,11 +245,17 @@ export const CreateOrderPage = () => {
     );
   }, [cartItems]);
 
-  // Cập nhật số tiền cọc gợi ý
-  const setQuickDeposit = (percent) => {
-    const calculated = Math.round((totalAmount * percent) / 100);
-    setCustomerInfo((prev) => ({ ...prev, depositAmount: calculated }));
-  };
+  // ── Tự động tính tiền cọc theo quy tắc nghiệp vụ ──────────
+  // Đơn hàng > 10.000.000 VNĐ: mặc định cọc 30%
+  // Đơn hàng ≤ 10.000.000 VNĐ: mặc định cọc 0đ (không bắt buộc)
+  useEffect(() => {
+    if (totalAmount > 10000000) {
+      const defaultDeposit = Math.round(totalAmount * 0.3);
+      setCustomerInfo((prev) => ({ ...prev, depositAmount: defaultDeposit }));
+    } else {
+      setCustomerInfo((prev) => ({ ...prev, depositAmount: 0 }));
+    }
+  }, [totalAmount]);
 
   // ── BƯỚC 1: BẤM NÚT TẠO HỢP ĐỒNG ────────────────────────────
   const handleStartContractCreation = async (e) => {
@@ -267,6 +273,14 @@ export const CreateOrderPage = () => {
 
     if (!customerInfo.customerPhone.trim()) {
       toast.error('Vui lòng nhập số điện thoại khách hàng.');
+      return;
+    }
+
+    const minRequiredDeposit = totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0;
+    if (totalAmount > 10000000 && Number(customerInfo.depositAmount) < minRequiredDeposit) {
+      toast.error(
+        `Đơn hàng trên 10 triệu yêu cầu đặt cọc tối thiểu 30% (${formatVND(minRequiredDeposit)}).`
+      );
       return;
     }
 
@@ -554,9 +568,14 @@ export const CreateOrderPage = () => {
                   <span className="text-sm font-bold text-stone-900">{formatVND(totalAmount)}</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-xs text-stone-600">
-                  <span>Tiền cọc dự kiến:</span>
+                  <span>Tiền cọc mặc định:</span>
                   <span className="font-semibold text-amber-800">
                     {formatVND(customerInfo.depositAmount)}
+                    {totalAmount > 10000000 && (
+                      <span className="ml-1 rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-bold text-amber-800">
+                        (30%)
+                      </span>
+                    )}
                   </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between border-t border-stone-200 pt-2 text-xs font-bold text-stone-900">
@@ -671,14 +690,25 @@ export const CreateOrderPage = () => {
 
               {/* Tiền đặt cọc */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-stone-700">
-                  Tiền đặt cọc trước (VND)
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-stone-700">
+                    Tiền đặt cọc trước (VND)
+                  </label>
+                  {totalAmount > 10000000 ? (
+                    <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                      Mặc định cọc 30% (Đơn > 10 triệu)
+                    </span>
+                  ) : (
+                    <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
+                      Không bắt buộc cọc (Đơn ≤ 10 triệu)
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
                   <input
                     type="number"
-                    min="0"
+                    min={totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0}
                     max={totalAmount}
                     value={customerInfo.depositAmount}
                     onChange={(e) =>
@@ -690,37 +720,11 @@ export const CreateOrderPage = () => {
                     className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs font-bold text-amber-800 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                 </div>
-                {/* Nút chọn nhanh cọc */}
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setQuickDeposit(0)}
-                    className="rounded bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 hover:bg-stone-200"
-                  >
-                    0đ (Chưa cọc)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickDeposit(30)}
-                    className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
-                  >
-                    Cọc 30%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickDeposit(50)}
-                    className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
-                  >
-                    Cọc 50%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickDeposit(100)}
-                    className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-200"
-                  >
-                    Trả hết 100%
-                  </button>
-                </div>
+                <p className="mt-1 text-[11px] text-stone-500">
+                  {totalAmount > 10000000
+                    ? `* Theo chính sách bán hàng: Đơn trên 10 triệu mặc định cọc 30% (${formatVND(Math.round(totalAmount * 0.3))}).`
+                    : '* Đơn hàng từ 10 triệu trở xuống không yêu cầu đặt cọc trước.'}
+                </p>
               </div>
 
               <div>
