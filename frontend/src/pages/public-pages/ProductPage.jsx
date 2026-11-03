@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { getProducts, getProductMetadata } from '../../services/productService';
+import bannerImg from '../../../public/images/product-banner.jpg';
 
 /* =====================================================================
  * Cấu hình mặc định (chỉ dùng làm fallback khi API chưa trả dữ liệu).
@@ -18,7 +19,7 @@ import { getProducts, getProductMetadata } from '../../services/productService';
 const PAGE_SIZE = 9;
 const SEARCH_DEBOUNCE_MS = 400;
 
-const DEFAULT_BANNER = { title: 'Sản phẩm', image: '' };
+const DEFAULT_BANNER = { title: 'Sản phẩm', image: bannerImg };
 const DEFAULT_SORT_OPTIONS = [
   { value: '', label: 'Mặc định' },
   { value: 'asc', label: 'Giá: Thấp đến cao' },

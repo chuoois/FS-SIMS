@@ -37,7 +37,7 @@ const STORY = {
   text: 'Góc Nhà chọn từng món đồ nội thất và trang trí từ các nhà thiết kế, xưởng thủ công mà chúng tôi tin tưởng. Khám phá từng bộ sưu tập để tìm món đồ hợp với căn nhà của bạn.',
   cta: 'Khám phá sản phẩm',
   href: '/products',
-  image: '',
+  image: '/assets/slide_ban_an.png',
 };
 
 /* ---------- Tiện ích ---------- */

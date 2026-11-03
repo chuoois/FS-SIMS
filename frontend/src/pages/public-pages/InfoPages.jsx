@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Clock, Mail, MapPin, Phone } from 'lucide-react';
+import bannerImg from '../../../public/images/infor-banner.png';
 
 /* ---------- Dữ liệu (thay bằng nội dung thật) ---------- */
 const aboutStats = [
@@ -8,21 +9,24 @@ const aboutStats = [
   { value: '6', label: 'Năm hoạt động' },
 ];
 
-const aboutValues = [
-  { title: 'Làm trực tiếp tại xưởng', text: 'Từng sản phẩm được gia công ngay tại xưởng của gia đình, kiểm tra kỹ trước khi giao đến tay bạn.' },
-  { title: 'Đặt làm theo nhu cầu', text: 'Kích thước, vật liệu và màu sắc có thể điều chỉnh để phù hợp với không gian của từng nhà.' },
-  { title: 'Tư vấn tận tâm', text: 'Trao đổi trực tiếp với người làm ra sản phẩm, rõ ràng về giá cả và thời gian hoàn thiện.' },
-];
-
 const contact = {
   name: 'Góc Nhà Showroom',
-  // TODO: điền địa chỉ và giờ mở cửa thật của Góc Nhà
-  address: ['Địa chỉ showroom', 'Thành phố, Việt Nam'],
-  mapUrl: '', // dán link Google Maps; để trống thì địa chỉ hiển thị dạng chữ thường
+  // TODO: đây là địa chỉ ví dụ ở Hà Nội, hãy thay bằng địa chỉ showroom thật
+  address: ['Số 1 Đinh Tiên Hoàng, Hoàn Kiếm', 'Hà Nội, Việt Nam'],
+  // Link mở Google Maps (dùng cho nút "Mở trong Google Maps")
+  mapUrl: 'https://maps.app.goo.gl/B98GAitUWJhyjUif7',
+  // Tuỳ chọn: dán src của iframe lấy từ Google Maps > Chia sẻ > Nhúng bản đồ.
+  // Để trống thì bản đồ tự tìm theo địa chỉ ở trên.
+  embedUrl: '',
   phone: { label: '096 9011 078', tel: '0969011078' },
   email: 'gocnhacare@akacompany.com.vn',
   hours: ['Thứ hai — Chủ nhật', '09h — 21h'],
 };
+
+// Nếu không có embedUrl thì dựng URL nhúng từ địa chỉ chữ
+const mapEmbedSrc =
+  contact.embedUrl ||
+  `https://www.google.com/maps?q=${encodeURIComponent(contact.address.join(', '))}&hl=vi&z=16&output=embed`;
 
 /* ---------- Thành phần dùng chung (cùng phong cách trang chủ) ---------- */
 const Photo = ({ src, alt, tone = 'bg-stone-200', className = '' }) => {
@@ -53,7 +57,7 @@ const SectionHeading = ({ id, eyebrow, children }) => (
   </div>
 );
 
-const PageBanner = ({ eyebrow, title, accent, text, image = '' }) => (
+const PageBanner = ({ eyebrow, title, accent, text, image = bannerImg }) => (
   <section
     className="relative isolate flex min-h-[360px] items-end overflow-hidden bg-stone-700 md:min-h-[460px]"
     aria-labelledby="page-title"
@@ -115,8 +119,7 @@ export const AboutPage = () => (
   <>
     <PageBanner
       eyebrow="VỀ CHÚNG TÔI"
-      title="Xưởng Nhà"
-      accent="Làm Bằng Tâm"
+      title="Về chúng tôi"
       text="Góc Nhà là xưởng nội thất do gia đình vận hành, làm việc trực tiếp với từng khách hàng."
     />
 
@@ -125,7 +128,7 @@ export const AboutPage = () => (
       <div className={containerCls}>
         <section aria-labelledby="ve-goc-nha" className="grid overflow-hidden bg-stone-100 md:grid-cols-2">
           <Photo
-            src=""
+            src="/images/about-gocnha.png"
             alt="Không gian Góc Nhà"
             tone="bg-stone-300"
             className="min-h-[280px] w-full md:min-h-[440px]"
@@ -247,12 +250,28 @@ export const ContactPage = () => {
             </div>
           </div>
 
-          <Photo
-            src=""
-            alt="Showroom Góc Nhà"
-            tone="bg-stone-300"
-            className="min-h-[280px] w-full md:min-h-[440px] lg:h-full"
-          />
+          {/* Bản đồ Google Maps nhúng */}
+          <div className="flex flex-col gap-3 lg:h-full">
+            <iframe
+              title="Bản đồ Showroom Góc Nhà"
+              src={mapEmbedSrc}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+              className="min-h-[320px] w-full flex-1 border-0 bg-stone-200 md:min-h-[440px]"
+            />
+            {contact.mapUrl && (
+              <a
+                href={contact.mapUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-stone-900 ${linkCls}`}
+              >
+                Mở trong Google Maps
+                <ChevronRight className="size-3.5" strokeWidth={2.5} aria-hidden="true" />
+              </a>
+            )}
+          </div>
         </section>
       </div>
     </>

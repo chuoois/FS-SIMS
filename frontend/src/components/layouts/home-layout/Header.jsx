@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Heart, LogOut, Menu, Phone, Search, ShoppingBag, Star, User, X } from 'lucide-react';
+import { LogOut, Menu, Phone, Search, ShoppingBag, Star, User, X } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useCart } from '../../../context/CartContext';
 import { ROLES } from '../../../constants/roles';
@@ -15,7 +15,7 @@ const navigation = [
 const focusRing =
   'focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-900';
 
-/* Liên kết tiện ích ở thanh trên (Yêu thích, Giỏ hàng) */
+/* Liên kết tiện ích ở thanh trên (Giỏ hàng) */
 const UtilityLink = ({ to, icon: Icon, label, count = 0 }) => (
   <Link
     to={to}
@@ -124,8 +124,7 @@ const navLinkClass = ({ isActive }) =>
       : 'border-transparent text-stone-800 hover:text-orange-700'
   }`;
 
-/* favoriteCount / cartCount: truyền từ store; mặc định 0 thì không hiện số */
-export const Header = ({ favoriteCount = 0 }) => {
+export const Header = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
@@ -163,7 +162,6 @@ export const Header = ({ favoriteCount = 0 }) => {
         </div>
 
         <div className="flex items-center gap-4 sm:gap-5">
-          <UtilityLink to="/my-favorites" icon={Heart} label="Yêu thích" count={favoriteCount} />
           <UtilityLink to="/my-cart" icon={ShoppingBag} label="Giỏ hàng" count={cartCount} />
           <span className="h-4 w-px bg-stone-200" aria-hidden="true" />
 
