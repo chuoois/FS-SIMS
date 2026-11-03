@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { CartPage } from '../pages/public-pages/Cartpage';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import toast from 'react-hot-toast';
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -11,15 +12,23 @@ vi.mock('../context/AuthContext', () => ({
 vi.mock('../context/CartContext', () => ({
   useCart: vi.fn(),
 }));
+vi.mock('react-hot-toast', () => ({
+  default: { success: vi.fn(), error: vi.fn() },
+}));
 
 describe('CartPage', () => {
   const updateItem = vi.fn().mockResolvedValue({});
   const removeItem = vi.fn().mockResolvedValue({});
   const refreshCart = vi.fn().mockResolvedValue({});
+  const submitRequest = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
-    useAuth.mockReturnValue({ isAuthenticated: true });
+    useAuth.mockReturnValue({
+      isAuthenticated: true,
+      user: { fullName: 'Nguyễn Văn A', phoneNumber: '0901234567', address: '12 Lê Lợi' },
+    });
+    submitRequest.mockResolvedValue({ requestCode: 'RQ-20261103-AB12CD34' });
     useCart.mockReturnValue({
       items: [{
         cartItemId: 1,
@@ -42,6 +51,7 @@ describe('CartPage', () => {
       refreshCart,
       updateItem,
       removeItem,
+      submitRequest,
     });
   });
 
@@ -82,6 +92,47 @@ describe('CartPage', () => {
 
     await waitFor(() => {
       expect(removeItem).toHaveBeenCalledWith(21);
+    });
+  });
+
+  it('gửi yêu cầu mua hàng cho sale từ giỏ hàng', async () => {
+    render(
+      <MemoryRouter>
+        <CartPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu cho sale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận gửi yêu cầu' }));
+
+    await waitFor(() => {
+      expect(submitRequest).toHaveBeenCalledWith({
+        contactName: 'Nguyễn Văn A',
+        contactPhone: '0901234567',
+        deliveryAddress: '12 Lê Lợi',
+        description: '',
+      });
+    });
+    expect(toast.success).toHaveBeenCalledWith(
+      'Đã gửi yêu cầu RQ-20261103-AB12CD34 cho nhân viên bán hàng.'
+    );
+  });
+
+  it('hiển thị lỗi khi không gửi được yêu cầu', async () => {
+    submitRequest.mockRejectedValue({
+      response: { data: { message: 'Giỏ hàng đang trống.' } },
+    });
+    render(
+      <MemoryRouter>
+        <CartPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu cho sale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận gửi yêu cầu' }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Giỏ hàng đang trống.');
     });
   });
 });
