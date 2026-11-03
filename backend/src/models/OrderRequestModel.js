@@ -16,7 +16,7 @@ const OrderRequest = sequelize.define('OrderRequest', {
     budget_min: { type: DataTypes.INTEGER, allowNull: true },
     budget_max: { type: DataTypes.INTEGER, allowNull: true },
     expected_date: { type: DataTypes.DATEONLY, allowNull: true },
-    status: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'NEW' },
+    status: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'PENDING' },
     assigned_to: { type: DataTypes.BIGINT, allowNull: true, references: { model: 'user_account', key: 'user_account_id' } },
     quoted_price: { type: DataTypes.INTEGER, allowNull: true },
     quoted_at: { type: DataTypes.DATE, allowNull: true },

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Minus, Plus, RefreshCw, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -148,9 +148,36 @@ const EmptyCart = () => (
 );
 
 export const CartPage = () => {
-  const { isAuthenticated } = useAuth();
-  const { items, itemCount, subtotal, loading, error, refreshCart, updateItem, removeItem } = useCart();
+  const { isAuthenticated, user } = useAuth();
+  const {
+    items,
+    itemCount,
+    subtotal,
+    loading,
+    error,
+    refreshCart,
+    updateItem,
+    removeItem,
+    submitRequest,
+  } = useCart();
   const [busyProductId, setBusyProductId] = useState(null);
+  const [isRequestFormOpen, setIsRequestFormOpen] = useState(false);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [requestForm, setRequestForm] = useState({
+    contactName: '',
+    contactPhone: '',
+    deliveryAddress: '',
+    description: '',
+  });
+
+  useEffect(() => {
+    setRequestForm((current) => ({
+      ...current,
+      contactName: current.contactName || user?.fullName || '',
+      contactPhone: current.contactPhone || user?.phoneNumber || '',
+      deliveryAddress: current.deliveryAddress || user?.address || '',
+    }));
+  }, [user]);
 
   const changeQuantity = async (productId, quantity) => {
     setBusyProductId(productId);
@@ -180,6 +207,20 @@ export const CartPage = () => {
       await refreshCart();
     } catch (requestError) {
       toast.error(requestError.response?.data?.message || 'Không thể tải giỏ hàng.');
+    }
+  };
+
+  const handleRequestSubmit = async (event) => {
+    event.preventDefault();
+    setIsSubmittingRequest(true);
+    try {
+      const request = await submitRequest(requestForm);
+      toast.success(`Đã gửi yêu cầu ${request.requestCode} cho nhân viên bán hàng.`);
+      setIsRequestFormOpen(false);
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Không thể gửi yêu cầu mua hàng.');
+    } finally {
+      setIsSubmittingRequest(false);
     }
   };
 
@@ -232,7 +273,7 @@ export const CartPage = () => {
                 <CartItem
                   key={item.product.productId}
                   item={item}
-                  busy={busyProductId === item.product.productId}
+                  busy={isSubmittingRequest || busyProductId === item.product.productId}
                   onQty={changeQuantity}
                   onRemove={deleteItem}
                 />
@@ -259,6 +300,74 @@ export const CartPage = () => {
               Cần hỗ trợ đặt hàng? Gọi{' '}
               <a href="tel:0969011078" className="font-bold text-stone-900 hover:text-orange-700">096 9011 078</a>.
             </p>
+
+            {!isRequestFormOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsRequestFormOpen(true)}
+                className="mt-5 h-11 w-full bg-stone-900 px-4 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+              >
+                Gửi yêu cầu cho sale
+              </button>
+            ) : (
+              <form className="mt-5 grid gap-3" onSubmit={handleRequestSubmit}>
+                <h3 className="text-sm font-bold text-stone-900">Thông tin để nhân viên liên hệ</h3>
+                <label className="grid gap-1 text-xs font-medium text-stone-700">
+                  Họ và tên
+                  <input
+                    required
+                    maxLength={150}
+                    value={requestForm.contactName}
+                    onChange={(event) => setRequestForm({ ...requestForm, contactName: event.target.value })}
+                    className="h-10 border border-stone-300 bg-white px-3 text-sm"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-stone-700">
+                  Số điện thoại
+                  <input
+                    required
+                    type="tel"
+                    maxLength={20}
+                    value={requestForm.contactPhone}
+                    onChange={(event) => setRequestForm({ ...requestForm, contactPhone: event.target.value })}
+                    className="h-10 border border-stone-300 bg-white px-3 text-sm"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-stone-700">
+                  Địa chỉ giao hàng (không bắt buộc)
+                  <input
+                    maxLength={255}
+                    value={requestForm.deliveryAddress}
+                    onChange={(event) => setRequestForm({ ...requestForm, deliveryAddress: event.target.value })}
+                    className="h-10 border border-stone-300 bg-white px-3 text-sm"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-stone-700">
+                  Ghi chú (không bắt buộc)
+                  <textarea
+                    maxLength={500}
+                    value={requestForm.description}
+                    onChange={(event) => setRequestForm((current) => ({ ...current, description: event.target.value }))}
+                    className="min-h-20 border border-stone-300 bg-white p-3 text-sm"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={isSubmittingRequest || busyProductId !== null}
+                  className="h-11 bg-stone-900 px-4 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSubmittingRequest ? 'Đang gửi yêu cầu...' : 'Xác nhận gửi yêu cầu'}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingRequest}
+                  onClick={() => setIsRequestFormOpen(false)}
+                  className="h-9 text-xs font-medium text-stone-600 hover:text-stone-900 disabled:opacity-50"
+                >
+                  Hủy
+                </button>
+              </form>
+            )}
           </aside>
         </div>
       )}

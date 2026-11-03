@@ -94,6 +94,12 @@ export function CartProvider({ children }) {
     (productId) => applyMutation(() => cartService.removeCartItem(productId)),
     [applyMutation]
   );
+  const submitRequest = useCallback(async (contactInfo) => {
+    const response = await cartService.createCartOrderRequest(contactInfo);
+    setCart({ items: [], itemCount: 0, subtotal: 0 });
+    setError('');
+    return response.data;
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -104,8 +110,9 @@ export function CartProvider({ children }) {
       addItem,
       updateItem,
       removeItem,
+      submitRequest,
     }),
-    [cart, loading, error, refreshCart, addItem, updateItem, removeItem]
+    [cart, loading, error, refreshCart, addItem, updateItem, removeItem, submitRequest]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
