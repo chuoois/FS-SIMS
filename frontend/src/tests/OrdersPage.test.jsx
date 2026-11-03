@@ -104,6 +104,33 @@ describe('OrdersPage - Quản lý đơn hàng (Search & Filter)', () => {
       expect(screen.getByText('ORD-20261102-0002')).toBeInTheDocument();
       expect(screen.getByText('Trần Thị B')).toBeInTheDocument();
     });
+
+    // Thanh phân trang hiển thị thông tin
+    expect(screen.getByText(/Hiển thị/i)).toBeInTheDocument();
+    expect(screen.getByText(/trên tổng số/i)).toBeInTheDocument();
+    expect(screen.getByText(/Trang 1 \/ 1/i)).toBeInTheDocument();
+  });
+
+  it('Hỗ trợ thay đổi số lượng đơn hàng hiển thị mỗi trang (page size selector)', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('ORD-20261102-0001')).toBeInTheDocument();
+    });
+
+    // Chọn hiển thị 20 đơn hàng mỗi trang
+    const pageSizeSelect = screen.getByLabelText(/Số đơn hàng mỗi trang/i);
+    await user.selectOptions(pageSizeSelect, '20');
+
+    await waitFor(() => {
+      expect(saleOrderService.getOrders).toHaveBeenCalledWith(
+        expect.objectContaining({
+          limit: 20,
+          page: 1,
+        })
+      );
+    });
   });
 
   it('Tìm kiếm theo Tên khách hàng', async () => {

@@ -95,6 +95,7 @@ export const OrdersPage = () => {
 
   // ── Phân trang ──────────────────────────────────────────────
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [pagination, setPagination] = useState({
     totalItems: 0,
     totalPages: 1,
@@ -131,7 +132,7 @@ export const OrdersPage = () => {
   const fetchOrdersList = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, limit: 10 };
+      const params = { page, limit };
 
       // Xử lý từ khóa tìm kiếm theo chế độ
       if (search.trim()) {
@@ -175,7 +176,7 @@ export const OrdersPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, search, searchBy, statusFilter, orderTypeFilter, sortBy]);
+  }, [page, limit, search, searchBy, statusFilter, orderTypeFilter, sortBy]);
 
   // Debounce gọi API khi người dùng nhập từ khóa tìm kiếm
   useEffect(() => {
@@ -487,17 +488,21 @@ export const OrdersPage = () => {
           </table>
         </div>
 
-        {pagination.totalPages > 1 && (
-          <div className="border-t border-stone-200 p-3">
-            <TablePagination
-              currentPage={pagination.currentPage}
-              totalPages={pagination.totalPages}
-              totalItems={pagination.totalItems}
-              itemsPerPage={pagination.itemsPerPage}
-              onPageChange={(p) => setPage(p)}
-            />
-          </div>
-        )}
+        <TablePagination
+          currentPage={pagination.currentPage || page}
+          totalPages={pagination.totalPages || 1}
+          totalItems={pagination.totalItems}
+          currentCount={orders.length}
+          itemsPerPage={limit}
+          pageSizeOptions={[5, 10, 20, 50]}
+          onPageChange={(p) => setPage(p)}
+          onPageSizeChange={(newLimit) => {
+            setLimit(newLimit);
+            setPage(1);
+          }}
+          itemLabel="đơn hàng"
+          loading={loading}
+        />
       </div>
 
       {/* ── Modal Chi tiết Đơn hàng ──────────────────────────── */}

@@ -217,9 +217,21 @@ async function signContract(req, res) {
  */
 async function getContracts(req, res) {
   try {
-    const { search, status, page = 1, limit = 10 } = req.query;
+    const {
+      search,
+      search_by,
+      customer_name,
+      contract_code,
+      status,
+      page = 1,
+      limit = 10,
+    } = req.query;
+
     const result = await getContractsModel({
       search: typeof search === 'string' ? search.trim() : '',
+      search_by: typeof search_by === 'string' ? search_by.trim().toUpperCase() : 'ALL',
+      customer_name: typeof customer_name === 'string' ? customer_name.trim() : '',
+      contract_code: typeof contract_code === 'string' ? contract_code.trim() : '',
       status: typeof status === 'string' ? status.trim().toUpperCase() : 'ALL',
       page: Math.max(1, parseInt(page, 10) || 1),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
