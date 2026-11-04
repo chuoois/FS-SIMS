@@ -8,6 +8,7 @@ import { ManageMaterialsPage } from "../../pages/owner-pages/ManageMaterialsPage
 import { ManagePurchaseReceiptsPage } from "../../pages/owner-pages/ManagePurchaseReceiptsPage";
 import { ManageMaterialExportPage } from "../../pages/owner-pages/ManageMaterialExportPage";
 import { ManageProductionOrdersPage } from "../../pages/owner-pages/ManageProductionOrdersPage";
+import { ManageOrdersPage } from "../../pages/owner-pages/ManageOrdersPage";
 
 export const OwnerRouter = {
   path: "/owner",
@@ -18,7 +19,6 @@ export const OwnerRouter = {
       element: <OwnerLayout />,
       children: [
         {
-          
           index: true,
           element: (
             <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
@@ -56,6 +56,10 @@ export const OwnerRouter = {
         {
           path: "production-orders",
           element: <ManageProductionOrdersPage />,
+        },
+        {
+          path: "orders",
+          element: <ManageOrdersPage />,
         },
         {
           path: "analytics",

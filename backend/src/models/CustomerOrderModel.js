@@ -393,6 +393,68 @@ async function findCustomerOrderById(orderId, customerAccountId) {
   });
 }
 
+// ============================================================
+// Các hàm bổ sung cho Manage Order (Owner / Sales)
+// ============================================================
+
+const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'];
+
+/**
+ * Hủy đơn hàng (Owner / Sales / Customer)
+ * Điều kiện: Đơn chưa COMPLETED và chưa CANCELLED
+ */
+async function cancelOrder(orderId, { cancelledBy } = {}) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.status === 'COMPLETED') {
+    throw new Error('Không thể hủy đơn hàng đã hoàn thành.');
+  }
+  if (order.status === 'CANCELLED') {
+    throw new Error('Đơn hàng này đã được hủy trước đó.');
+  }
+
+  await order.update({
+    status: 'CANCELLED',
+    modifieby: cancelledBy || null,
+  });
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Cập nhật trạng thái đơn hàng (Owner)
+ * Các trạng thái hợp lệ: NEW, CONFIRMED, IN_PRODUCTION, COMPLETED, CANCELLED
+ */
+async function updateOrderStatus(orderId, newStatus, { updatedBy } = {}) {
+  if (!VALID_STATUSES.includes(newStatus)) {
+    throw new Error(`Trạng thái "${newStatus}" không hợp lệ. Các trạng thái hợp lệ: ${VALID_STATUSES.join(', ')}.`);
+  }
+
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.status === 'CANCELLED') {
+    throw new Error('Không thể cập nhật trạng thái đơn hàng đã bị hủy.');
+  }
+  if (order.status === 'COMPLETED') {
+    throw new Error('Không thể cập nhật trạng thái đơn hàng đã hoàn thành.');
+  }
+  if (order.status === newStatus) {
+    throw new Error(`Đơn hàng đã ở trạng thái "${newStatus}".`);
+  }
+
+  const updateData = { status: newStatus, modifieby: updatedBy || null };
+  if (newStatus === 'COMPLETED') {
+    updateData.delivered_date = new Date();
+  }
+
+  await order.update(updateData);
+  return findOrderById(orderId);
+}
+
 module.exports = {
   CustomerOrder,
   generateNextOrderCode,
@@ -403,4 +465,7 @@ module.exports = {
   getOrdersWithPagination,
   getCustomerOrdersWithPagination,
   findCustomerOrderById,
+  cancelOrder,
+  updateOrderStatus,
+  VALID_STATUSES,
 };
