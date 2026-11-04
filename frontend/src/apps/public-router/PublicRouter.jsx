@@ -9,7 +9,6 @@ import { ProductPage } from "../../pages/public-pages/ProductPage";
 import { ProductDetailPage } from "../../pages/public-pages/ProductDetailPage";
 import { AboutPage, ContactPage } from "../../pages/public-pages/InfoPages";
 import { CartPage } from "../../pages/public-pages/Cartpage";
-import { ProductFavoritePage } from "../../pages/public-pages/ProductFavoritePage";
 import { ProfilePage } from "../../pages/public-pages/Profilepage";
 import { CustomerOrdersPage } from "../../pages/public-pages/CustomerOrdersPage";
 import { CustomerOrderDetailPage } from "../../pages/public-pages/CustomerOrderDetailPage";
@@ -68,10 +67,6 @@ export const PublicRouter = {
     {
       path: "my-cart",
       element: <CartPage />,
-    },
-    {
-      path: "my-favorites",
-      element: <ProductFavoritePage />,
     },
 
     // ── Routes yêu cầu đăng nhập (mọi role) ─────────────────

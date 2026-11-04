@@ -5,7 +5,7 @@
 // Hỗ trợ In / Xuất file bản giấy và Xác nhận đã ký ngoài bằng bút mực
 // =========================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -20,6 +20,7 @@ import {
   X,
   ArrowRight,
   Printer,
+  Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -71,8 +72,10 @@ export const ContractsPage = () => {
   const [contracts, setContracts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [searchBy, setSearchBy] = useState('ALL'); // 'ALL' | 'CONTRACT_CODE' | 'CUSTOMER_NAME' | 'PHONE'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [pagination, setPagination] = useState({ totalItems: 0, totalPages: 1, currentPage: 1, itemsPerPage: 10 });
 
   const [selectedContract, setSelectedContract] = useState(null);
@@ -84,11 +87,41 @@ export const ContractsPage = () => {
   const [contractToPrint, setContractToPrint] = useState(null);
   const [paperFileUrl, setPaperFileUrl] = useState('');
 
+  // Đếm số lượng bộ lọc đang kích hoạt
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (search.trim()) count += 1;
+    if (statusFilter !== 'ALL') count += 1;
+    return count;
+  }, [search, statusFilter]);
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setSearchBy('ALL');
+    setStatusFilter('ALL');
+    setPage(1);
+  };
+
   const fetchContractsList = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, limit: 10 };
-      if (search.trim()) params.search = search.trim();
+      const params = { page, limit };
+
+      if (search.trim()) {
+        const keyword = search.trim();
+        if (searchBy === 'CONTRACT_CODE') {
+          params.contract_code = keyword;
+        } else if (searchBy === 'CUSTOMER_NAME') {
+          params.customer_name = keyword;
+        } else if (searchBy === 'PHONE') {
+          params.search = keyword;
+          params.search_by = 'PHONE';
+        } else {
+          params.search = keyword;
+          params.search_by = 'ALL';
+        }
+      }
+
       if (statusFilter !== 'ALL') params.status = statusFilter;
 
       const res = await getContracts(params);
@@ -100,10 +133,13 @@ export const ContractsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter]);
+  }, [page, limit, search, searchBy, statusFilter]);
 
   useEffect(() => {
-    fetchContractsList();
+    const timer = setTimeout(() => {
+      fetchContractsList();
+    }, 300);
+    return () => clearTimeout(timer);
   }, [fetchContractsList]);
 
   const handleViewDetail = async (contract) => {
@@ -202,36 +238,114 @@ export const ContractsPage = () => {
         </div>
       </div>
 
-      {/* Bộ lọc */}
-      <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-          <input
-            type="text"
-            placeholder="Tìm theo mã hợp đồng, tên khách hàng, số điện thoại..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs text-stone-900 focus:border-amber-500 focus:outline-none"
-          />
+      {/* ── Khu vực Tìm kiếm & Bộ lọc (Search & Filters) ────────── */}
+      <div className="flex flex-col gap-3.5 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+        {/* Hàng 1: Thanh Tìm kiếm với Dropdown chọn tiêu chí */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-52">
+            <select
+              aria-label="Tiêu chí tìm kiếm hợp đồng"
+              value={searchBy}
+              onChange={(e) => {
+                setSearchBy(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-3 pr-8 text-xs font-semibold text-stone-800 focus:border-amber-500 focus:bg-white focus:outline-none"
+            >
+              <option value="ALL">🔍 Tất cả tiêu chí</option>
+              <option value="CUSTOMER_NAME">👤 Tên khách hàng</option>
+              <option value="CONTRACT_CODE">📄 Mã hợp đồng</option>
+              <option value="PHONE">📞 Số điện thoại</option>
+            </select>
+          </div>
+
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+            <input
+              type="text"
+              placeholder={
+                searchBy === 'CUSTOMER_NAME'
+                  ? 'Nhập họ tên khách hàng cần tìm...'
+                  : searchBy === 'CONTRACT_CODE'
+                  ? 'Nhập mã hợp đồng (ví dụ: HD-...)...'
+                  : searchBy === 'PHONE'
+                  ? 'Nhập số điện thoại khách hàng...'
+                  : 'Tìm theo mã hợp đồng, tên khách hàng hoặc số điện thoại...'
+              }
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-8 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setPage(1);
+                }}
+                className="absolute right-2.5 top-2.5 rounded p-0.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+                title="Xóa tìm kiếm"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="w-full sm:w-56">
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="w-full rounded-lg border border-stone-200 py-2 px-3 text-xs text-stone-900 focus:border-amber-500 focus:outline-none"
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="DRAFT">Biên bản chờ ký</option>
-            <option value="SIGNED">Đã ký kết</option>
-            <option value="CANCELLED">Đã hủy</option>
-          </select>
+        {/* Hàng 2: Bộ lọc trạng thái & Nút đặt lại */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-stone-100 pt-3">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-600 mr-1">
+              <Filter className="h-3.5 w-3.5 text-amber-700" />
+              <span>Trạng thái:</span>
+            </div>
+            <select
+              aria-label="Lọc trạng thái hợp đồng"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+              className="rounded-lg border border-stone-200 py-1.5 px-3 text-xs text-stone-800 focus:border-amber-500 focus:outline-none"
+            >
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="DRAFT">Biên bản chờ ký</option>
+              <option value="SIGNED">Đã ký kết</option>
+              <option value="CANCELLED">Đã hủy</option>
+            </select>
+          </div>
+
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="flex items-center gap-1 rounded-lg border border-stone-300 bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition"
+            >
+              <X className="h-3.5 w-3.5 text-stone-500" />
+              <span>Đặt lại bộ lọc</span>
+              <span className="ml-1 rounded-full bg-amber-800 px-1.5 py-0.2 text-[10px] text-white">
+                {activeFilterCount}
+              </span>
+            </button>
+          )}
+        </div>
+
+        {/* Tóm tắt kết quả */}
+        <div className="flex items-center justify-between text-[11px] text-stone-500 pt-1">
+          <span>
+            Tìm thấy <strong className="font-bold text-stone-900">{pagination.totalItems}</strong> hợp đồng
+            {search.trim() && (
+              <span> cho từ khóa &ldquo;<strong className="text-amber-900">{search.trim()}</strong>&rdquo;</span>
+            )}
+          </span>
+          {pagination.totalPages > 1 && (
+            <span>
+              Trang {pagination.currentPage} / {pagination.totalPages}
+            </span>
+          )}
         </div>
       </div>
 
@@ -311,17 +425,21 @@ export const ContractsPage = () => {
           </table>
         </div>
 
-        {pagination.totalPages > 1 && (
-          <div className="border-t border-stone-200 p-3">
-            <TablePagination
-              currentPage={pagination.currentPage}
-              totalPages={pagination.totalPages}
-              totalItems={pagination.totalItems}
-              itemsPerPage={pagination.itemsPerPage}
-              onPageChange={(p) => setPage(p)}
-            />
-          </div>
-        )}
+        <TablePagination
+          currentPage={pagination.currentPage || page}
+          totalPages={pagination.totalPages || 1}
+          totalItems={pagination.totalItems}
+          currentCount={contracts.length}
+          itemsPerPage={limit}
+          pageSizeOptions={[5, 10, 20, 50]}
+          onPageChange={(p) => setPage(p)}
+          onPageSizeChange={(newLimit) => {
+            setLimit(newLimit);
+            setPage(1);
+          }}
+          itemLabel="hợp đồng"
+          loading={loading}
+        />
       </div>
 
       {/* Modal In hợp đồng bản giấy A4 */}

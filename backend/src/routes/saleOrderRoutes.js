@@ -16,6 +16,9 @@ const {
   createOrderFromContract,
   getOrders,
   getOrderById,
+  getRequests,
+  getRequestById,
+  convertRequestToContract,
 } = require('../controllers/saleOrderController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 
@@ -39,6 +42,11 @@ router.get('/contracts/:id', getContractById);
 router.post('/orders/from-contract/:contractId', createOrderFromContract);
 router.get('/orders', getOrders);
 router.get('/orders/:id', getOrderById);
+
+// -- Luong Yeu cau cua khach hang (Customer Requests) ----
+router.get('/requests', getRequests);
+router.get('/requests/:id', getRequestById);
+router.post('/requests/:id/convert-to-contract', convertRequestToContract);
 
 module.exports = router;
 

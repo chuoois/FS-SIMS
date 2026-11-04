@@ -41,6 +41,12 @@ jest.mock('../src/models/ContractModel', () => ({
   getContractsWithPagination: jest.fn(),
 }));
 
+jest.mock('../src/models/SaleRequestModel', () => ({
+  getRequestsWithPagination: jest.fn(),
+  findRequestById: jest.fn(),
+  convertRequestToContract: jest.fn(),
+}));
+
 jest.mock('../src/models/CustomerOrderModel', () => ({
   CustomerOrder: {},
   generateNextOrderCode: jest.fn(),
@@ -61,6 +67,11 @@ const { findUserRoleByCode } = require('../src/models/userRole.model');
 const { getProductsWithPagination, findProductById } = require('../src/models/ProductModel');
 const { createOfflineContract, signContract } = require('../src/models/ContractModel');
 const { createOrderFromContract, getOrdersWithPagination } = require('../src/models/CustomerOrderModel');
+const {
+  getRequestsWithPagination,
+  findRequestById: findSaleRequestById,
+  convertRequestToContract,
+} = require('../src/models/SaleRequestModel');
 
 const SALES_ROLE_ID = 2;
 const salesToken = jwt.sign(
@@ -271,6 +282,91 @@ describe('Sale Orders API (/api/sale-orders)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
+    });
+  });
+
+  describe('GET /api/sale-orders/requests', () => {
+    test('trả về 200 và danh sách yêu cầu của khách hàng', async () => {
+      getRequestsWithPagination.mockResolvedValue({
+        requests: [
+          {
+            request_id: 1,
+            request_code: 'RQ-20261103-0001',
+            order_type: 'READY',
+            contact_name: 'Nguyễn Văn A',
+            contact_phone: '0912345678',
+            status: 'PENDING',
+            createdate: '2026-11-03T10:00:00.000Z',
+            items: [],
+          },
+        ],
+        totalItems: 1,
+        totalPages: 1,
+        currentPage: 1,
+        itemsPerPage: 10,
+      });
+
+      const res = await request(app)
+        .get('/api/sale-orders/requests')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].requestCode).toBe('RQ-20261103-0001');
+    });
+  });
+
+  describe('GET /api/sale-orders/requests/:id', () => {
+    test('trả về 200 và chi tiết yêu cầu', async () => {
+      findSaleRequestById.mockResolvedValue({
+        request_id: 1,
+        request_code: 'RQ-20261103-0001',
+        order_type: 'READY',
+        contact_name: 'Nguyễn Văn A',
+        contact_phone: '0912345678',
+        status: 'PENDING',
+        items: [],
+      });
+
+      const res = await request(app)
+        .get('/api/sale-orders/requests/1')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.requestCode).toBe('RQ-20261103-0001');
+    });
+
+    test('trả về 404 khi không tìm thấy yêu cầu', async () => {
+      findSaleRequestById.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get('/api/sale-orders/requests/999')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('POST /api/sale-orders/requests/:id/convert-to-contract', () => {
+    test('trả về 201 khi chuyển đổi yêu cầu thành hợp đồng thành công', async () => {
+      convertRequestToContract.mockResolvedValue({
+        contractId: 50,
+        contractCode: 'HD-20261103-0050',
+        requestCode: 'RQ-20261103-0001',
+        totalAmount: 15000000,
+        depositAmount: 4500000,
+      });
+
+      const res = await request(app)
+        .post('/api/sale-orders/requests/1/convert-to-contract')
+        .set('Authorization', `Bearer ${salesToken}`)
+        .send({
+          deposit_amount: 4500000,
+          signed_place: 'Cửa hàng Góc Nhà',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.contractCode).toBe('HD-20261103-0050');
     });
   });
 });

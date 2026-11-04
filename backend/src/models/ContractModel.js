@@ -265,7 +265,15 @@ async function findContractByCode(contractCode) {
 /**
  * Lấy danh sách hợp đồng có tìm kiếm, lọc và phân trang
  */
-async function getContractsWithPagination({ page = 1, limit = 10, status, search } = {}) {
+async function getContractsWithPagination({
+  page = 1,
+  limit = 10,
+  status,
+  search,
+  search_by,
+  customer_name,
+  contract_code,
+} = {}) {
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (pageNum - 1) * limitNum;
@@ -274,13 +282,27 @@ async function getContractsWithPagination({ page = 1, limit = 10, status, search
   if (status && status !== 'ALL') {
     whereClause.status = status;
   }
-  if (search && search.trim()) {
+  if (contract_code && contract_code.trim()) {
+    whereClause.contract_code = { [Op.like]: `%${contract_code.trim()}%` };
+  }
+  if (customer_name && customer_name.trim()) {
+    whereClause.customer_name = { [Op.like]: `%${customer_name.trim()}%` };
+  }
+  if (search && search.trim() && !contract_code && !customer_name) {
     const trimmed = search.trim();
-    whereClause[Op.or] = [
-      { contract_code: { [Op.like]: `%${trimmed}%` } },
-      { customer_name: { [Op.like]: `%${trimmed}%` } },
-      { customer_phone: { [Op.like]: `%${trimmed}%` } },
-    ];
+    if (search_by === 'CONTRACT_CODE') {
+      whereClause.contract_code = { [Op.like]: `%${trimmed}%` };
+    } else if (search_by === 'CUSTOMER_NAME') {
+      whereClause.customer_name = { [Op.like]: `%${trimmed}%` };
+    } else if (search_by === 'PHONE') {
+      whereClause.customer_phone = { [Op.like]: `%${trimmed}%` };
+    } else {
+      whereClause[Op.or] = [
+        { contract_code: { [Op.like]: `%${trimmed}%` } },
+        { customer_name: { [Op.like]: `%${trimmed}%` } },
+        { customer_phone: { [Op.like]: `%${trimmed}%` } },
+      ];
+    }
   }
 
   const { rows, count } = await Contract.findAndCountAll({

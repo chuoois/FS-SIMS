@@ -258,7 +258,17 @@ async function findOrderByContractId(contractId) {
 /**
  * Lấy danh sách đơn hàng có phân trang, lọc và tìm kiếm
  */
-async function getOrdersWithPagination({ page = 1, limit = 10, status, order_type, search } = {}) {
+async function getOrdersWithPagination({
+  page = 1,
+  limit = 10,
+  status,
+  order_type,
+  search,
+  search_by,
+  order_code,
+  customer_name,
+  sort = 'NEWEST',
+} = {}) {
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (pageNum - 1) * limitNum;
@@ -270,14 +280,37 @@ async function getOrdersWithPagination({ page = 1, limit = 10, status, order_typ
   if (order_type && order_type !== 'ALL') {
     whereClause.order_type = order_type;
   }
-  if (search && search.trim()) {
-    const trimmed = search.trim();
-    whereClause[Op.or] = [
-      { order_code: { [Op.like]: `%${trimmed}%` } },
-      { contact_name: { [Op.like]: `%${trimmed}%` } },
-      { contact_phone: { [Op.like]: `%${trimmed}%` } },
-    ];
+
+  // 1. Tìm kiếm cụ thể theo trường
+  if (order_code && order_code.trim()) {
+    whereClause.order_code = { [Op.like]: `%${order_code.trim()}%` };
   }
+  if (customer_name && customer_name.trim()) {
+    whereClause.contact_name = { [Op.like]: `%${customer_name.trim()}%` };
+  }
+
+  // 2. Tìm kiếm từ ô search chung
+  if (search && search.trim() && !order_code && !customer_name) {
+    const trimmed = search.trim();
+    if (search_by === 'ORDER_CODE') {
+      whereClause.order_code = { [Op.like]: `%${trimmed}%` };
+    } else if (search_by === 'CUSTOMER_NAME') {
+      whereClause.contact_name = { [Op.like]: `%${trimmed}%` };
+    } else if (search_by === 'PHONE') {
+      whereClause.contact_phone = { [Op.like]: `%${trimmed}%` };
+    } else {
+      whereClause[Op.or] = [
+        { order_code: { [Op.like]: `%${trimmed}%` } },
+        { contact_name: { [Op.like]: `%${trimmed}%` } },
+        { contact_phone: { [Op.like]: `%${trimmed}%` } },
+      ];
+    }
+  }
+
+  let orderOptions = [['order_id', 'DESC']];
+  if (sort === 'OLDEST') orderOptions = [['order_id', 'ASC']];
+  else if (sort === 'AMOUNT_DESC') orderOptions = [['total_amount', 'DESC']];
+  else if (sort === 'AMOUNT_ASC') orderOptions = [['total_amount', 'ASC']];
 
   const { rows, count } = await CustomerOrder.findAndCountAll({
     where: whereClause,
@@ -304,7 +337,7 @@ async function getOrdersWithPagination({ page = 1, limit = 10, status, order_typ
         attributes: ['user_account_id', 'full_name'],
       },
     ],
-    order: [['order_id', 'DESC']],
+    order: orderOptions,
     limit: limitNum,
     offset,
     distinct: true,
