@@ -829,6 +829,7 @@ CREATE TABLE IF NOT EXISTS production_order (
     planned_end      DATE          NULL,
     completed_date   DATE          NULL,
     assigned_to      BIGINT        NULL,                -- người phụ trách (tổ trưởng)
+    design_file_url  VARCHAR(500)  NULL,                -- ảnh / bản vẽ kỹ thuật thiết kế
     note             VARCHAR(500)  NULL,
     createdate       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     modifiedate      DATETIME      NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,

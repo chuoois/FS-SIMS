@@ -2,13 +2,14 @@
 // ManageProductionOrdersPage.jsx
 // Quản lý Lệnh Gia Công (Manage Production Orders) dành cho Chủ xưởng (Owner)
 // Chức năng:
-// 1. Xem danh sách lệnh gia công (mã, loại, đơn hàng liên kết, trưởng nhóm, ngày dự kiến, trạng thái)
-// 2. Tạo lệnh gia công cho đơn hàng CONFIRMED + CUSTOM
-// 3. Phân công trưởng nhóm sản xuất (Staff Leader)
-// 4. Hủy lệnh gia công (đơn hàng liên kết trở về trạng thái CONFIRMED)
+// 1. Xem danh sách lệnh gia công (mã, loại, đơn hàng liên kết, bản vẽ kỹ thuật, trưởng nhóm, ngày dự kiến, trạng thái)
+// 2. Tạo lệnh gia công cho đơn hàng CONFIRMED + CUSTOM kèm upload bản vẽ kỹ thuật
+// 3. Xem / Cập nhật bản vẽ kỹ thuật cho lệnh gia công
+// 4. Phân công trưởng nhóm sản xuất (Staff Leader)
+// 5. Hủy lệnh gia công (đơn hàng liên kết trở về trạng thái CONFIRMED)
 // =========================================================
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Hammer,
   Plus,
@@ -25,6 +26,11 @@ import {
   Layers,
   ShoppingBag,
   User,
+  Image as ImageIcon,
+  Upload,
+  Eye,
+  ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -35,6 +41,7 @@ import {
   createProductionOrder,
   assignLeader,
   cancelProductionOrder,
+  updateProductionOrderDesignFile,
 } from '../../services/productionOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
 
@@ -52,6 +59,15 @@ const formatDate = (dateString) => {
   } catch {
     return dateString;
   }
+};
+
+// Format dung lượng file
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 };
 
 // Huy hiệu trạng thái lệnh gia công
@@ -120,6 +136,8 @@ export const ManageProductionOrdersPage = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isPreviewDrawingOpen, setIsPreviewDrawingOpen] = useState(false);
+  const [isUploadDrawingOpen, setIsUploadDrawingOpen] = useState(false);
 
   // Đối tượng đang chọn & Loading
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -130,11 +148,21 @@ export const ManageProductionOrdersPage = () => {
     order_id: '',
     planned_start: '',
     planned_end: '',
+    design_file: null,
+    design_preview: null,
   });
 
   const [assignForm, setAssignForm] = useState({
     assigned_to: '',
   });
+
+  const [uploadDrawingForm, setUploadDrawingForm] = useState({
+    file: null,
+    preview: null,
+  });
+
+  const createFileInputRef = useRef(null);
+  const uploadFileInputRef = useRef(null);
 
   // ── Tải metadata (Đơn hàng đủ điều kiện & Trưởng nhóm) ────
   const loadMetadata = async () => {
@@ -207,17 +235,54 @@ export const ManageProductionOrdersPage = () => {
     setCurrentPage(1);
   };
 
+  // ── Xử lý chọn file bản vẽ trong form tạo mới ────────────
+  const handleCreateFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn file hình ảnh (JPG, PNG, WEBP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Dung lượng ảnh tối đa là 5MB');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setCreateForm((prev) => ({
+      ...prev,
+      design_file: file,
+      design_preview: previewUrl,
+    }));
+  };
+
+  const handleRemoveCreateFile = () => {
+    if (createForm.design_preview) {
+      URL.revokeObjectURL(createForm.design_preview);
+    }
+    setCreateForm((prev) => ({
+      ...prev,
+      design_file: null,
+      design_preview: null,
+    }));
+    if (createFileInputRef.current) {
+      createFileInputRef.current.value = '';
+    }
+  };
+
   // ── Mở Modal Tạo mới ───────────────────────────────────────
   const handleOpenCreateModal = () => {
     loadMetadata();
     const today = new Date().toISOString().slice(0, 10);
-    // Mặc định kết thúc sau 14 ngày
     const nextTwoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     setCreateForm({
       order_id: '',
       planned_start: today,
       planned_end: nextTwoWeeks,
+      design_file: null,
+      design_preview: null,
     });
     setIsCreateOpen(true);
   };
@@ -248,6 +313,7 @@ export const ManageProductionOrdersPage = () => {
         order_id: Number(createForm.order_id),
         planned_start: createForm.planned_start,
         planned_end: createForm.planned_end,
+        design_file: createForm.design_file || undefined,
       });
 
       toast.success(res?.message || 'Tạo lệnh gia công thành công');
@@ -322,21 +388,79 @@ export const ManageProductionOrdersPage = () => {
     }
   };
 
+  // ── Mở Modal Xem bản vẽ kỹ thuật ─────────────────────────
+  const handleOpenPreviewDrawing = (order) => {
+    setSelectedOrder(order);
+    setIsPreviewDrawingOpen(true);
+  };
+
+  // ── Mở Modal Tải lên / Cập nhật bản vẽ kỹ thuật ──────────
+  const handleOpenUploadDrawing = (order) => {
+    setSelectedOrder(order);
+    setUploadDrawingForm({
+      file: null,
+      preview: null,
+    });
+    setIsUploadDrawingOpen(true);
+  };
+
+  const handleUploadFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn file hình ảnh (JPG, PNG, WEBP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Dung lượng ảnh tối đa là 5MB');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setUploadDrawingForm({
+      file,
+      preview: previewUrl,
+    });
+  };
+
+  const handleUploadDrawingSubmit = async (e) => {
+    e.preventDefault();
+    if (!uploadDrawingForm.file) {
+      toast.error('Vui lòng chọn file bản vẽ kỹ thuật');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await updateProductionOrderDesignFile(
+        selectedOrder.production_id,
+        uploadDrawingForm.file
+      );
+
+      toast.success(res?.message || 'Cập nhật bản vẽ kỹ thuật thành công');
+      setIsUploadDrawingOpen(false);
+      fetchProductionOrders();
+    } catch (err) {
+      console.error('Lỗi khi cập nhật bản vẽ:', err);
+      toast.error(err.response?.data?.message || 'Không thể cập nhật bản vẽ');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* ── Tiêu đề & Nút thao tác ───────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-900">
-              <Hammer className="h-6 w-6 text-amber-800" />
-            </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-stone-900">
                 Quản Lý Lệnh Gia Công
               </h1>
               <p className="text-sm text-stone-500">
-                Theo dõi tiến độ, tạo lệnh sản xuất cho đơn đặt làm, phân công trưởng nhóm và quản lý trạng thái.
+                Theo dõi tiến độ, tạo lệnh sản xuất cho đơn đặt làm, đính kèm bản vẽ kỹ thuật và phân công thợ.
               </p>
             </div>
           </div>
@@ -478,6 +602,7 @@ export const ManageProductionOrdersPage = () => {
                 <th className="py-3.5 pl-4 pr-3 sm:pl-6">Mã lệnh</th>
                 <th className="px-3 py-3.5">Loại</th>
                 <th className="px-3 py-3.5">Đơn hàng liên kết</th>
+                <th className="px-3 py-3.5 text-center">Bản vẽ kỹ thuật</th>
                 <th className="px-3 py-3.5">Trưởng nhóm phụ trách</th>
                 <th className="px-3 py-3.5">Thời gian dự kiến</th>
                 <th className="px-3 py-3.5 text-center">Trạng thái</th>
@@ -488,7 +613,7 @@ export const ManageProductionOrdersPage = () => {
             <tbody className="divide-y divide-stone-200 bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-stone-500">
+                  <td colSpan={8} className="py-12 text-center text-stone-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RotateCw className="h-6 w-6 animate-spin text-amber-700" />
                       <span>Đang tải danh sách lệnh gia công...</span>
@@ -497,7 +622,7 @@ export const ManageProductionOrdersPage = () => {
                 </tr>
               ) : productionOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-stone-500">
+                  <td colSpan={8} className="py-12 text-center text-stone-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Hammer className="h-10 w-10 text-stone-300" />
                       <p className="font-medium text-stone-700">Không tìm thấy lệnh gia công nào</p>
@@ -541,6 +666,45 @@ export const ManageProductionOrdersPage = () => {
                           </div>
                         ) : (
                           <span className="text-stone-400">—</span>
+                        )}
+                      </td>
+
+                      {/* Bản vẽ kỹ thuật */}
+                      <td className="px-3 py-3.5 text-center">
+                        {order.design_file_url ? (
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPreviewDrawing(order)}
+                              className="group relative inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/60 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 transition"
+                              title="Xem bản vẽ kỹ thuật"
+                            >
+                              <ImageIcon className="h-3.5 w-3.5 text-amber-600" />
+                              <span>Xem bản vẽ</span>
+                            </button>
+                            {canAct && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenUploadDrawing(order)}
+                                className="rounded p-1 text-stone-400 hover:text-amber-700 hover:bg-stone-100 transition"
+                                title="Đổi bản vẽ khác"
+                              >
+                                <Upload className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ) : canAct ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenUploadDrawing(order)}
+                            className="inline-flex items-center gap-1 rounded-md border border-dashed border-stone-300 bg-stone-50 px-2 py-1 text-xs text-stone-600 hover:border-amber-500 hover:text-amber-700 transition"
+                            title="Tải lên bản vẽ"
+                          >
+                            <Upload className="h-3 w-3" />
+                            <span>Tải lên</span>
+                          </button>
+                        ) : (
+                          <span className="text-xs text-stone-400 italic">Chưa có</span>
                         )}
                       </td>
 
@@ -634,7 +798,7 @@ export const ManageProductionOrdersPage = () => {
       {/* ── Modal 1: Tạo Lệnh Gia Công Mới ────────────────── */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 pb-4">
               <div className="flex items-center gap-2">
                 <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
@@ -721,6 +885,66 @@ export const ManageProductionOrdersPage = () => {
                     className="mt-1.5 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
                     required
                   />
+                </div>
+              </div>
+
+              {/* Upload bản vẽ kỹ thuật */}
+              <div>
+                <label className="block text-sm font-semibold text-stone-700">
+                  Bản vẽ kỹ thuật / Bản thiết kế
+                  <span className="ml-1 text-xs font-normal text-stone-500">(Không bắt buộc)</span>
+                </label>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Đính kèm bản vẽ để thợ xem trực tiếp khi nhận lệnh gia công (JPG, PNG, WEBP, tối đa 5MB)
+                </p>
+
+                <div className="mt-2">
+                  {createForm.design_preview ? (
+                    <div className="relative rounded-xl border border-stone-200 bg-stone-50 p-3 flex items-center gap-3">
+                      <img
+                        src={createForm.design_preview}
+                        alt="Preview bản vẽ"
+                        className="h-16 w-16 rounded-lg object-cover border border-stone-200 bg-white"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-stone-800 truncate">
+                          {createForm.design_file?.name}
+                        </p>
+                        <p className="text-xs text-stone-400">
+                          {formatFileSize(createForm.design_file?.size)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveCreateFile}
+                        className="rounded-lg p-1.5 text-stone-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                        title="Xóa ảnh"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="create-design-file-input"
+                      className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 bg-stone-50/50 p-4 transition hover:border-amber-600 hover:bg-amber-50/30"
+                    >
+                      <Upload className="h-6 w-6 text-stone-400 mb-1" />
+                      <span className="text-xs font-medium text-amber-800">
+                        Nhấn để chọn file bản vẽ
+                      </span>
+                      <span className="text-[11px] text-stone-400 mt-0.5">
+                        Hỗ trợ PNG, JPG, WEBP (tối đa 5MB)
+                      </span>
+                      <input
+                        id="create-design-file-input"
+                        ref={createFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCreateFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
 
@@ -883,6 +1107,215 @@ export const ManageProductionOrdersPage = () => {
                 <span>Xác nhận hủy lệnh</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal 4: Xem Bản Vẽ Kỹ Thuật (Preview Modal) ──── */}
+      {isPreviewDrawingOpen && selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 max-h-[95vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="h-5 w-5 text-amber-700" />
+                  <h3 className="text-lg font-bold text-stone-900">
+                    Bản Vẽ Kỹ Thuật — {selectedOrder.production_code}
+                  </h3>
+                </div>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Đơn hàng: {selectedOrder.order_code || '—'} {selectedOrder.customer_name ? `• Khách: ${selectedOrder.customer_name}` : ''}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={selectedOrder.design_file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
+                  title="Mở trong tab mới"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Mở tab mới</span>
+                </a>
+                <button
+                  onClick={() => setIsPreviewDrawingOpen(false)}
+                  className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="my-4 flex-1 overflow-auto rounded-xl bg-stone-950/5 p-2 flex items-center justify-center">
+              <img
+                src={selectedOrder.design_file_url}
+                alt={`Bản vẽ ${selectedOrder.production_code}`}
+                className="max-h-[65vh] w-auto max-w-full rounded-lg object-contain shadow-md"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+              <span className="text-xs text-stone-400">
+                Thợ xưởng sẽ dựa vào bản vẽ này để tiến hành gia công chi tiết.
+              </span>
+              <div className="flex items-center gap-2">
+                {selectedOrder.status !== 'COMPLETED' && selectedOrder.status !== 'CANCELLED' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPreviewDrawingOpen(false);
+                      handleOpenUploadDrawing(selectedOrder);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Thay đổi bản vẽ</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewDrawingOpen(false)}
+                  className="rounded-lg bg-stone-800 px-4 py-1.5 text-xs font-medium text-white hover:bg-stone-900"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal 5: Tải Lên / Cập Nhật Bản Vẽ Kỹ Thuật ───── */}
+      {isUploadDrawingOpen && selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
+                  <Upload className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-stone-900">
+                    {selectedOrder.design_file_url ? 'Cập Nhật Bản Vẽ Kỹ Thuật' : 'Tải Lên Bản Vẽ Kỹ Thuật'}
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    Lệnh gia công: {selectedOrder.production_code}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsUploadDrawingOpen(false)}
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUploadDrawingSubmit} className="mt-4 space-y-4">
+              {/* Hiện ảnh cũ nếu có */}
+              {selectedOrder.design_file_url && !uploadDrawingForm.preview && (
+                <div>
+                  <span className="block text-xs font-semibold text-stone-700 mb-1">
+                    Bản vẽ hiện tại:
+                  </span>
+                  <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 p-2">
+                    <img
+                      src={selectedOrder.design_file_url}
+                      alt="Current blueprint"
+                      className="h-12 w-12 rounded object-cover border border-stone-200"
+                    />
+                    <div className="flex-1 min-w-0 text-xs text-stone-600 truncate">
+                      {selectedOrder.design_file_url}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Upload file mới */}
+              <div>
+                <label className="block text-sm font-semibold text-stone-700">
+                  Chọn bản vẽ mới <span className="text-rose-500">*</span>
+                </label>
+                <div className="mt-2">
+                  {uploadDrawingForm.preview ? (
+                    <div className="relative rounded-xl border border-stone-200 bg-stone-50 p-3 flex items-center gap-3">
+                      <img
+                        src={uploadDrawingForm.preview}
+                        alt="Preview mới"
+                        className="h-16 w-16 rounded-lg object-cover border border-stone-200 bg-white"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-stone-800 truncate">
+                          {uploadDrawingForm.file?.name}
+                        </p>
+                        <p className="text-xs text-stone-400">
+                          {formatFileSize(uploadDrawingForm.file?.size)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (uploadDrawingForm.preview) {
+                            URL.revokeObjectURL(uploadDrawingForm.preview);
+                          }
+                          setUploadDrawingForm({ file: null, preview: null });
+                          if (uploadFileInputRef.current) {
+                            uploadFileInputRef.current.value = '';
+                          }
+                        }}
+                        className="rounded-lg p-1.5 text-stone-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                        title="Chọn file khác"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="upload-drawing-file-input"
+                      className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 bg-stone-50/50 p-4 transition hover:border-amber-600 hover:bg-amber-50/30"
+                    >
+                      <Upload className="h-6 w-6 text-stone-400 mb-1" />
+                      <span className="text-xs font-medium text-amber-800">
+                        Nhấn để chọn file bản vẽ mới
+                      </span>
+                      <span className="text-[11px] text-stone-400 mt-0.5">
+                        Hỗ trợ PNG, JPG, WEBP (tối đa 5MB)
+                      </span>
+                      <input
+                        id="upload-drawing-file-input"
+                        ref={uploadFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUploadFileChange}
+                        className="hidden"
+                        required
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Nút hành động */}
+              <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setIsUploadDrawingOpen(false)}
+                  className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || !uploadDrawingForm.file}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-800 disabled:opacity-50"
+                >
+                  {submitting && <RotateCw className="h-4 w-4 animate-spin" />}
+                  <span>Lưu bản vẽ</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

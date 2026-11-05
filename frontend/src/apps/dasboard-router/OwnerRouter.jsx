@@ -9,6 +9,7 @@ import { ManagePurchaseReceiptsPage } from "../../pages/owner-pages/ManagePurcha
 import { ManageMaterialExportPage } from "../../pages/owner-pages/ManageMaterialExportPage";
 import { ManageProductionOrdersPage } from "../../pages/owner-pages/ManageProductionOrdersPage";
 import { ManageOrdersPage } from "../../pages/owner-pages/ManageOrdersPage";
+import { ManageFinancialReportsPage } from "../../pages/owner-pages/ManageFinancialReportsPage";
 
 export const OwnerRouter = {
   path: "/owner",
@@ -62,12 +63,12 @@ export const OwnerRouter = {
           element: <ManageOrdersPage />,
         },
         {
+          path: "financial-reports",
+          element: <ManageFinancialReportsPage />,
+        },
+        {
           path: "analytics",
-          element: (
-            <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-stone-900">Báo cáo & Phân tích</h2>
-            </div>
-          ),
+          element: <ManageFinancialReportsPage />,
         },
       ],
     },

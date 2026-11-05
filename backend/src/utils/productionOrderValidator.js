@@ -12,7 +12,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * @returns {{ isValid: boolean, error?: string, value?: object }}
  */
 function validateCreateProductionOrderInput(data = {}) {
-  const { order_id, planned_start, planned_end } = data;
+  const { order_id, planned_start, planned_end, design_file_url } = data;
 
   // 1. Kiểm tra order_id (bắt buộc, số nguyên dương)
   if (order_id === undefined || order_id === null || String(order_id).trim() === '') {
@@ -43,6 +43,7 @@ function validateCreateProductionOrderInput(data = {}) {
       order_id: oId,
       planned_start: planned_start.trim(),
       planned_end: planned_end.trim(),
+      design_file_url: (typeof design_file_url === 'string' && design_file_url.trim()) ? design_file_url.trim() : null,
     },
   };
 }
@@ -99,6 +100,7 @@ function toProductionOrderDTO(raw) {
     leader_name: plain.supervisor?.full_name || null,
     leader_email: plain.supervisor?.email || null,
     leader_phone: plain.supervisor?.phone_number || null,
+    design_file_url: plain.design_file_url || null,
     // Audit
     note: plain.note || null,
     createby: plain.createby || null,

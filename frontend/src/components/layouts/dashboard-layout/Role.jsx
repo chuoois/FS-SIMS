@@ -24,7 +24,7 @@ export const roles = {
     label: 'Chủ xưởng',
     base: '/owner',
     items: [
-      { label: 'Tổng quan', path: '', icon: LayoutDashboard },
+      { label: 'Báo cáo tài chính', path: 'financial-reports', icon: BarChart3 },
       { label: 'Quản lý tài khoản', path: 'accounts', icon: UserCog },
       { label: 'Quản lý đơn hàng', path: 'orders', icon: ClipboardList },
       { label: 'Nhà cung cấp', path: 'suppliers', icon: Building2 },
@@ -33,7 +33,6 @@ export const roles = {
       { label: 'Phiếu nhập hàng', path: 'purchase-receipts', icon: Receipt },
       { label: 'Phiếu xuất kho', path: 'material-exports', icon: FileText },
       { label: 'Lệnh gia công', path: 'production-orders', icon: Hammer },
-      { label: 'Doanh thu & báo cáo', path: '#', icon: BarChart3 },
       { label: 'Khách hàng', path: '#', icon: Users },
       { label: 'Cài đặt', path: '#', icon: Settings },
     ],

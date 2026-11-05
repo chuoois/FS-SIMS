@@ -76,6 +76,10 @@ const ProductionOrder = sequelize.define(
       allowNull: true,
       references: { model: 'user_account', key: 'user_account_id' },
     },
+    design_file_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
     note: {
       type: DataTypes.STRING(500),
       allowNull: true,
@@ -272,7 +276,7 @@ async function generateNextProductionOrderCode() {
 /**
  * Tạo mới lệnh gia công từ đơn hàng khách hàng đã CONFIRMED và là loại CUSTOM
  */
-async function createProductionOrder({ orderId, plannedStart, plannedEnd, createBy }) {
+async function createProductionOrder({ orderId, plannedStart, plannedEnd, designFileUrl, createBy }) {
   return sequelize.transaction(async (t) => {
     const CustomerOrder = getCustomerOrder();
 
@@ -307,6 +311,7 @@ async function createProductionOrder({ orderId, plannedStart, plannedEnd, create
         status: 'DRAFT',
         planned_start: plannedStart || null,
         planned_end: plannedEnd || null,
+        design_file_url: designFileUrl || null,
         createby: createBy || 'system',
       },
       { transaction: t }
@@ -439,4 +444,17 @@ module.exports = {
   assignLeaderToOrder,
   cancelProductionOrder,
   getEligibleCustomerOrders,
+  updateProductionOrderDesignFile,
+};
+
+async function updateProductionOrderDesignFile(productionId, designFileUrl, modifieBy) {
+  const po = await ProductionOrder.findByPk(productionId);
+  if (!po) {
+    throw new Error('Không tìm thấy lệnh gia công.');
+  }
+  await po.update({
+    design_file_url: designFileUrl || null,
+    modifieby: modifieBy || 'system',
+  });
+  return findProductionOrderById(productionId);
 };
