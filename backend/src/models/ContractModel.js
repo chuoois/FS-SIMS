@@ -46,10 +46,10 @@ if (!Contract.associations || !Contract.associations.items) {
   ContractItem.belongsTo(Contract, { foreignKey: 'contract_id', as: 'contract' });
 }
 if (!Contract.associations || !Contract.associations.signer) {
-  Contract.belongsTo(UserAccount, { foreignKey: 'signed_by', as: 'signer' });
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') Contract.belongsTo(UserAccount, { foreignKey: 'signed_by', as: 'signer' });
 }
 if (!ContractItem.associations || !ContractItem.associations.product) {
-  ContractItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+  if (typeof Product === 'function' && typeof Product.belongsTo === 'function') ContractItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 }
 
 /**

@@ -22,13 +22,13 @@ if (!OrderRequest.associations || !OrderRequest.associations.images) {
   OrderRequest.hasMany(OrderRequestImage, { foreignKey: 'request_id', as: 'images' });
 }
 if (!OrderRequest.associations || !OrderRequest.associations.customer) {
-  OrderRequest.belongsTo(UserAccount, { foreignKey: 'customer_account_id', as: 'customer' });
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') OrderRequest.belongsTo(UserAccount, { foreignKey: 'customer_account_id', as: 'customer' });
 }
 if (!OrderRequest.associations || !OrderRequest.associations.assignee) {
-  OrderRequest.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'assignee' });
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') OrderRequest.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'assignee' });
 }
 if (!OrderRequest.associations || !OrderRequest.associations.contract) {
-  OrderRequest.hasOne(Contract, { foreignKey: 'request_id', as: 'contract' });
+  if (typeof Contract === 'function' && typeof Contract.belongsTo === 'function') OrderRequest.hasOne(Contract, { foreignKey: 'request_id', as: 'contract' });
 }
 
 /**

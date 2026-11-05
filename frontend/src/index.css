@@ -5,3 +5,14 @@
     @apply m-0 min-w-80 bg-stone-50 font-sans text-emerald-950 antialiased;
   }
 }
+
+/* Ẩn thanh cuộn (scrollbar) nhưng vẫn giữ chức năng cuộn */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+}

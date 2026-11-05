@@ -438,17 +438,14 @@ async function deleteStaffAccount(userAccountId) {
   return affected > 0;
 }
 
-module.exports = {
-  UserAccount,
-  createUserAccount,
-  findUserAccountByEmail,
-  findUserAccountById,
-  getAllUserAccounts,
-  updateUserAccountStatus,
-  updateUserProfile,
-  updateUserPassword,
-  getStaffAccounts,
-  getStaffAccountById,
-  updateStaffAccount,
-  deleteStaffAccount,
-};
+async function getStaffLeaders() {
+  const UserRoleModel = sequelize.models.UserRole || require('./userRole.model').UserRole;
+  return UserAccount.findAll({
+    where: { status: 'ACTIVE' },
+    attributes: ['user_account_id', 'full_name', 'email', 'phone_number'],
+    include: [{ model: UserRoleModel, as: 'role', attributes: ['role_id', 'role_code', 'role_name'], where: { role_code: 'LEADERSTAFF' }, required: true }],
+    order: [['full_name', 'ASC']],
+  });
+}
+
+module.exports = { UserAccount, createUserAccount, findUserAccountByEmail, findUserAccountById, getAllUserAccounts, updateUserAccountStatus, updateUserProfile, updateUserPassword, getStaffAccounts, getStaffAccountById, updateStaffAccount, deleteStaffAccount, getStaffLeaders };

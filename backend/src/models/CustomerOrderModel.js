@@ -49,7 +49,7 @@ if (!CustomerOrder.associations || !CustomerOrder.associations.contract) {
   CustomerOrder.belongsTo(Contract, { foreignKey: 'contract_id', as: 'contract' });
 }
 if (!CustomerOrder.associations || !CustomerOrder.associations.staff) {
-  CustomerOrder.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'staff' });
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') CustomerOrder.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'staff' });
 }
 if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.product) {
   CustomerOrderItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
@@ -426,6 +426,81 @@ async function findCustomerOrderById(orderId, customerAccountId) {
   });
 }
 
+// ============================================================
+// Các hàm bổ sung cho Manage Order (Owner / Sales)
+// ============================================================
+
+const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'COMPLETED', 'CANCELLED'];
+
+const NEXT_ORDER_STATUS = {
+  NEW: 'CONFIRMED',
+  CONFIRMED: 'IN_PRODUCTION',
+  IN_PRODUCTION: 'COMPLETED',
+  PROCESSING: 'COMPLETED',
+};
+
+/**
+ * Hủy đơn hàng (Owner / Sales / Customer)
+ * Điều kiện: Đơn chưa COMPLETED và chưa CANCELLED
+ */
+async function cancelOrder(orderId, { cancelledBy } = {}) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.status === 'COMPLETED') {
+    throw new Error('Không thể hủy đơn hàng đã hoàn thành.');
+  }
+  if (order.status === 'CANCELLED') {
+    throw new Error('Đơn hàng này đã được hủy trước đó.');
+  }
+
+  await order.update({
+    status: 'CANCELLED',
+    modifieby: cancelledBy || null,
+  });
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Cập nhật trạng thái đơn hàng (Owner)
+ * Các trạng thái hợp lệ: NEW, CONFIRMED, IN_PRODUCTION, COMPLETED, CANCELLED
+ */
+async function updateOrderStatus(orderId, newStatus, { updatedBy } = {}) {
+  const normalizedStatus = newStatus === 'PROCESSING' ? 'IN_PRODUCTION' : newStatus;
+  if (!VALID_STATUSES.includes(normalizedStatus)) {
+    throw new Error(`Trạng thái "${newStatus}" không hợp lệ. Các trạng thái hợp lệ: ${VALID_STATUSES.join(', ')}.`);
+  }
+
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.status === 'CANCELLED') {
+    throw new Error('Không thể cập nhật trạng thái đơn hàng đã bị hủy.');
+  }
+  if (order.status === 'COMPLETED') {
+    throw new Error('Không thể cập nhật trạng thái đơn hàng đã hoàn thành.');
+  }
+  if (order.status === normalizedStatus) {
+    throw new Error(`Đơn hàng đã ở trạng thái "${normalizedStatus}".`);
+  }
+
+  const expectedNext = NEXT_ORDER_STATUS[order.status];
+  if (expectedNext && expectedNext !== normalizedStatus) {
+    throw new Error(`Không thể chuyển từ trạng thái "${order.status}" sang "${normalizedStatus}". Trạng thái kế tiếp hợp lệ là "${expectedNext}".`);
+  }
+
+  const updateData = { status: normalizedStatus, modifieby: updatedBy || null };
+  if (normalizedStatus === 'COMPLETED') {
+    updateData.delivered_date = new Date();
+  }
+
+  await order.update(updateData);
+  return findOrderById(orderId);
+}
+
 module.exports = {
   CustomerOrder,
   generateNextOrderCode,
@@ -436,4 +511,8 @@ module.exports = {
   getOrdersWithPagination,
   getCustomerOrdersWithPagination,
   findCustomerOrderById,
+  cancelOrder,
+  updateOrderStatus,
+  VALID_STATUSES,
+  NEXT_ORDER_STATUS,
 };
