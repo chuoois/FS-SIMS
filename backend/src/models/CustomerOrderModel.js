@@ -49,7 +49,7 @@ if (!CustomerOrder.associations || !CustomerOrder.associations.contract) {
   CustomerOrder.belongsTo(Contract, { foreignKey: 'contract_id', as: 'contract' });
 }
 if (!CustomerOrder.associations || !CustomerOrder.associations.staff) {
-  CustomerOrder.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'staff' });
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') CustomerOrder.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'staff' });
 }
 if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.product) {
   CustomerOrderItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
@@ -430,7 +430,14 @@ async function findCustomerOrderById(orderId, customerAccountId) {
 // Các hàm bổ sung cho Manage Order (Owner / Sales)
 // ============================================================
 
-const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'];
+const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'COMPLETED', 'CANCELLED'];
+
+const NEXT_ORDER_STATUS = {
+  NEW: 'CONFIRMED',
+  CONFIRMED: 'IN_PRODUCTION',
+  IN_PRODUCTION: 'COMPLETED',
+  PROCESSING: 'COMPLETED',
+};
 
 /**
  * Hủy đơn hàng (Owner / Sales / Customer)
@@ -461,7 +468,8 @@ async function cancelOrder(orderId, { cancelledBy } = {}) {
  * Các trạng thái hợp lệ: NEW, CONFIRMED, IN_PRODUCTION, COMPLETED, CANCELLED
  */
 async function updateOrderStatus(orderId, newStatus, { updatedBy } = {}) {
-  if (!VALID_STATUSES.includes(newStatus)) {
+  const normalizedStatus = newStatus === 'PROCESSING' ? 'IN_PRODUCTION' : newStatus;
+  if (!VALID_STATUSES.includes(normalizedStatus)) {
     throw new Error(`Trạng thái "${newStatus}" không hợp lệ. Các trạng thái hợp lệ: ${VALID_STATUSES.join(', ')}.`);
   }
 
@@ -475,12 +483,17 @@ async function updateOrderStatus(orderId, newStatus, { updatedBy } = {}) {
   if (order.status === 'COMPLETED') {
     throw new Error('Không thể cập nhật trạng thái đơn hàng đã hoàn thành.');
   }
-  if (order.status === newStatus) {
-    throw new Error(`Đơn hàng đã ở trạng thái "${newStatus}".`);
+  if (order.status === normalizedStatus) {
+    throw new Error(`Đơn hàng đã ở trạng thái "${normalizedStatus}".`);
   }
 
-  const updateData = { status: newStatus, modifieby: updatedBy || null };
-  if (newStatus === 'COMPLETED') {
+  const expectedNext = NEXT_ORDER_STATUS[order.status];
+  if (expectedNext && expectedNext !== normalizedStatus) {
+    throw new Error(`Không thể chuyển từ trạng thái "${order.status}" sang "${normalizedStatus}". Trạng thái kế tiếp hợp lệ là "${expectedNext}".`);
+  }
+
+  const updateData = { status: normalizedStatus, modifieby: updatedBy || null };
+  if (normalizedStatus === 'COMPLETED') {
     updateData.delivered_date = new Date();
   }
 
@@ -501,4 +514,5 @@ module.exports = {
   cancelOrder,
   updateOrderStatus,
   VALID_STATUSES,
+  NEXT_ORDER_STATUS,
 };

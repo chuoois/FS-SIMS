@@ -116,7 +116,7 @@ describe('ManageProductionOrdersPage Component', () => {
       expect(screen.getByText('Trần Văn Trưởng')).toBeInTheDocument();
       expect(screen.getByText('Chưa phân công')).toBeInTheDocument();
       expect(screen.getAllByText('Chờ sản xuất').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Đang gia công').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Đang xử lý').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Hoàn thành').length).toBeGreaterThan(0);
     });
   });

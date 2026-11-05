@@ -156,7 +156,9 @@ async function updateOrderStatus(req, res) {
       error.message.includes('không hợp lệ') ||
       error.message.includes('đã bị hủy') ||
       error.message.includes('đã hoàn thành') ||
-      error.message.includes('đã ở trạng thái')
+      error.message.includes('đã ở trạng thái') ||
+      error.message.includes('Không thể chuyển') ||
+      error.message.includes('kế tiếp')
     );
     const statusCode = isNotFound ? 404 : isClientError ? 400 : 500;
 

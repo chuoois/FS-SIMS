@@ -56,7 +56,7 @@ jest.mock('../src/models/CustomerOrderModel', () => ({
   findCustomerOrderById: jest.fn(),
   cancelOrder: jest.fn(),
   updateOrderStatus: jest.fn(),
-  VALID_STATUSES: ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'],
+  VALID_STATUSES: ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'COMPLETED', 'CANCELLED'],
 }));
 
 jest.mock('../src/models/CustomerOrderItemModel', () => ({
@@ -385,7 +385,7 @@ describe('Manage Orders API (/api/order-management)', () => {
   describe('PATCH /api/order-management/:id/status (Cập nhật trạng thái)', () => {
     test('Cập nhật thành công (200)', async () => {
       const mockOrder = {
-        ...mockOrderDTO({ status: 'IN_PRODUCTION', statusLabel: 'Đang sản xuất' }),
+        ...mockOrderDTO({ status: 'IN_PRODUCTION', statusLabel: 'Đang xử lý' }),
         toJSON: function() { return { ...this }; },
       };
       updateOrderStatusModel.mockResolvedValueOnce(mockOrder);

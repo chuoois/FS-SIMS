@@ -894,32 +894,6 @@ CREATE TABLE IF NOT EXISTS production_order_item (
 ) ENGINE = InnoDB;
 
 
-
-
--- =========================================================
--- 24b. production_order_image  (ảnh sản phẩm gia công thợ gửi lên để nghiệm thu / đánh giá)
--- =========================================================
-CREATE TABLE IF NOT EXISTS production_order_image (
-    image_id         BIGINT        NOT NULL AUTO_INCREMENT,
-    production_id    BIGINT        NOT NULL,
-    image_url        VARCHAR(500)  NOT NULL,
-    caption          VARCHAR(255)  NULL,
-    stage            VARCHAR(50)   NULL DEFAULT 'PROGRESS',
-    uploaded_by      BIGINT        NULL,
-    createdate       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    createby         VARCHAR(100)  NULL,
-    PRIMARY KEY (image_id),
-    KEY idx_po_image_production (production_id),
-    KEY idx_po_image_user (uploaded_by),
-    CONSTRAINT fk_po_image_production
-        FOREIGN KEY (production_id) REFERENCES production_order (production_id)
-        ON UPDATE CASCADE ON DELETE CASCADE,
-    CONSTRAINT fk_po_image_user
-        FOREIGN KEY (uploaded_by) REFERENCES user_account (user_account_id)
-        ON UPDATE CASCADE ON DELETE SET NULL
-) ENGINE = InnoDB;
-
-
 -- =========================================================
 -- 25. material_issue  (phiếu xuất nguyên vật liệu khỏi kho cho gia công)
 --     status: DRAFT -> CONFIRMED (trừ tồn kho) | CANCELLED

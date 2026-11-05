@@ -4,12 +4,13 @@
 // Thuộc utils/ -> Dễ unit test, hàm thuần không phụ thuộc DB/network
 // =========================================================
 
-const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'];
+const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'COMPLETED', 'CANCELLED'];
 
 const STATUS_LABELS = {
   NEW: 'Mới',
   CONFIRMED: 'Đã xác nhận',
-  IN_PRODUCTION: 'Đang sản xuất',
+  IN_PRODUCTION: 'Đang xử lý',
+  PROCESSING: 'Đang xử lý',
   COMPLETED: 'Hoàn thành',
   CANCELLED: 'Đã hủy',
 };
@@ -18,6 +19,22 @@ const ORDER_TYPE_LABELS = {
   READY: 'Hàng sẵn',
   CUSTOM: 'Đặt theo yêu cầu',
 };
+
+// Quy trình chuyển trạng thái đơn hàng tuần tự
+const NEXT_ORDER_STATUS = {
+  NEW: 'CONFIRMED',
+  CONFIRMED: 'IN_PRODUCTION',
+  IN_PRODUCTION: 'COMPLETED',
+  PROCESSING: 'COMPLETED',
+};
+
+/**
+ * Lấy trạng thái kế tiếp hợp lệ trong quy trình
+ */
+function getNextOrderStatus(currentStatus) {
+  if (!currentStatus) return null;
+  return NEXT_ORDER_STATUS[currentStatus] || null;
+}
 
 /**
  * Validate input cập nhật trạng thái đơn hàng
@@ -29,11 +46,15 @@ function validateUpdateStatusInput(data = {}) {
     return { isValid: false, error: 'Trạng thái đơn hàng là bắt buộc.' };
   }
 
-  const trimmed = status.trim().toUpperCase();
+  let trimmed = status.trim().toUpperCase();
+  if (trimmed === 'PROCESSING') {
+    trimmed = 'IN_PRODUCTION';
+  }
+
   if (!VALID_STATUSES.includes(trimmed)) {
     return {
       isValid: false,
-      error: `Trạng thái "${trimmed}" không hợp lệ. Các trạng thái hợp lệ: ${VALID_STATUSES.join(', ')}.`,
+      error: `Trạng thái "${trimmed}" không hợp lệ. Các trạng thái hợp lệ: NEW, CONFIRMED, IN_PRODUCTION, COMPLETED, CANCELLED.`,
     };
   }
 
@@ -46,6 +67,7 @@ function validateUpdateStatusInput(data = {}) {
 function toOrderManagementDTO(raw) {
   if (!raw) return null;
   const order = raw.toJSON ? raw.toJSON() : raw;
+  const nextStatus = getNextOrderStatus(order.status);
 
   return {
     orderId: order.order_id,
@@ -67,6 +89,8 @@ function toOrderManagementDTO(raw) {
     ),
     status: order.status,
     statusLabel: STATUS_LABELS[order.status] || order.status,
+    nextStatus,
+    nextStatusLabel: nextStatus ? STATUS_LABELS[nextStatus] || nextStatus : null,
     expectedDate: order.expected_date,
     deliveredDate: order.delivered_date,
     assignedTo: order.assigned_to,
@@ -96,7 +120,8 @@ module.exports = {
   VALID_STATUSES,
   STATUS_LABELS,
   ORDER_TYPE_LABELS,
+  NEXT_ORDER_STATUS,
+  getNextOrderStatus,
   validateUpdateStatusInput,
   toOrderManagementDTO,
 };
-

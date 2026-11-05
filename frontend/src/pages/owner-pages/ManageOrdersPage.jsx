@@ -4,7 +4,8 @@
 // Chức năng:
 // 1. Xem danh sách đơn hàng (hàng sẵn & hàng đặt làm, tìm kiếm, lọc, phân trang)
 // 2. Xem chi tiết đơn hàng (thông tin khách, sản phẩm, thanh toán)
-// 3. Cập nhật trạng thái đơn hàng (Owner)
+// 3. Quản lý trạng thái đơn hàng tuần tự (Next Action Button, không dùng select/dropdown)
+//    Quy trình: Mới (NEW) -> Đã xác nhận (CONFIRMED) -> Đang xử lý (IN_PRODUCTION) -> Hoàn thành (COMPLETED)
 // 4. Hủy đơn hàng chưa hoàn thành
 // Đồng bộ giao diện 100% với hệ thống Dashboard Owner
 // =========================================================
@@ -31,7 +32,6 @@ import {
   CreditCard,
   Package,
   FileText,
-  Hammer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -50,7 +50,7 @@ const ORDER_TYPES = ['ALL', 'READY', 'CUSTOM'];
 const STATUS_LABELS = {
   NEW: 'Mới',
   CONFIRMED: 'Đã xác nhận',
-  IN_PRODUCTION: 'Đang sản xuất',
+  IN_PRODUCTION: 'Đang xử lý',
   COMPLETED: 'Hoàn thành',
   CANCELLED: 'Đã hủy',
 };
@@ -60,8 +60,31 @@ const ORDER_TYPE_LABELS = {
   CUSTOM: 'Đặt theo yêu cầu',
 };
 
-// Trạng thái Owner có thể cập nhật
-const UPDATABLE_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'];
+// Cấu hình trạng thái kế tiếp trong quy trình tuần tự
+// Chỉ cho phép chuyển sang trạng thái hợp lệ tiếp theo
+const NEXT_STATUS_CONFIG = {
+  NEW: {
+    nextStatus: 'CONFIRMED',
+    actionLabel: 'Xác nhận đơn',
+    nextLabel: 'Đã xác nhận',
+    buttonClass: 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100',
+    icon: CheckCircle2,
+  },
+  CONFIRMED: {
+    nextStatus: 'IN_PRODUCTION',
+    actionLabel: 'Chuyển xử lý',
+    nextLabel: 'Đang xử lý',
+    buttonClass: 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100',
+    icon: RefreshCw,
+  },
+  IN_PRODUCTION: {
+    nextStatus: 'COMPLETED',
+    actionLabel: 'Hoàn thành đơn',
+    nextLabel: 'Hoàn thành',
+    buttonClass: 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
+    icon: CheckCircle2,
+  },
+};
 
 // ─── Định dạng tiền tệ VNĐ ─────────────────────────────────
 const formatCurrency = (amount) => {
@@ -105,8 +128,8 @@ const StatusBadge = ({ status }) => {
     case 'IN_PRODUCTION':
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
-          <Hammer className="h-3.5 w-3.5" />
-          Đang sản xuất
+          <Clock className="h-3.5 w-3.5" />
+          Đang xử lý
         </span>
       );
     case 'COMPLETED':
@@ -133,8 +156,11 @@ const StatusBadge = ({ status }) => {
 };
 
 // ─── Modal Chi tiết đơn hàng ──────────────────────────────
-function OrderDetailModal({ order, onClose }) {
+function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId }) {
   if (!order) return null;
+  const nextConfig = NEXT_STATUS_CONFIG[order.status];
+  const NextIcon = nextConfig?.icon || CheckCircle2;
+  const isAdvancing = advanceLoadingId === order.orderId;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
@@ -166,21 +192,38 @@ function OrderDetailModal({ order, onClose }) {
 
         {/* Nội dung chi tiết */}
         <div className="max-h-[72vh] overflow-y-auto px-6 py-5 space-y-6">
-          {/* Trạng thái & ngày tạo */}
+          {/* Trạng thái & hành động kế tiếp */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-stone-50 p-4 border border-stone-200">
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-stone-500">Trạng thái hiện tại:</span>
               <StatusBadge status={order.status} />
             </div>
-            <div className="flex items-center gap-4 text-xs text-stone-500">
-              {order.createdAt && (
-                <span>Ngày tạo: {formatDate(order.createdAt)}</span>
+            <div className="flex items-center gap-3">
+              {nextConfig && (
+                <button
+                  onClick={() => onAdvanceStatus(order)}
+                  disabled={isAdvancing}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
+                  title={`Chuyển trạng thái sang ${nextConfig.nextLabel}`}
+                >
+                  {isAdvancing ? (
+                    <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <NextIcon className="h-3.5 w-3.5" />
+                  )}
+                  <span>Chuyển sang: {nextConfig.actionLabel}</span>
+                </button>
               )}
-              {order.expectedDate && (
-                <span className="font-medium text-stone-700">
-                  Giao dự kiến: {formatDate(order.expectedDate)}
-                </span>
-              )}
+              <div className="flex items-center gap-3 text-xs text-stone-500">
+                {order.createdAt && (
+                  <span>Ngày tạo: {formatDate(order.createdAt)}</span>
+                )}
+                {order.expectedDate && (
+                  <span className="font-medium text-stone-700">
+                    Giao dự kiến: {formatDate(order.expectedDate)}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -317,92 +360,29 @@ function OrderDetailModal({ order, onClose }) {
         </div>
 
         {/* Footer Modal */}
-        <div className="flex justify-end border-t border-stone-200 px-6 py-4 bg-stone-50 rounded-b-2xl">
+        <div className="flex items-center justify-between border-t border-stone-200 px-6 py-4 bg-stone-50 rounded-b-2xl">
+          <div>
+            {nextConfig && (
+              <button
+                onClick={() => onAdvanceStatus(order)}
+                disabled={isAdvancing}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
+                title={`Chuyển trạng thái sang ${nextConfig.nextLabel}`}
+              >
+                {isAdvancing ? (
+                  <RotateCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <NextIcon className="h-4 w-4" />
+                )}
+                <span>{nextConfig.actionLabel}</span>
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="rounded-lg border border-stone-300 bg-white px-5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95"
           >
             Đóng
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Modal Cập nhật trạng thái ────────────────────────────
-function UpdateStatusModal({ order, loading, onConfirm, onClose }) {
-  const [selectedStatus, setSelectedStatus] = useState(order?.status || '');
-
-  if (!order) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl border border-stone-200">
-        <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
-              <RefreshCw className="h-5 w-5" />
-            </div>
-            <h2 className="text-lg font-bold text-stone-900">Cập nhật trạng thái đơn hàng</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
-            aria-label="Đóng modal cập nhật trạng thái"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="px-6 py-5 space-y-4">
-          <div className="rounded-lg bg-stone-50 p-3.5 border border-stone-200 text-sm">
-            <div className="flex justify-between items-center mb-1.5">
-              <span className="text-stone-500">Mã đơn hàng:</span>
-              <span className="font-semibold text-stone-800">{order.orderCode}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-stone-500">Trạng thái hiện tại:</span>
-              <StatusBadge status={order.status} />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="new-status" className="mb-1.5 block text-sm font-medium text-stone-700">
-              Trạng thái mới
-            </label>
-            <select
-              id="new-status"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 bg-white px-3.5 py-2.5 text-sm text-stone-800 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
-            >
-              {UPDATABLE_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1.5 text-xs text-stone-400">
-              Chọn trạng thái mới phù hợp theo quy trình xử lý đơn hàng của xưởng.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2.5 border-t border-stone-200 px-6 py-4 bg-stone-50 rounded-b-2xl">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50 transition active:scale-95 disabled:opacity-50"
-          >
-            Hủy
-          </button>
-          <button
-            onClick={() => onConfirm(selectedStatus)}
-            disabled={loading || selectedStatus === order.status}
-            className="rounded-lg bg-amber-700 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-amber-800 transition active:scale-95 disabled:opacity-50"
-          >
-            {loading ? 'Đang lưu...' : 'Xác nhận'}
           </button>
         </div>
       </div>
@@ -481,13 +461,11 @@ export function ManageOrdersPage() {
     itemsPerPage: 10,
   });
 
-  // Modals
+  // Modals & Action loading
   const [detailOrder, setDetailOrder] = useState(null);
-  const [statusOrder, setStatusOrder] = useState(null);
   const [cancelOrder, setCancelOrder] = useState(null);
-
-  // Action states
-  const [actionLoading, setActionLoading] = useState(false);
+  const [advanceLoadingId, setAdvanceLoadingId] = useState(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   // ── Fetch danh sách ──────────────────────────────────────
   const fetchOrders = useCallback(async () => {
@@ -543,7 +521,7 @@ export function ManageOrdersPage() {
   // ── Hủy đơn ─────────────────────────────────────────────
   async function handleCancelConfirm() {
     if (!cancelOrder) return;
-    setActionLoading(true);
+    setCancelLoading(true);
     try {
       await cancelOrderApi(cancelOrder.orderId);
       toast.success(`Đã hủy đơn hàng ${cancelOrder.orderCode}.`);
@@ -552,25 +530,55 @@ export function ManageOrdersPage() {
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Không thể hủy đơn hàng.');
     } finally {
-      setActionLoading(false);
+      setCancelLoading(false);
     }
   }
 
-  // ── Cập nhật trạng thái ──────────────────────────────────
-  async function handleStatusConfirm(newStatus) {
-    if (!statusOrder) return;
-    setActionLoading(true);
+  // ── Chuyển sang trạng thái kế tiếp trong quy trình ───────
+  const handleAdvanceStatus = async (order) => {
+    const nextConfig = NEXT_STATUS_CONFIG[order.status];
+    if (!nextConfig) return;
+
+    setAdvanceLoadingId(order.orderId);
     try {
-      await updateOrderStatusApi(statusOrder.orderId, { status: newStatus });
-      toast.success(`Đã cập nhật trạng thái đơn hàng ${statusOrder.orderCode} → ${STATUS_LABELS[newStatus]}.`);
-      setStatusOrder(null);
+      await updateOrderStatusApi(order.orderId, { status: nextConfig.nextStatus });
+      toast.success(
+        `Đã chuyển trạng thái đơn hàng ${order.orderCode} sang "${nextConfig.nextLabel}".`
+      );
+
+      // Cập nhật ngay lập tức danh sách để nút hành động đổi sang trạng thái mới
+      setOrders((prevOrders) =>
+        prevOrders.map((o) =>
+          o.orderId === order.orderId
+            ? {
+                ...o,
+                status: nextConfig.nextStatus,
+                statusLabel: nextConfig.nextLabel,
+              }
+            : o
+        )
+      );
+
+      // Nếu đang mở modal chi tiết đơn hàng này, cập nhật modal luôn
+      setDetailOrder((prev) =>
+        prev && prev.orderId === order.orderId
+          ? {
+              ...prev,
+              status: nextConfig.nextStatus,
+              statusLabel: nextConfig.nextLabel,
+            }
+          : prev
+      );
+
+      // Đồng bộ lại với backend
       fetchOrders();
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Không thể cập nhật trạng thái.');
+      console.error('Lỗi khi chuyển trạng thái đơn hàng:', err);
+      toast.error(err?.response?.data?.message || 'Không thể chuyển trạng thái đơn hàng.');
     } finally {
-      setActionLoading(false);
+      setAdvanceLoadingId(null);
     }
-  }
+  };
 
   // ── Tính thống kê nhanh ─────────────────────────────────
   const stats = useMemo(() => {
@@ -595,7 +603,7 @@ export function ManageOrdersPage() {
                 Quản lý đơn hàng
               </h1>
               <p className="text-sm text-stone-500">
-                Xem toàn bộ đơn hàng (hàng sẵn & đặt làm), theo dõi tiến độ, chi tiết thông tin và cập nhật trạng thái.
+                Xem toàn bộ đơn hàng (hàng sẵn & đặt làm), theo dõi tiến độ, chi tiết thông tin và chuyển trạng thái theo quy trình.
               </p>
             </div>
           </div>
@@ -644,12 +652,12 @@ export function ManageOrdersPage() {
           </div>
         </div>
 
-        {/* Đang sản xuất */}
+        {/* Đang xử lý */}
         <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-5 shadow-sm transition hover:shadow">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-blue-800">Đang sản xuất</span>
+            <span className="text-sm font-medium text-blue-800">Đang xử lý</span>
             <div className="rounded-lg bg-blue-100 p-2 text-blue-700">
-              <Hammer className="h-5 w-5" />
+              <Clock className="h-5 w-5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
@@ -775,7 +783,10 @@ export function ManageOrdersPage() {
                 </tr>
               ) : (
                 orders.map((order) => {
-                  const canAct = order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
+                  const nextConfig = NEXT_STATUS_CONFIG[order.status];
+                  const NextIcon = nextConfig?.icon || CheckCircle2;
+                  const isAdvancing = advanceLoadingId === order.orderId;
+                  const canCancel = order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
 
                   return (
                     <tr key={order.orderId} className="transition hover:bg-stone-50/80">
@@ -815,7 +826,7 @@ export function ManageOrdersPage() {
                         )}
                       </td>
 
-                      {/* Trạng thái */}
+                      {/* Trạng thái hiện tại */}
                       <td className="whitespace-nowrap px-3 py-3.5 text-center">
                         <StatusBadge status={order.status} />
                       </td>
@@ -838,23 +849,29 @@ export function ManageOrdersPage() {
                             <span>Chi tiết</span>
                           </button>
 
-                          {/* Nút Cập nhật trạng thái */}
-                          {canAct && (
+                          {/* Nút hành động chuyển sang trạng thái hợp lệ tiếp theo */}
+                          {nextConfig && (
                             <button
-                              onClick={() => setStatusOrder(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-100 active:scale-95"
-                              title="Cập nhật trạng thái"
+                              onClick={() => handleAdvanceStatus(order)}
+                              disabled={isAdvancing}
+                              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
+                              title={`Chuyển trạng thái sang ${nextConfig.nextLabel}`}
                             >
-                              <RefreshCw className="h-3.5 w-3.5" />
-                              <span>Cập nhật</span>
+                              {isAdvancing ? (
+                                <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <NextIcon className="h-3.5 w-3.5" />
+                              )}
+                              <span>{nextConfig.actionLabel}</span>
                             </button>
                           )}
 
                           {/* Nút Hủy đơn hàng */}
-                          {canAct && (
+                          {canCancel && (
                             <button
                               onClick={() => setCancelOrder(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100 active:scale-95"
+                              disabled={isAdvancing}
+                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100 active:scale-95 disabled:opacity-50"
                               title="Hủy đơn hàng"
                             >
                               <Ban className="h-3.5 w-3.5" />
@@ -890,22 +907,18 @@ export function ManageOrdersPage() {
 
       {/* ── Modals ── */}
       {detailOrder && (
-        <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />
-      )}
-
-      {statusOrder && (
-        <UpdateStatusModal
-          order={statusOrder}
-          loading={actionLoading}
-          onConfirm={handleStatusConfirm}
-          onClose={() => setStatusOrder(null)}
+        <OrderDetailModal
+          order={detailOrder}
+          onClose={() => setDetailOrder(null)}
+          onAdvanceStatus={handleAdvanceStatus}
+          advanceLoadingId={advanceLoadingId}
         />
       )}
 
       {cancelOrder && (
         <CancelConfirmDialog
           order={cancelOrder}
-          loading={actionLoading}
+          loading={cancelLoading}
           onConfirm={handleCancelConfirm}
           onClose={() => setCancelOrder(null)}
         />

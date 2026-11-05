@@ -35,6 +35,24 @@ describe('ManageOrdersPage Component', () => {
     {
       orderId: 2,
       orderCode: 'ORD-20261101-0002',
+      orderType: 'CUSTOM',
+      orderTypeLabel: 'Đặt theo yêu cầu',
+      contactName: 'Lê Gia Công',
+      contactPhone: '0908888888',
+      staffName: 'Trần Bán Hàng',
+      status: 'IN_PRODUCTION',
+      statusLabel: 'Đang xử lý',
+      totalAmount: 20000000,
+      depositAmount: 10000000,
+      paidAmount: 10000000,
+      remainingAmount: 10000000,
+      expectedDate: '2026-12-10',
+      deliveredDate: null,
+      items: [],
+    },
+    {
+      orderId: 3,
+      orderCode: 'ORD-20261101-0003',
       orderType: 'READY',
       orderTypeLabel: 'Hàng sẵn',
       contactName: 'Trần Thị Mua Hàng',
@@ -50,10 +68,28 @@ describe('ManageOrdersPage Component', () => {
       deliveredDate: '2026-11-14',
       items: [],
     },
+    {
+      orderId: 4,
+      orderCode: 'ORD-20261101-0004',
+      orderType: 'READY',
+      orderTypeLabel: 'Hàng sẵn',
+      contactName: 'Hoàng Văn Mới',
+      contactPhone: '0903333333',
+      staffName: null,
+      status: 'NEW',
+      statusLabel: 'Mới',
+      totalAmount: 4000000,
+      depositAmount: 0,
+      paidAmount: 0,
+      remainingAmount: 4000000,
+      expectedDate: '2026-11-20',
+      deliveredDate: null,
+      items: [],
+    },
   ];
 
   const mockPagination = {
-    totalItems: 2,
+    totalItems: 4,
     totalPages: 1,
     currentPage: 1,
     itemsPerPage: 10,
@@ -64,6 +100,10 @@ describe('ManageOrdersPage Component', () => {
     orderManagementService.getOrders.mockResolvedValue({
       orders: mockOrders,
       pagination: mockPagination,
+    });
+    orderManagementService.updateOrderStatus.mockResolvedValue({
+      message: 'Cập nhật trạng thái thành công',
+      order: { ...mockOrders[0], status: 'IN_PRODUCTION', statusLabel: 'Đang xử lý' },
     });
   });
 
@@ -88,6 +128,7 @@ describe('ManageOrdersPage Component', () => {
     render(<ManageOrdersPage />);
     await waitFor(() => {
       expect(screen.getByText('Nguyễn Văn Khách')).toBeDefined();
+      expect(screen.getByText('Lê Gia Công')).toBeDefined();
       expect(screen.getByText('Trần Thị Mua Hàng')).toBeDefined();
     });
   });
@@ -104,20 +145,105 @@ describe('ManageOrdersPage Component', () => {
     });
   });
 
-  // ─── 4. Thống kê ─────────────────────────────────────────────────
-  it('hiển thị card thống kê', async () => {
+  // ─── 4. Thống kê & Nhãn trạng thái ───────────────────────────────
+  it('hiển thị card thống kê với nhãn "Đang xử lý" thay vì "Đang sản xuất"', async () => {
     render(<ManageOrdersPage />);
     await waitFor(() => {
-      // Card labels - xuất hiện đúng 1 lần mỗi card
       expect(screen.getByText('Tổng đơn hàng')).toBeDefined();
-      // Các label có thể trùng với dropdown options hoặc badge → dùng getAllByText
       expect(screen.getAllByText('Đã xác nhận').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Đang sản xuất').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Đang xử lý').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Hoàn thành').length).toBeGreaterThan(0);
+      // Đảm bảo không còn nhãn "Đang sản xuất"
+      expect(screen.queryByText('Đang sản xuất')).toBeNull();
     });
   });
 
-  // ─── 5. Mở modal chi tiết ────────────────────────────────────────
+  // ─── 5. Không dùng Select/Dropdown để đổi trạng thái đơn hàng ─────
+  it('không sử dụng Select/Dropdown để thay đổi trạng thái đơn hàng', async () => {
+    render(<ManageOrdersPage />);
+    await waitFor(() => screen.getByText('Quản lý đơn hàng'));
+
+    // Không tồn tại select đổi trạng thái như id="new-status" hay nhãn "Trạng thái mới"
+    expect(screen.queryByLabelText(/Trạng thái mới/i)).toBeNull();
+    expect(screen.queryByRole('combobox', { name: /Trạng thái mới/i })).toBeNull();
+  });
+
+  // ─── 6. Nút hành động chuyển sang trạng thái kế tiếp ─────────────
+  it('hiển thị đúng nút hành động kế tiếp cho từng trạng thái đơn hàng', async () => {
+    render(<ManageOrdersPage />);
+    await waitFor(() => screen.getByText('Quản lý đơn hàng'));
+
+    // Đơn NEW (id: 4) -> Nút "Xác nhận đơn"
+    expect(screen.getByRole('button', { name: /Xác nhận đơn/i })).toBeDefined();
+
+    // Đơn CONFIRMED (id: 1) -> Nút "Chuyển xử lý"
+    expect(screen.getByRole('button', { name: /Chuyển xử lý/i })).toBeDefined();
+
+    // Đơn IN_PRODUCTION (id: 2) -> Nút "Hoàn thành đơn"
+    expect(screen.getByRole('button', { name: /Hoàn thành đơn/i })).toBeDefined();
+  });
+
+  it('đơn hàng COMPLETED không hiển thị nút chuyển trạng thái', async () => {
+    render(<ManageOrdersPage />);
+    await waitFor(() => screen.getByText('Quản lý đơn hàng'));
+
+    // Đơn COMPLETED không có nút chuyển trạng thái nào
+    const row = screen.getByText('ORD-20261101-0003').closest('tr');
+    expect(row).toBeDefined();
+    // Trong dòng này chỉ có nút Chi tiết, không có nút Chuyển xử lý hay Hoàn thành
+    const buttonsInRow = row.querySelectorAll('button');
+    const buttonTexts = Array.from(buttonsInRow).map((b) => b.textContent);
+    expect(buttonTexts).toContain('Chi tiết');
+    expect(buttonTexts).not.toContain('Chuyển xử lý');
+    expect(buttonTexts).not.toContain('Hoàn thành đơn');
+    expect(buttonTexts).not.toContain('Xác nhận đơn');
+  });
+
+  // ─── 7. Nhấn nút tự động cập nhật sang trạng thái kế tiếp ────────
+  it('khi Owner nhấn nút "Chuyển xử lý", tự động gọi API cập nhật sang IN_PRODUCTION', async () => {
+    const user = userEvent.setup();
+    render(<ManageOrdersPage />);
+
+    await waitFor(() => screen.getByRole('button', { name: /Chuyển xử lý/i }));
+    const advanceButton = screen.getByRole('button', { name: /Chuyển xử lý/i });
+    await user.click(advanceButton);
+
+    await waitFor(() => {
+      expect(orderManagementService.updateOrderStatus).toHaveBeenCalledWith(1, {
+        status: 'IN_PRODUCTION',
+      });
+    });
+  });
+
+  it('sau khi cập nhật sang IN_PRODUCTION, nút hành động tự động chuyển thành "Hoàn thành đơn"', async () => {
+    const user = userEvent.setup();
+    let currentOrders = [...mockOrders];
+    orderManagementService.getOrders.mockImplementation(async () => ({
+      orders: currentOrders,
+      pagination: mockPagination,
+    }));
+    orderManagementService.updateOrderStatus.mockImplementation(async (id, data) => {
+      currentOrders = currentOrders.map((o) =>
+        o.orderId === id ? { ...o, status: data.status, statusLabel: 'Đang xử lý' } : o
+      );
+      return { message: 'OK' };
+    });
+
+    render(<ManageOrdersPage />);
+
+    await waitFor(() => screen.getByRole('button', { name: /Chuyển xử lý/i }));
+    const advanceBtn = screen.getByRole('button', { name: /Chuyển xử lý/i });
+    await user.click(advanceBtn);
+
+    // Sau khi nhấn, đơn 1 chuyển sang IN_PRODUCTION, nút biến thành "Hoàn thành đơn"
+    await waitFor(() => {
+      // Trước đó chỉ có 1 nút "Hoàn thành đơn" (từ đơn 2), nay phải có 2 nút "Hoàn thành đơn"
+      const completedButtons = screen.getAllByRole('button', { name: /Hoàn thành đơn/i });
+      expect(completedButtons.length).toBe(2);
+    });
+  });
+
+  // ─── 8. Mở modal chi tiết ────────────────────────────────────────
   it('mở modal chi tiết khi bấm nút Chi tiết', async () => {
     const user = userEvent.setup();
     const mockDetail = {
@@ -146,7 +272,7 @@ describe('ManageOrdersPage Component', () => {
     });
   });
 
-  // ─── 6. Hủy đơn hàng ────────────────────────────────────────────
+  // ─── 9. Hủy đơn hàng ────────────────────────────────────────────
   it('hiển thị dialog xác nhận khi bấm nút Hủy', async () => {
     const user = userEvent.setup();
     render(<ManageOrdersPage />);
@@ -160,21 +286,7 @@ describe('ManageOrdersPage Component', () => {
     });
   });
 
-  // ─── 7. Mở modal cập nhật trạng thái ────────────────────────────
-  it('mở modal cập nhật trạng thái khi bấm nút Cập nhật', async () => {
-    const user = userEvent.setup();
-    render(<ManageOrdersPage />);
-
-    await waitFor(() => screen.getAllByText('Cập nhật'));
-    const updateButtons = screen.getAllByText('Cập nhật');
-    await user.click(updateButtons[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText(/cập nhật trạng thái đơn hàng/i)).toBeDefined();
-    });
-  });
-
-  // ─── 8. Bộ lọc ───────────────────────────────────────────────────
+  // ─── 10. Bộ lọc danh sách ─────────────────────────────────────────
   it('gọi API lại khi thay đổi bộ lọc trạng thái', async () => {
     const user = userEvent.setup();
     render(<ManageOrdersPage />);
