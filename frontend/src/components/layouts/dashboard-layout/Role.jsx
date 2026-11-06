@@ -48,12 +48,12 @@ export const roles = {
     ],
   },
   staffLeader: {
-    label: 'Thợ xưởng',
+    label: 'Tổ trưởng xưởng',
     base: '/staff-leader',
     items: [
-      { label: 'Tổng quan', path: '', icon: LayoutDashboard },
-      { label: 'Công việc', path: '#', icon: ClipboardList },
-      { label: 'Tiến độ sản xuất', path: '#', icon: Hammer },
+      { label: 'Tổng quan & Đơn hàng', path: '', icon: LayoutDashboard },
+      { label: 'Đơn sản xuất', path: 'production', icon: ClipboardList },
+      { label: 'Tiến độ sản xuất', path: 'production', icon: Hammer },
       { label: 'Nhân viên trong nhóm', path: '#', icon: Users },
       { label: 'Chấm công', path: '#', icon: Clock },
       { label: 'Báo cáo nhóm', path: '#', icon: BarChart3 },

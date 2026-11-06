@@ -11,7 +11,8 @@
 // =========================================================
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { CustomOrderForm } from './CustomOrderForm';
 import {
   ShoppingCart,
   Search,
@@ -58,8 +59,14 @@ const formatVND = (amount) => {
   }).format(amount || 0);
 };
 
-export const CreateOrderPage = () => {
+export const CreateOrderPage = ({ initialTab } = {}) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('editRequestId') || searchParams.get('requestId');
+  const queryTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    initialTab || (queryTab === 'pos' ? 'POS_WAREHOUSE' : 'CUSTOM_ORDER')
+  );
 
   // ── 1. States Sản phẩm trong kho (Bên phải) ────────────────
   const [products, setProducts] = useState([]);
@@ -371,6 +378,7 @@ export const CreateOrderPage = () => {
     <div className="flex flex-col gap-5">
       {/* ── Header trang POS ─────────────────────────────────── */}
       <div className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+<<<<<<< Updated upstream
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
             <Receipt className="h-6 w-6" />
@@ -381,6 +389,19 @@ export const CreateOrderPage = () => {
               Chọn sản phẩm từ kho bên phải, lập hợp đồng và chốt đơn hàng nhanh chóng
             </p>
           </div>
+=======
+        <div>
+          <h1 className="text-xl font-bold text-stone-900">
+            {activeTab === 'CUSTOM_ORDER'
+              ? 'Tạo Đơn Hàng May Đo & Thiết Kế'
+              : 'Tạo Đơn Hàng Tại Quầy (POS)'}
+          </h1>
+          <p className="text-xs text-stone-500">
+            {activeTab === 'CUSTOM_ORDER'
+              ? 'Nhập thông số kỹ thuật, tải ảnh thiết kế và gửi Chủ xưởng (Owner) phê duyệt'
+              : 'Chọn sản phẩm từ kho bên phải, lập hợp đồng và chốt đơn hàng nhanh chóng'}
+          </p>
+>>>>>>> Stashed changes
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -412,11 +433,59 @@ export const CreateOrderPage = () => {
             <FileText className="h-3.5 w-3.5 text-amber-600" />
             Danh sách hợp đồng
           </button>
+          <button
+            type="button"
+            onClick={() => navigate('/sale/requests')}
+            className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-amber-700" />
+            Yêu cầu thiết kế
+          </button>
         </div>
       </div>
 
-      {/* ── BỐ CỤC 2 CỘT CHÍNH ───────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      {/* ── THANH CHUYỂN ĐỔI CHẾ ĐỘ ĐẶT HÀNG (TABS) ─────────── */}
+      <div className="flex flex-wrap gap-2 border-b border-stone-200 bg-white px-5 pt-3 rounded-xl shadow-sm">
+        <button
+          type="button"
+          onClick={() => setActiveTab('CUSTOM_ORDER')}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
+            activeTab === 'CUSTOM_ORDER'
+              ? 'border-amber-800 text-amber-900'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <Sparkles className="h-4 w-4 text-amber-700" />
+          Đơn May Đo & Thiết Kế (Sales – Owner – Leader)
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+            Quy trình chính
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('POS_WAREHOUSE')}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
+            activeTab === 'POS_WAREHOUSE'
+              ? 'border-amber-800 text-amber-900'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          Bán hàng có sẵn (POS)
+        </button>
+      </div>
+
+      {activeTab === 'CUSTOM_ORDER' ? (
+        <CustomOrderForm
+          metadata={metadata}
+          products={products}
+          editRequestId={editId}
+          onCancelEdit={() => navigate('/sale/create-order')}
+        />
+      ) : (
+        /* ── BỐ CỤC 2 CỘT CHÍNH POS ───────────────────────────── */
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* ═════════════════════════════════════════════════════
             CỘT BÊN TRÁI: GIỎ HÀNG & THÔNG TIN KHÁCH HÀNG (lg:col-span-5)
             ═════════════════════════════════════════════════════ */}
@@ -566,7 +635,7 @@ export const CreateOrderPage = () => {
 
           {/* Card Form Thông tin Khách hàng */}
           <form
-            onSubmit={handleStartContractCreation}
+            noValidate onSubmit={handleStartContractCreation}
             className="flex flex-col rounded-xl border border-stone-200 bg-white p-5 shadow-sm"
           >
             <div className="mb-4 flex items-center gap-2 border-b border-stone-100 pb-3">
@@ -666,9 +735,26 @@ export const CreateOrderPage = () => {
 
               {/* Tiền đặt cọc */}
               <div>
+<<<<<<< Updated upstream
                 <label className="mb-1 block text-xs font-semibold text-stone-700">
                   Tiền đặt cọc trước (VND)
                 </label>
+=======
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="text-xs font-semibold text-stone-700">
+                    Tiền đặt cọc trước (VND)
+                  </label>
+                  {totalAmount > 10000000 ? (
+                    <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                      Mặc định cọc 30% (Đơn &gt; 10 triệu)
+                    </span>
+                  ) : (
+                    <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
+                      Không bắt buộc cọc (Đơn ≤ 10 triệu)
+                    </span>
+                  )}
+                </div>
+>>>>>>> Stashed changes
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
                   <input
@@ -998,6 +1084,7 @@ export const CreateOrderPage = () => {
           )}
         </div>
       </div>
+      )}
 
       {/* ═════════════════════════════════════════════════════════
           MODAL 1: CHI TIẾT SẢN PHẨM (ProductDetailModal)

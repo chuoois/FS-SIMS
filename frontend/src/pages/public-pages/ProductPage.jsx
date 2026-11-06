@@ -538,7 +538,7 @@ export const ProductPage = () => {
 
   const goTo = (p) => {
     setPage(p);
-    gridTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    gridTopRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   };
 
   const toggleLike = useCallback((id) => {

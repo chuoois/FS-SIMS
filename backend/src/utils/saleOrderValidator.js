@@ -128,6 +128,100 @@ function validateCreateOrderFromContractInput(contractId) {
 }
 
 /**
+ * Validate input khi sales tạo / cập nhật Order Request
+ */
+function validateCreateSalesRequestInput(data = {}) {
+  const {
+    customer_account_id,
+    customerAccountId,
+    contact_name,
+    contactName,
+    contact_phone,
+    contactPhone,
+    contact_email,
+    contactEmail,
+    delivery_address,
+    deliveryAddress,
+    title,
+    description,
+    expected_date,
+    expectedDate,
+    budget_min,
+    budgetMin,
+    budget_max,
+    budgetMax,
+    items,
+    images,
+  } = data;
+
+  const finalName = (contactName || contact_name || '').trim();
+  if (!finalName) {
+    return { isValid: false, error: 'Họ tên khách hàng là bắt buộc.' };
+  }
+  if (finalName.length < 2 || finalName.length > 150) {
+    return { isValid: false, error: 'Họ tên khách hàng phải từ 2 đến 150 ký tự.' };
+  }
+
+  const finalPhone = (contactPhone || contact_phone || '').trim();
+  if (!finalPhone) {
+    return { isValid: false, error: 'Số điện thoại khách hàng là bắt buộc.' };
+  }
+  if (!PHONE_REGEX.test(finalPhone)) {
+    return { isValid: false, error: 'Số điện thoại không hợp lệ (từ 7 đến 20 ký tự số).' };
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return { isValid: false, error: 'Đơn hàng phải có ít nhất một sản phẩm yêu cầu.' };
+  }
+
+  const validatedItems = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const itemName = (it.itemName || it.item_name || '').trim();
+    if (!itemName) {
+      return { isValid: false, error: `Sản phẩm thứ ${i + 1} phải có tên sản phẩm.` };
+    }
+    const qty = parseInt(it.quantity, 10);
+    if (isNaN(qty) || qty <= 0) {
+      return { isValid: false, error: `Số lượng cho sản phẩm thứ ${i + 1} phải lớn hơn 0.` };
+    }
+
+    validatedItems.push({
+      productId: it.productId || it.product_id ? parseInt(it.productId || it.product_id, 10) : null,
+      itemName,
+      categoryId: it.categoryId || it.category_id ? parseInt(it.categoryId || it.category_id, 10) : null,
+      roomId: it.roomId || it.room_id ? parseInt(it.roomId || it.room_id, 10) : null,
+      materialId: it.materialId || it.material_id ? parseInt(it.materialId || it.material_id, 10) : null,
+      colorId: it.colorId || it.color_id ? parseInt(it.colorId || it.color_id, 10) : null,
+      lengthCm: it.lengthCm != null ? parseInt(it.lengthCm, 10) : (it.length_cm != null ? parseInt(it.length_cm, 10) : null),
+      widthCm: it.widthCm != null ? parseInt(it.widthCm, 10) : (it.width_cm != null ? parseInt(it.width_cm, 10) : null),
+      heightCm: it.heightCm != null ? parseInt(it.heightCm, 10) : (it.height_cm != null ? parseInt(it.height_cm, 10) : null),
+      quantity: qty,
+      unitPrice: it.unitPrice != null ? parseInt(it.unitPrice, 10) : (it.unit_price != null ? parseInt(it.unit_price, 10) : null),
+      description: it.description ? String(it.description).trim().slice(0, 500) : null,
+    });
+  }
+
+  return {
+    isValid: true,
+    value: {
+      customerAccountId: customerAccountId || customer_account_id ? parseInt(customerAccountId || customer_account_id, 10) : null,
+      contactName: finalName,
+      contactPhone: finalPhone,
+      contactEmail: (contactEmail || contact_email || '').trim() || null,
+      deliveryAddress: (deliveryAddress || delivery_address || '').trim() || null,
+      title: (title || '').trim() || `Đơn đặt hàng ${finalName}`,
+      description: (description || '').trim() || null,
+      expectedDate: expectedDate || expected_date || null,
+      budgetMin: budgetMin != null ? parseInt(budgetMin, 10) : (budget_min != null ? parseInt(budget_min, 10) : null),
+      budgetMax: budgetMax != null ? parseInt(budgetMax, 10) : (budget_max != null ? parseInt(budget_max, 10) : null),
+      items: validatedItems,
+      images: Array.isArray(images) ? images : [],
+    },
+  };
+}
+
+/**
  * Chuyển đổi dữ liệu Contract sang DTO
  */
 function toContractDTO(raw) {
@@ -208,6 +302,18 @@ function toOrderDTO(raw) {
       productCode: it.product?.product_code || null,
       productName: it.item_name || it.product?.product_name || null,
       imageUrl: it.product?.image_url || null,
+      categoryId: it.category_id,
+      categoryName: it.category?.category_name || null,
+      roomId: it.room_id,
+      roomName: it.room?.room_name || null,
+      materialId: it.material_id,
+      materialName: it.material?.material_name || null,
+      colorId: it.color_id,
+      colorName: it.color?.color_name || null,
+      hexValue: it.color?.hex_value || null,
+      lengthCm: it.length_cm,
+      widthCm: it.width_cm,
+      heightCm: it.height_cm,
       quantity: it.quantity,
       unitPrice: it.unit_price,
       totalPrice: it.quantity * it.unit_price,
@@ -216,11 +322,89 @@ function toOrderDTO(raw) {
   };
 }
 
+/**
+ * Chuyển đổi dữ liệu OrderRequest sang DTO
+ */
+function toRequestDTO(raw) {
+  if (!raw) return null;
+  const req = raw.toJSON ? raw.toJSON() : raw;
+
+  return {
+    requestId: req.request_id,
+    requestCode: req.request_code,
+    orderType: req.order_type,
+    requestType: req.request_type,
+    customerAccountId: req.customer_account_id,
+    contactName: req.contact_name,
+    contactPhone: req.contact_phone,
+    contactEmail: req.contact_email,
+    deliveryAddress: req.delivery_address,
+    title: req.title,
+    description: req.description,
+    budgetMin: req.budget_min,
+    budgetMax: req.budget_max,
+    expectedDate: req.expected_date,
+    status: req.status,
+    assignedTo: req.assigned_to,
+    assigneeName: req.assignee?.full_name || null,
+    quotedPrice: req.quoted_price,
+    quotedAt: req.quoted_at,
+    approvedAt: req.approved_at,
+    staffNote: req.staff_note,
+    rejectReason: req.reject_reason,
+    createBy: req.createby,
+    modifieBy: req.modifieby,
+    createdAt: req.createdate,
+    updatedAt: req.modifiedate,
+    contract: req.contract ? {
+      contractId: req.contract.contract_id,
+      contractCode: req.contract.contract_code,
+      status: req.contract.status,
+    } : null,
+    customer: req.customer ? {
+      userAccountId: req.customer.user_account_id,
+      fullName: req.customer.full_name,
+      email: req.customer.email,
+      phoneNumber: req.customer.phone_number,
+    } : null,
+    items: (req.items || []).map((it) => ({
+      requestItemId: it.request_item_id,
+      productId: it.product_id,
+      productCode: it.product?.product_code || null,
+      productName: it.product?.product_name || null,
+      itemName: it.item_name,
+      categoryId: it.category_id,
+      categoryName: it.category?.category_name || null,
+      roomId: it.room_id,
+      roomName: it.room?.room_name || null,
+      materialId: it.material_id,
+      materialName: it.material?.material_name || null,
+      colorId: it.color_id,
+      colorName: it.color?.color_name || null,
+      hexValue: it.color?.hex_value || null,
+      lengthCm: it.length_cm,
+      widthCm: it.width_cm,
+      heightCm: it.height_cm,
+      quantity: it.quantity,
+      unitPrice: it.unit_price,
+      description: it.description,
+    })),
+    images: (req.images || []).map((img) => ({
+      requestImageId: img.request_image_id,
+      requestItemId: img.request_item_id,
+      imageUrl: img.image_url,
+      sortOrder: img.sort_order,
+    })),
+  };
+}
+
 module.exports = {
   validateCreateOfflineContractInput,
   validateSignContractInput,
   validateCreateOrderFromContractInput,
+  validateCreateSalesRequestInput,
   toContractDTO,
   toOrderDTO,
+  toRequestDTO,
 };
 

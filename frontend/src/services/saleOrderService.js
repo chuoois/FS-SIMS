@@ -1,12 +1,12 @@
 // =========================================================
 // saleOrderService.js
-// Service gọi API Riêng biệt cho Bán hàng & Tạo đơn hàng tại quầy (Sale POS)
+// Service gọi API Riêng biệt cho Bán hàng & Quản lý Đơn hàng (Sale Role)
 // =========================================================
 
 import api from './api';
 
 /**
- * 1. Lấy danh sách sản phẩm có trong kho dành cho POS
+ * 1. Lấy danh sách sản phẩm có trong kho dành cho POS / Đặt hàng
  */
 export async function getWarehouseProducts(params = {}) {
   const response = await api.get('/sale-orders/products', { params });
@@ -22,10 +22,18 @@ export async function getProductDetail(productId) {
 }
 
 /**
- * 3. Lấy metadata (danh mục, phòng...) phục vụ lọc ở POS
+ * 3. Lấy metadata (danh mục, phòng, chất liệu, màu sắc...)
  */
 export async function getProductMetadata() {
   const response = await api.get('/sale-orders/metadata');
+  return response.data;
+}
+
+/**
+ * 3b. Lấy danh sách khách hàng phục vụ dropdown trong form đặt hàng của Sales
+ */
+export async function getCustomers(params = {}) {
+  const response = await api.get('/sale-orders/customers', { params });
   return response.data;
 }
 
@@ -85,3 +93,61 @@ export async function getOrderById(orderId) {
   return response.data;
 }
 
+<<<<<<< Updated upstream
+=======
+/**
+ * 11. Lấy danh sách yêu cầu của khách hàng (dành cho Sale)
+ */
+export async function getRequests(params = {}) {
+  const response = await api.get('/sale-orders/requests', { params });
+  return response.data;
+}
+
+/**
+ * 12. Lấy chi tiết 1 yêu cầu
+ */
+export async function getRequestById(requestId) {
+  const response = await api.get(`/sale-orders/requests/${requestId}`);
+  return response.data;
+}
+
+/**
+ * 13. Sales tạo đơn đặt hàng mới gửi Chủ xưởng duyệt thiết kế
+ */
+export async function createSalesOrderRequest(payload) {
+  const response = await api.post('/sale-orders/requests', payload);
+  return response.data;
+}
+
+/**
+ * 14. Sales chỉnh sửa đơn đặt hàng (khi PENDING hoặc khi Owner yêu cầu sửa)
+ */
+export async function updateSalesOrderRequest(requestId, payload) {
+  const response = await api.put(`/sale-orders/requests/${requestId}`, payload);
+  return response.data;
+}
+
+/**
+ * 15. Chuyển yêu cầu thành hợp đồng DRAFT (sau khi Owner chốt thiết kế)
+ */
+export async function convertRequestToContract(requestId, payload = {}) {
+  const response = await api.post(`/sale-orders/requests/${requestId}/convert-to-contract`, payload);
+  return response.data;
+}
+
+/**
+ * 16. Sales xác nhận giao hàng (READY_TO_DELIVER -> DELIVERING)
+ */
+export async function confirmOrderDelivery(orderId, payload = {}) {
+  const response = await api.post(`/sale-orders/orders/${orderId}/deliver`, payload);
+  return response.data;
+}
+
+/**
+ * 17. Sales xác nhận giao hàng hoàn tất (DELIVERING -> COMPLETED)
+ */
+export async function completeOrderDelivery(orderId, payload = {}) {
+  const response = await api.post(`/sale-orders/orders/${orderId}/complete`, payload);
+  return response.data;
+}
+>>>>>>> Stashed changes

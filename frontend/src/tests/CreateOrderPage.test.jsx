@@ -51,6 +51,10 @@ describe('CreateOrderPage (POS)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    saleOrderService.getCustomers.mockResolvedValue({
+      data: [{ userId: 10, fullName: 'Khách hàng VIP', phone: '0988777666', email: 'vip@gmail.com', address: '123 Kim Mã, Hà Nội' }],
+    });
+    saleOrderService.createSalesOrderRequest.mockResolvedValue({ data: { requestId: 101, requestCode: 'ORQ-202611-001' } });
     saleOrderService.getProductMetadata.mockResolvedValue({
       data: {
         categories: [{ category_id: 1, category_name: 'Bàn' }],
@@ -70,10 +74,10 @@ describe('CreateOrderPage (POS)', () => {
     });
   });
 
-  const renderComponent = () =>
+  const renderComponent = (props = { initialTab: 'POS_WAREHOUSE' }) =>
     render(
       <BrowserRouter>
-        <CreateOrderPage />
+        <CreateOrderPage {...props} />
       </BrowserRouter>
     );
 
@@ -213,6 +217,57 @@ describe('CreateOrderPage (POS)', () => {
     await waitFor(() => {
       expect(screen.getByText(/ĐÃ TẠO ĐƠN HÀNG THÀNH CÔNG!/i)).toBeInTheDocument();
       expect(screen.getByText('ORD-20261028-0001')).toBeInTheDocument();
+    });
+  });
+
+  it('Tạo đơn hàng may đo và thiết kế gửi Chủ xưởng phê duyệt (Quy trình Sales - Owner - Leader)', async () => {
+    const user = userEvent.setup();
+    renderComponent({ initialTab: 'CUSTOM_ORDER' });
+
+    // 1. Kiểm tra tiêu đề form may đo
+    expect(screen.getByText(/Tạo Đơn Hàng May Đo & Thiết Kế/i)).toBeInTheDocument();
+    expect(screen.getByText(/1. Thông tin Khách hàng & Kế hoạch/i)).toBeInTheDocument();
+    expect(screen.getByText(/2. Danh sách Sản phẩm May đo/i)).toBeInTheDocument();
+
+    // 2. Chọn khách hàng từ dropdown
+    await waitFor(() => {
+      expect(screen.getByText(/Khách hàng VIP/i)).toBeInTheDocument();
+    });
+
+    const customerSelect = screen.getAllByRole('combobox')[0];
+    await user.selectOptions(customerSelect, '10');
+
+    // Tự động điền thông tin khách hàng
+    expect(screen.getByDisplayValue('Khách hàng VIP')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('0988777666')).toBeInTheDocument();
+
+    // 3. Nhập kích thước & số lượng cho sản phẩm #1
+    const lengthInput = screen.getByPlaceholderText('VD: 180');
+    const widthInput = screen.getByPlaceholderText('VD: 90');
+    const heightInput = screen.getByPlaceholderText('VD: 75');
+    await user.type(lengthInput, '200');
+    await user.type(widthInput, '100');
+    await user.type(heightInput, '78');
+
+    // 4. Bấm nút xem lại và gửi duyệt
+    const reviewBtn = screen.getByRole('button', { name: /XEM LẠI & GỬI CHỦ XƯỞNG DUYỆT THIẾT KẾ/i });
+    await user.click(reviewBtn);
+
+    // 5. Kiểm tra modal xác nhận xuất hiện
+    await waitFor(() => {
+      expect(screen.getByText(/Xác nhận Đơn hàng May đo & Thiết Kế/i)).toBeInTheDocument();
+      expect(screen.getByText('200 x 100 x 78 cm')).toBeInTheDocument();
+    });
+
+    // 6. Xác nhận gửi đơn
+    const confirmBtn = screen.getByRole('button', { name: /Xác nhận gửi Chủ xưởng phê duyệt/i });
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(saleOrderService.createSalesOrderRequest).toHaveBeenCalledTimes(1);
+      expect(toast.success).toHaveBeenCalledWith(
+        expect.stringMatching(/Đã gửi đơn hàng thiết kế cho Chủ xưởng duyệt thành công!/i)
+      );
     });
   });
 });

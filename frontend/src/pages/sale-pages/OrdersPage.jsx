@@ -21,7 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getOrders, getOrderById } from '../../services/saleOrderService';
+import { getOrders, getOrderById, confirmOrderDelivery, completeOrderDelivery } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
 
 const formatVND = (val) =>
@@ -43,7 +43,20 @@ const getStatusBadge = (status) => {
           Đang sản xuất
         </span>
       );
+    case 'UNDER_INSPECTION':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-800">
+          <Clock className="h-3 w-3" />
+          Chờ nghiệm thu
+        </span>
+      );
     case 'READY_TO_DELIVER':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2.5 py-0.5 text-xs font-semibold text-cyan-800">
+          <Truck className="h-3 w-3" />
+          Chờ giao hàng
+        </span>
+      );
     case 'DELIVERING':
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">
@@ -87,6 +100,81 @@ export const OrdersPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+<<<<<<< Updated upstream
+=======
+  // Modal Giao hàng & Hoàn tất
+  const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
+  const [deliveryOrder, setDeliveryOrder] = useState(null);
+  const [deliveryAddressInput, setDeliveryAddressInput] = useState('');
+  const [deliveryDateInput, setDeliveryDateInput] = useState('');
+  const [deliveryNoteInput, setDeliveryNoteInput] = useState('');
+  const [isDelivering, setIsDelivering] = useState(false);
+
+  const handleOpenDeliveryModal = (order) => {
+    setDeliveryOrder(order);
+    setDeliveryAddressInput(order.deliveryAddress || '');
+    setDeliveryDateInput(new Date().toISOString().substring(0, 10));
+    setDeliveryNoteInput('');
+    setDeliveryModalOpen(true);
+  };
+
+  const handleConfirmDelivery = async (e) => {
+    e.preventDefault();
+    if (!deliveryOrder) return;
+    try {
+      setIsDelivering(true);
+      await confirmOrderDelivery(deliveryOrder.orderId, {
+        deliveryAddress: deliveryAddressInput.trim() || undefined,
+        deliveryDate: deliveryDateInput || undefined,
+        note: deliveryNoteInput.trim() || undefined,
+      });
+      toast.success(`Đơn hàng ${deliveryOrder.orderCode} đã chuyển sang trạng thái Đang giao hàng!`);
+      setDeliveryModalOpen(false);
+      fetchOrdersList();
+    } catch (err) {
+      console.error('Lỗi xác nhận giao hàng:', err);
+      toast.error(err.response?.data?.message || 'Không thể xác nhận giao hàng');
+    } finally {
+      setIsDelivering(false);
+    }
+  };
+
+  const handleCompleteOrder = async (order) => {
+    if (!window.confirm(`Xác nhận khách hàng đã nhận đủ sản phẩm và hoàn tất đơn hàng ${order.orderCode}?`)) return;
+    try {
+      await completeOrderDelivery(order.orderId, {
+        note: 'Giao hàng thành công và khách hàng đã nghiệm thu',
+      });
+      toast.success(`Đơn hàng ${order.orderCode} đã hoàn tất thành công (COMPLETED)!`);
+      fetchOrdersList();
+    } catch (err) {
+      console.error('Lỗi hoàn tất đơn hàng:', err);
+      toast.error(err.response?.data?.message || 'Không thể hoàn tất đơn hàng');
+    }
+  };
+
+  // ── Đếm số lượng bộ lọc đang kích hoạt ────────────────────────
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (search.trim()) count += 1;
+    if (statusFilter !== 'ALL') count += 1;
+    if (orderTypeFilter !== 'ALL') count += 1;
+    if (sortBy !== 'NEWEST') count += 1;
+    return count;
+  }, [search, statusFilter, orderTypeFilter, sortBy]);
+
+  // ── Đặt lại toàn bộ bộ lọc ───────────────────────────────────
+  const handleResetFilters = () => {
+    setSearch('');
+    setSearchBy('ALL');
+    setStatusFilter('ALL');
+    setOrderTypeFilter('ALL');
+    setSortBy('NEWEST');
+    setPage(1);
+  };
+
+  // ── Gọi API lấy danh sách đơn hàng ───────────────────────────
+>>>>>>> Stashed changes
   const fetchOrdersList = useCallback(async () => {
     try {
       setLoading(true);
@@ -240,6 +328,7 @@ export const OrdersPage = () => {
                     </td>
                     <td className="px-4 py-3 text-center">{getStatusBadge(o.status)}</td>
                     <td className="px-4 py-3 text-center">
+<<<<<<< Updated upstream
                       <button
                         onClick={() => handleViewDetail(o)}
                         className="inline-flex items-center gap-1 rounded border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
@@ -247,6 +336,35 @@ export const OrdersPage = () => {
                         <Eye className="h-3 w-3 text-stone-500" />
                         Xem
                       </button>
+=======
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => handleViewDetail(o)}
+                          className="inline-flex items-center gap-1 rounded border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 shadow-sm hover:bg-stone-100 transition"
+                        >
+                          <Eye className="h-3 w-3 text-stone-500" />
+                          Xem
+                        </button>
+                        {o.status === 'READY_TO_DELIVER' && (
+                          <button
+                            onClick={() => handleOpenDeliveryModal(o)}
+                            className="inline-flex items-center gap-1 rounded bg-cyan-700 px-2 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-cyan-800 transition"
+                          >
+                            <Truck className="h-3 w-3" />
+                            Giao hàng
+                          </button>
+                        )}
+                        {o.status === 'DELIVERING' && (
+                          <button
+                            onClick={() => handleCompleteOrder(o)}
+                            className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-800 transition"
+                          >
+                            <CheckCircle2 className="h-3 w-3" />
+                            Hoàn tất
+                          </button>
+                        )}
+                      </div>
+>>>>>>> Stashed changes
                     </td>
                   </tr>
                 ))
@@ -359,6 +477,79 @@ export const OrdersPage = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Modal Xác nhận Giao hàng ──────────────────────────── */}
+      {deliveryModalOpen && deliveryOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <form onSubmit={handleConfirmDelivery} className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-stone-200 bg-stone-900 px-5 py-3.5 text-white">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 text-cyan-400" />
+                <h3 className="text-base font-bold">
+                  Xác nhận Giao hàng: #{deliveryOrder.orderCode}
+                </h3>
+              </div>
+              <button type="button" onClick={() => setDeliveryModalOpen(false)} className="rounded-lg p-1 text-stone-400 hover:bg-stone-800">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5 text-xs text-stone-800">
+              <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+                <p className="font-semibold text-cyan-900">Đơn hàng đã qua nghiệm thu chất lượng (Chủ xưởng đạt yêu cầu)</p>
+                <p className="text-cyan-800 text-[11px] mt-0.5">Xác nhận chuyển trạng thái sang ĐANG GIAO HÀNG (DELIVERING) để đội ngũ giao nhận tiến hành chuyển hàng cho khách.</p>
+              </div>
+
+              <div>
+                <label className="mb-1 block font-semibold text-stone-700">Khách hàng nhận:</label>
+                <p className="font-bold text-stone-900 text-sm">{deliveryOrder.contactName} - {deliveryOrder.contactPhone}</p>
+              </div>
+
+              <div>
+                <label className="mb-1 block font-semibold text-stone-700">Địa chỉ giao hàng <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={deliveryAddressInput}
+                  onChange={(e) => setDeliveryAddressInput(e.target.value)}
+                  placeholder="Nhập địa chỉ nhận hàng chi tiết..."
+                  className="w-full rounded-lg border border-stone-300 p-2 text-xs focus:border-cyan-600 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-semibold text-stone-700">Ngày xuất giao</label>
+                <input
+                  type="date"
+                  value={deliveryDateInput}
+                  onChange={(e) => setDeliveryDateInput(e.target.value)}
+                  className="w-full rounded-lg border border-stone-300 p-2 text-xs focus:border-cyan-600 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-semibold text-stone-700">Ghi chú vận chuyển (nếu có)</label>
+                <textarea
+                  rows="2"
+                  value={deliveryNoteInput}
+                  onChange={(e) => setDeliveryNoteInput(e.target.value)}
+                  placeholder="Lưu ý giờ giao, liên hệ bảo vệ hoặc số tầng..."
+                  className="w-full rounded-lg border border-stone-300 p-2 text-xs focus:border-cyan-600 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-stone-200 bg-stone-50 px-5 py-3">
+              <button type="button" onClick={() => setDeliveryModalOpen(false)} className="rounded-lg border border-stone-300 px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100">
+                Hủy
+              </button>
+              <button type="submit" disabled={isDelivering} className="flex items-center gap-1.5 rounded-lg bg-cyan-700 px-5 py-2 font-bold text-white hover:bg-cyan-800 disabled:opacity-50">
+                {isDelivering ? 'Đang cập nhật...' : 'Xác nhận Bắt đầu Giao'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
