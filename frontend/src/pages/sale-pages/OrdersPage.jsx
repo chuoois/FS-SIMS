@@ -28,7 +28,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getOrders, getOrderById } from '../../services/saleOrderService';
+import { getOrders, getOrderById, confirmOrderDelivery, completeOrderDelivery } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
 
 const formatVND = (val) =>
@@ -92,6 +92,43 @@ export const OrdersPage = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [orderTypeFilter, setOrderTypeFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('NEWEST');
+  const [deliveryActionLoading, setDeliveryActionLoading] = useState(false);
+
+  const handleDeliverOrder = async (orderId) => {
+    if (!window.confirm('Xác nhận bắt đầu xuất kho và giao đơn hàng này cho khách hàng?')) return;
+    try {
+      setDeliveryActionLoading(true);
+      await confirmOrderDelivery(orderId);
+      toast.success('Đã kích hoạt giao hàng! Đơn hàng chuyển sang trạng thái Đang giao hàng.');
+      fetchOrders();
+      if (selectedOrder && selectedOrder.orderId === orderId) {
+        setSelectedOrder((prev) => ({ ...prev, status: 'DELIVERING' }));
+      }
+    } catch (err) {
+      console.error('Lỗi khi giao hàng:', err);
+      toast.error(err.response?.data?.message || 'Không thể kích hoạt giao hàng.');
+    } finally {
+      setDeliveryActionLoading(false);
+    }
+  };
+
+  const handleCompleteOrder = async (orderId) => {
+    if (!window.confirm('Xác nhận khách hàng đã nhận đủ sản phẩm và hoàn tất thanh toán (COMPLETED)?')) return;
+    try {
+      setDeliveryActionLoading(true);
+      await completeOrderDelivery(orderId);
+      toast.success('Đã hoàn tất đơn hàng thành công (COMPLETED)!');
+      fetchOrders();
+      if (selectedOrder && selectedOrder.orderId === orderId) {
+        setSelectedOrder((prev) => ({ ...prev, status: 'COMPLETED' }));
+      }
+    } catch (err) {
+      console.error('Lỗi khi hoàn tất đơn:', err);
+      toast.error(err.response?.data?.message || 'Không thể hoàn tất đơn hàng.');
+    } finally {
+      setDeliveryActionLoading(false);
+    }
+  };
 
   // ── Phân trang ──────────────────────────────────────────────
   const [page, setPage] = useState(1);

@@ -108,3 +108,43 @@ export async function convertRequestToContract(requestId, payload = {}) {
   const response = await api.post(`/sale-orders/requests/${requestId}/convert-to-contract`, payload);
   return response.data;
 }
+
+/**
+ * 14. Lấy danh sách khách hàng phục vụ dropdown/autocomplete cho Sales
+ */
+export async function getCustomers(params = {}) {
+  const response = await api.get('/sale-orders/customers', { params });
+  return response.data;
+}
+
+/**
+ * 15. Sales tạo đơn yêu cầu thiết kế / may đo riêng biệt (Order Request)
+ */
+export async function createSalesOrderRequest(payload) {
+  const response = await api.post('/sale-orders/requests', payload);
+  return response.data;
+}
+
+/**
+ * 16. Sales cập nhật lại đơn yêu cầu (khi Owner yêu cầu sửa thiết kế)
+ */
+export async function updateSalesOrderRequest(requestId, payload) {
+  const response = await api.put(`/sale-orders/requests/${requestId}`, payload);
+  return response.data;
+}
+
+/**
+ * 17. Sales kích hoạt giao hàng (khi Owner nghiệm thu đạt READY_TO_DELIVER)
+ */
+export async function confirmOrderDelivery(orderId, payload = {}) {
+  const response = await api.post(`/sale-orders/orders/${orderId}/deliver`, payload);
+  return response.data;
+}
+
+/**
+ * 18. Sales xác nhận đã giao hàng thành công -> Hoàn tất đơn COMPLETED
+ */
+export async function completeOrderDelivery(orderId, payload = {}) {
+  const response = await api.post(`/sale-orders/orders/${orderId}/complete`, payload);
+  return response.data;
+}

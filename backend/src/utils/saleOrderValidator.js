@@ -1,6 +1,6 @@
 // =========================================================
 // saleOrderValidator.js
-// Validation & DTO chuyên biệt cho Luồng Bán hàng tại quầy (Role Sale POS)
+// Validation & DTO chuyên biệt cho Luồng Bán hàng tại quầy (Role Sale POS) & May đo (Order Request)
 // Thuộc utils/ -> Dễ unit test, hàm thuần không phụ thuộc DB/network
 // =========================================================
 
@@ -144,6 +144,72 @@ function validateCreateOrderFromContractInput(contractId) {
 }
 
 /**
+ * Validate dữ liệu đầu vào khi Sales tạo đơn đặt hàng may đo/thiết kế (Order Request)
+ */
+function validateCreateSalesRequestInput(data = {}) {
+  const {
+    customerAccountId,
+    contactName,
+    contactPhone,
+    contactEmail,
+    deliveryAddress,
+    title,
+    description,
+    budgetMin,
+    budgetMax,
+    expectedDate,
+    orderType = 'CUSTOM',
+    items = [],
+    images = [],
+  } = data;
+
+  if (!contactName || typeof contactName !== 'string' || !contactName.trim()) {
+    return { isValid: false, error: 'Họ tên khách hàng là bắt buộc.' };
+  }
+  if (!contactPhone || typeof contactPhone !== 'string' || !contactPhone.trim()) {
+    return { isValid: false, error: 'Số điện thoại khách hàng là bắt buộc.' };
+  }
+  if (!PHONE_REGEX.test(contactPhone.trim())) {
+    return { isValid: false, error: 'Số điện thoại khách hàng không hợp lệ.' };
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return { isValid: false, error: 'Yêu cầu phải có ít nhất một sản phẩm.' };
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const name = it.itemName || it.item_name;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return { isValid: false, error: `Sản phẩm thứ ${i + 1} phải có tên sản phẩm.` };
+    }
+    const qty = Number(it.quantity);
+    if (isNaN(qty) || qty <= 0) {
+      return { isValid: false, error: `Số lượng của sản phẩm "${name}" phải lớn hơn 0.` };
+    }
+  }
+
+  return {
+    isValid: true,
+    data: {
+      customerAccountId: customerAccountId ? Number(customerAccountId) : null,
+      contactName: contactName.trim(),
+      contactPhone: contactPhone.trim(),
+      contactEmail: contactEmail ? String(contactEmail).trim() : null,
+      deliveryAddress: deliveryAddress ? String(deliveryAddress).trim() : null,
+      title: title ? String(title).trim() : null,
+      description: description ? String(description).trim() : null,
+      budgetMin: budgetMin !== undefined && budgetMin !== null ? Number(budgetMin) : null,
+      budgetMax: budgetMax !== undefined && budgetMax !== null ? Number(budgetMax) : null,
+      expectedDate: expectedDate || null,
+      orderType: orderType || 'CUSTOM',
+      items,
+      images,
+    },
+  };
+}
+
+/**
  * Chuyển đổi dữ liệu Contract sang DTO
  */
 function toContractDTO(raw) {
@@ -214,6 +280,8 @@ function toOrderDTO(raw) {
     deliveredDate: order.delivered_date,
     assignedTo: order.assigned_to,
     staffName: order.staff?.full_name || null,
+    leaderId: order.assigned_to,
+    leaderName: order.leader?.full_name || order.staff?.full_name || null,
     note: order.note,
     createdAt: order.createdate,
     updatedAt: order.modifiedate,
@@ -228,7 +296,72 @@ function toOrderDTO(raw) {
       unitPrice: it.unit_price,
       totalPrice: it.quantity * it.unit_price,
       description: it.description,
+      lengthCm: it.length_cm,
+      widthCm: it.width_cm,
+      heightCm: it.height_cm,
     })),
+  };
+}
+
+/**
+ * Chuyển đổi dữ liệu OrderRequest sang DTO
+ */
+function toRequestDTO(raw) {
+  if (!raw) return null;
+  const req = raw.toJSON ? raw.toJSON() : raw;
+
+  return {
+    requestId: req.request_id || req.requestId,
+    requestCode: req.request_code || req.requestCode,
+    orderType: req.order_type || req.orderType || 'CUSTOM',
+    customerAccountId: req.customer_account_id || req.customerAccountId || null,
+    customerName: req.customer?.full_name || req.customerName || req.contact_name || req.contactName || null,
+    contactName: req.contact_name || req.contactName || null,
+    contactPhone: req.contact_phone || req.contactPhone || null,
+    contactEmail: req.contact_email || req.contactEmail || null,
+    deliveryAddress: req.delivery_address || req.deliveryAddress || null,
+    title: req.title || null,
+    description: req.description || null,
+    budgetMin: Number(req.budget_min ?? req.budgetMin) || 0,
+    budgetMax: Number(req.budget_max ?? req.budgetMax) || 0,
+    expectedDate: req.expected_date || req.expectedDate || null,
+    status: req.status || 'PENDING',
+    rejectReason: req.reject_reason || req.rejectReason || null,
+    staffNote: req.staff_note || req.staffNote || null,
+    assignedTo: req.assigned_to || req.assignedTo || null,
+    assigneeName: req.assignee?.full_name || req.assigneeName || null,
+    approvedAt: req.approved_at || req.approvedAt || null,
+    contractId: req.contract?.contract_id || req.contractId || null,
+    contractCode: req.contract?.contract_code || req.contractCode || null,
+    contractStatus: req.contract?.status || req.contractStatus || null,
+    createdAt: req.createdate || req.createdAt || null,
+    updatedAt: req.modifiedate || req.updatedAt || null,
+    items: (req.items || []).map((it) => ({
+      requestItemId: it.request_item_id || it.requestItemId,
+      productId: it.product_id || it.productId || null,
+      itemName: it.item_name || it.itemName || null,
+      categoryId: it.category_id || it.categoryId || null,
+      roomId: it.room_id || it.roomId || null,
+      materialId: it.material_id || it.materialId || null,
+      colorId: it.color_id || it.colorId || null,
+      lengthCm: it.length_cm ?? it.lengthCm ?? null,
+      widthCm: it.width_cm ?? it.widthCm ?? null,
+      heightCm: it.height_cm ?? it.heightCm ?? null,
+      quantity: Number(it.quantity) || 1,
+      unitPrice: Number(it.unit_price ?? it.unitPrice) || 0,
+      totalPrice: (Number(it.quantity) || 1) * (Number(it.unit_price ?? it.unitPrice) || 0),
+      description: it.description || null,
+      technicalNotes: it.description || it.technicalNotes || it.technical_notes || null,
+    })),
+    images: (req.images || []).map((img) => {
+      if (typeof img === 'string') return img;
+      return {
+        requestImageId: img.request_image_id || img.requestImageId,
+        requestItemId: img.request_item_id || img.requestItemId || null,
+        imageUrl: img.image_url || img.imageUrl,
+        sortOrder: img.sort_order ?? img.sortOrder ?? 0,
+      };
+    }),
   };
 }
 
@@ -236,6 +369,8 @@ module.exports = {
   validateCreateOfflineContractInput,
   validateSignContractInput,
   validateCreateOrderFromContractInput,
+  validateCreateSalesRequestInput,
   toContractDTO,
   toOrderDTO,
+  toRequestDTO,
 };

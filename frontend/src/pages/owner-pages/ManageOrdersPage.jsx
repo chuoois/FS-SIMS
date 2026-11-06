@@ -32,6 +32,7 @@ import {
   CreditCard,
   Package,
   FileText,
+  Hammer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -40,8 +41,12 @@ import {
   getOrderDetail,
   cancelOrder as cancelOrderApi,
   updateOrderStatus as updateOrderStatusApi,
+  getStaffLeaders,
+  assignLeaderToOrder,
+  inspectOrder,
 } from '../../services/orderManagementService';
 import { TablePagination } from '../../components/common/TablePagination';
+import OwnerRequestsTab from './OwnerRequestsTab';
 
 // ─── Hằng số ──────────────────────────────────────────────
 const STATUSES = ['ALL', 'NEW', 'CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'];
@@ -466,6 +471,82 @@ export function ManageOrdersPage() {
   const [cancelOrder, setCancelOrder] = useState(null);
   const [advanceLoadingId, setAdvanceLoadingId] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('ORDERS'); // 'ORDERS' | 'REQUESTS'
+
+  // Modal Phân công Tổ trưởng
+  const [assignLeaderOrder, setAssignLeaderOrder] = useState(null);
+  const [leaders, setLeaders] = useState([]);
+  const [selectedLeaderId, setSelectedLeaderId] = useState('');
+  const [assignNote, setAssignNote] = useState('');
+  const [assignLoading, setAssignLoading] = useState(false);
+
+  const handleOpenAssignLeader = async (order) => {
+    setAssignLeaderOrder(order);
+    try {
+      const res = await getStaffLeaders();
+      const list = res.leaders || [];
+      setLeaders(list);
+      if (list.length > 0) {
+        setSelectedLeaderId(list[0].user_account_id);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách tổ trưởng:', err);
+    }
+  };
+
+  const handleConfirmAssignLeader = async (e) => {
+    e.preventDefault();
+    if (!assignLeaderOrder || !selectedLeaderId) return;
+    try {
+      setAssignLoading(true);
+      await assignLeaderToOrder(assignLeaderOrder.orderId, {
+        leaderId: selectedLeaderId,
+        note: assignNote,
+      });
+      toast.success('Đã phân công Tổ trưởng cho đơn hàng #' + assignLeaderOrder.orderCode);
+      setAssignLeaderOrder(null);
+      setAssignNote('');
+      fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể phân công Tổ trưởng.');
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  // Modal Nghiệm thu chất lượng
+  const [inspectTarget, setInspectTarget] = useState(null);
+  const [inspectResult, setInspectResult] = useState('PASSED');
+  const [inspectReason, setInspectReason] = useState('');
+  const [inspectLoading, setInspectLoading] = useState(false);
+
+  const handleConfirmInspect = async (e) => {
+    e.preventDefault();
+    if (!inspectTarget) return;
+    if (inspectResult === 'FAILED' && !inspectReason.trim()) {
+      toast.error('Vui lòng cung cấp lý do không đạt để xưởng khắc phục.');
+      return;
+    }
+    try {
+      setInspectLoading(true);
+      await inspectOrder(inspectTarget.orderId, {
+        result: inspectResult,
+        reason: inspectReason.trim() || undefined,
+      });
+      toast.success(
+        inspectResult === 'PASSED'
+          ? 'Nghiệm thu ĐẠT! Đơn hàng #' + inspectTarget.orderCode + ' chuyển sang trạng thái Sẵn sàng giao hàng.'
+          : 'Đã trả lại đơn hàng #' + inspectTarget.orderCode + ' cho xưởng sản xuất lại.'
+      );
+      setInspectTarget(null);
+      setInspectReason('');
+      fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể hoàn tất nghiệm thu.');
+    } finally {
+      setInspectLoading(false);
+    }
+  };
 
   // ── Fetch danh sách ──────────────────────────────────────
   const fetchOrders = useCallback(async () => {
@@ -591,6 +672,40 @@ export function ManageOrdersPage() {
 
   return (
     <div className="space-y-6">
+      {/* ── Tabs Chuyển đổi giữa Đơn hàng và Yêu cầu thiết kế ── */}
+      <div className="flex border-b border-stone-200 gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('ORDERS')}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
+            activeTab === 'ORDERS'
+              ? 'border-amber-800 text-amber-900 bg-amber-50/50'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <Package className="h-4 w-4" />
+          <span>Danh sách đơn hàng (Orders)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('REQUESTS')}
+          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
+            activeTab === 'REQUESTS'
+              ? 'border-amber-800 text-amber-900 bg-amber-50/50'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <ClipboardList className="h-4 w-4" />
+          <span>Thẩm định yêu cầu thiết kế (Design Requests)</span>
+        </button>
+      </div>
+
+      {activeTab === 'REQUESTS' ? (
+        <OwnerRequestsTab />
+      ) : (
+        <>
+
       {/* ── Tiêu đề & Nút thao tác ───────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -839,6 +954,34 @@ export function ManageOrdersPage() {
                       {/* Thao tác */}
                       <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
                         <div className="inline-flex items-center gap-1.5">
+                          {/* Nút Giao việc cho Leader khi CONFIRMED */}
+                          {order.status === 'CONFIRMED' && (
+                            <button
+                              onClick={() => handleOpenAssignLeader(order)}
+                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+                              title="Phân công Tổ trưởng xưởng"
+                            >
+                              <Hammer className="h-3.5 w-3.5" />
+                              <span>Giao việc</span>
+                            </button>
+                          )}
+
+                          {/* Nút Nghiệm thu khi UNDER_INSPECTION */}
+                          {order.status === 'UNDER_INSPECTION' && (
+                            <button
+                              onClick={() => {
+                                setInspectTarget(order);
+                                setInspectResult('PASSED');
+                                setInspectReason('');
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-800 shadow-sm transition hover:bg-purple-100 active:scale-95"
+                              title="Nghiệm thu chất lượng"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              <span>Nghiệm thu</span>
+                            </button>
+                          )}
+
                           {/* Nút Xem chi tiết */}
                           <button
                             onClick={() => handleViewDetail(order)}
@@ -923,6 +1066,146 @@ export function ManageOrdersPage() {
           onClose={() => setCancelOrder(null)}
         />
       )}
+
+      {/* ── Modal Phân công Tổ trưởng ── */}
+      {assignLeaderOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-stone-900 mb-2 flex items-center gap-2">
+              <Hammer className="h-5 w-5 text-amber-800" />
+              Phân công Tổ trưởng sản xuất #{assignLeaderOrder.orderCode}
+            </h3>
+            <p className="text-xs text-stone-500 mb-4">
+              Chọn Tổ trưởng xưởng chịu trách nhiệm bám sát bản vẽ kỹ thuật đã khóa và quản lý tiến độ gia công.
+            </p>
+            <form onSubmit={handleConfirmAssignLeader} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  Chọn Tổ trưởng xưởng:
+                </label>
+                <select
+                  value={selectedLeaderId}
+                  onChange={(e) => setSelectedLeaderId(e.target.value)}
+                  className="w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-amber-800 focus:outline-none bg-white font-medium"
+                >
+                  {leaders.map((ldr) => (
+                    <option key={ldr.user_account_id} value={ldr.user_account_id}>
+                      {ldr.full_name} ({ldr.email || ldr.phone_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  Ghi chú chỉ đạo cho xưởng:
+                </label>
+                <textarea
+                  rows="2"
+                  value={assignNote}
+                  onChange={(e) => setAssignNote(e.target.value)}
+                  placeholder="Ghi chú về thời hạn hoặc tiêu chuẩn đóng gói..."
+                  className="w-full rounded-lg border border-stone-200 p-2 text-xs focus:border-amber-800 focus:outline-none"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAssignLeaderOrder(null)}
+                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={assignLoading}
+                  className="rounded-lg bg-amber-800 px-5 py-2 font-bold text-white hover:bg-amber-900 disabled:opacity-50"
+                >
+                  {assignLoading ? 'Đang giao...' : 'Xác nhận giao việc'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Nghiệm thu chất lượng ── */}
+      {inspectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-stone-900 mb-2 flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-purple-700" />
+              Nghiệm thu chất lượng sản phẩm #{inspectTarget.orderCode}
+            </h3>
+            <p className="text-xs text-stone-500 mb-4">
+              Kiểm tra sản phẩm thực tế theo đúng bản vẽ thiết kế đã khóa. Nếu đạt, đơn hàng sẽ chuyển sang cho Sales để kích hoạt giao hàng.
+            </p>
+            <form onSubmit={handleConfirmInspect} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  Kết quả nghiệm thu:
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-emerald-800">
+                    <input
+                      type="radio"
+                      name="inspectRes"
+                      value="PASSED"
+                      checked={inspectResult === 'PASSED'}
+                      onChange={() => setInspectResult('PASSED')}
+                    />
+                    ĐẠT (Chuyển giao hàng)
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-rose-800">
+                    <input
+                      type="radio"
+                      name="inspectRes"
+                      value="FAILED"
+                      checked={inspectResult === 'FAILED'}
+                      onChange={() => setInspectResult('FAILED')}
+                    />
+                    KHÔNG ĐẠT (Trả xưởng sửa)
+                  </label>
+                </div>
+              </div>
+              {inspectResult === 'FAILED' && (
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">
+                    Lý do không đạt (để Tổ trưởng khắc phục): <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows="3"
+                    required
+                    value={inspectReason}
+                    onChange={(e) => setInspectReason(e.target.value)}
+                    placeholder="VD: Cánh cửa tủ bị xệ 2mm, nước sơn cạnh dưới chưa đều..."
+                    className="w-full rounded-lg border border-red-300 p-2 text-xs focus:border-red-600 focus:outline-none"
+                  />
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setInspectTarget(null)}
+                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={inspectLoading}
+                  className="rounded-lg bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 disabled:opacity-50"
+                >
+                  {inspectLoading ? 'Đang xử lý...' : 'Xác nhận nghiệm thu'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+        </>
+      )}
     </div>
   );
 }
+
+export default ManageOrdersPage;

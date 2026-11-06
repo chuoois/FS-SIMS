@@ -19,6 +19,11 @@ const {
   getRequests,
   getRequestById,
   convertRequestToContract,
+  getCustomers,
+  createSalesRequest,
+  updateSalesRequest,
+  deliverOrder,
+  completeOrder,
 } = require('../controllers/saleOrderController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 
@@ -32,6 +37,9 @@ router.get('/products', getWarehouseProducts);
 router.get('/products/:id', getProductDetail);
 router.get('/metadata', getProductMetadata);
 
+// ── Danh sách khách hàng cho Sales ────────────────────────
+router.get('/customers', getCustomers);
+
 // ── Luồng Hợp đồng (Contract) ──────────────────────────────
 router.post('/contracts', createOfflineContract);
 router.post('/contracts/:id/sign', signContract);
@@ -42,11 +50,14 @@ router.get('/contracts/:id', getContractById);
 router.post('/orders/from-contract/:contractId', createOrderFromContract);
 router.get('/orders', getOrders);
 router.get('/orders/:id', getOrderById);
+router.post('/orders/:id/deliver', deliverOrder);
+router.post('/orders/:id/complete', completeOrder);
 
-// -- Luong Yeu cau cua khach hang (Customer Requests) ----
+// ── Luồng Yêu cầu của khách hàng (Customer Requests) ──────
 router.get('/requests', getRequests);
 router.get('/requests/:id', getRequestById);
+router.post('/requests', createSalesRequest);
+router.put('/requests/:id', updateSalesRequest);
 router.post('/requests/:id/convert-to-contract', convertRequestToContract);
 
 module.exports = router;
-

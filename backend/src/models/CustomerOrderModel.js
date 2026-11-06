@@ -4,6 +4,10 @@ const { CustomerOrderItem } = require('./CustomerOrderItemModel');
 const { Contract } = require('./ContractModel');
 const { ContractItem } = require('./ContractItemModel');
 const { Product } = require('./ProductModel');
+const { ProductCategory } = require('./ProductCategoryModel');
+const { ProductRoom } = require('./ProductRoomModel');
+const { ProductMaterial } = require('./ProductMaterialModel');
+const { ProductColor } = require('./ProductColorModel');
 const { UserAccount } = require('./userAccount.model');
 
 const CustomerOrder = sequelize.define('CustomerOrder', {
@@ -46,13 +50,40 @@ if (!CustomerOrder.associations || !CustomerOrder.associations.items) {
   CustomerOrderItem.belongsTo(CustomerOrder, { foreignKey: 'order_id', as: 'order' });
 }
 if (!CustomerOrder.associations || !CustomerOrder.associations.contract) {
-  CustomerOrder.belongsTo(Contract, { foreignKey: 'contract_id', as: 'contract' });
+  if (typeof Contract === 'function' && typeof Contract.belongsTo === 'function') CustomerOrder.belongsTo(Contract, { foreignKey: 'contract_id', as: 'contract' });
 }
 if (!CustomerOrder.associations || !CustomerOrder.associations.staff) {
   if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') CustomerOrder.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'staff' });
 }
 if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.product) {
-  CustomerOrderItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+  if (typeof Product === 'function' && typeof Product.belongsTo === 'function') {
+    CustomerOrderItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+  }
+}
+if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.category) {
+  if (typeof ProductCategory === 'function' && typeof ProductCategory.belongsTo === 'function') {
+    CustomerOrderItem.belongsTo(ProductCategory, { foreignKey: 'category_id', as: 'category' });
+  }
+}
+if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.room) {
+  if (typeof ProductRoom === 'function' && typeof ProductRoom.belongsTo === 'function') {
+    CustomerOrderItem.belongsTo(ProductRoom, { foreignKey: 'room_id', as: 'room' });
+  }
+}
+if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.material) {
+  if (typeof ProductMaterial === 'function' && typeof ProductMaterial.belongsTo === 'function') {
+    CustomerOrderItem.belongsTo(ProductMaterial, { foreignKey: 'material_id', as: 'material' });
+  }
+}
+if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.color) {
+  if (typeof ProductColor === 'function' && typeof ProductColor.belongsTo === 'function') {
+    CustomerOrderItem.belongsTo(ProductColor, { foreignKey: 'color_id', as: 'color' });
+  }
+}
+if (!CustomerOrder.associations || !CustomerOrder.associations.leader) {
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') {
+    CustomerOrder.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'leader' });
+  }
 }
 
 /**
@@ -501,6 +532,246 @@ async function updateOrderStatus(orderId, newStatus, { updatedBy } = {}) {
   return findOrderById(orderId);
 }
 
+
+/**
+ * Owner phân công Leader phụ trách đơn hàng
+ */
+async function assignLeaderToCustomerOrder(orderId, leaderId, { assignedBy } = {}) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.status !== 'CONFIRMED' && order.status !== 'IN_PRODUCTION') {
+    throw new Error('Chỉ có thể phân công Tổ trưởng khi đơn hàng ở trạng thái ĐÃ XÁC NHẬN hoặc ĐANG SẢN XUẤT.');
+  }
+
+  // Kiểm tra tài khoản leader
+  const leader = await UserAccount.findByPk(leaderId);
+  if (!leader) {
+    throw new Error('Không tìm thấy tài khoản Tổ trưởng.');
+  }
+
+  await order.update({
+    assigned_to: leaderId,
+    modifieby: assignedBy || null,
+  });
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Leader tiếp nhận đơn hàng vào sản xuất
+ */
+async function leaderAcceptOrder(orderId, leaderId) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+    throw new Error('Bạn không được phân công phụ trách đơn hàng này.');
+  }
+  if (order.status !== 'CONFIRMED') {
+    throw new Error('Chỉ có thể tiếp nhận đơn hàng đang ở trạng thái Chờ tiếp nhận (CONFIRMED).');
+  }
+
+  await order.update({
+    status: 'IN_PRODUCTION',
+    assigned_to: leaderId,
+    modifieby: String(leaderId),
+  });
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Leader cập nhật tiến độ / ghi chú xưởng
+ */
+async function leaderUpdateProgress(orderId, leaderId, { note } = {}) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+    throw new Error('Bạn không có quyền cập nhật tiến độ cho đơn hàng này.');
+  }
+
+  const updatedNote = note
+    ? (order.note ? `${order.note}\n[${new Date().toLocaleDateString('vi-VN')} Leader]: ${note}` : note)
+    : order.note;
+
+  await order.update({
+    note: updatedNote,
+    modifieby: String(leaderId),
+  });
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Leader hoàn thành sản xuất và gửi yêu cầu nghiệm thu lên Owner
+ */
+async function leaderSubmitInspection(orderId, leaderId, { note } = {}) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+    throw new Error('Bạn không có quyền gửi nghiệm thu đơn hàng này.');
+  }
+  if (order.status !== 'IN_PRODUCTION') {
+    throw new Error('Chỉ có thể gửi nghiệm thu khi đơn hàng đang trong tiến trình sản xuất (IN_PRODUCTION).');
+  }
+
+  const updatedNote = note
+    ? (order.note ? `${order.note}\n[Gửi nghiệm thu]: ${note}` : `[Gửi nghiệm thu]: ${note}`)
+    : order.note;
+
+  await order.update({
+    status: 'UNDER_INSPECTION',
+    note: updatedNote,
+    modifieby: String(leaderId),
+  });
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Owner nghiệm thu sản phẩm
+ * - passed = true: chuyển sang READY_TO_DELIVER (đã nghiệm thu đạt, chuyển về Sales để giao)
+ * - passed = false: chuyển lại IN_PRODUCTION cho Leader làm lại kèm lý do
+ */
+async function ownerInspectOrder(orderId, { passed, rejectReason, inspectedBy } = {}) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.status !== 'UNDER_INSPECTION') {
+    throw new Error('Đơn hàng hiện không ở trạng thái Chờ nghiệm thu (UNDER_INSPECTION).');
+  }
+
+  if (passed) {
+    await order.update({
+      status: 'READY_TO_DELIVER',
+      modifieby: inspectedBy || null,
+    });
+  } else {
+    if (!rejectReason || !String(rejectReason).trim()) {
+      throw new Error('Vui lòng nhập lý do từ chối nghiệm thu để Tổ trưởng xử lý lại.');
+    }
+    const updatedNote = order.note
+      ? `${order.note}\n[Nghiệm thu KHÔNG ĐẠT - ${new Date().toLocaleDateString('vi-VN')}]: ${rejectReason}`
+      : `[Nghiệm thu KHÔNG ĐẠT]: ${rejectReason}`;
+
+    await order.update({
+      status: 'IN_PRODUCTION',
+      note: updatedNote,
+      modifieby: inspectedBy || null,
+    });
+  }
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Sales xác nhận bắt đầu giao hàng
+ */
+async function confirmDelivery(orderId, { deliveryAddress, deliveryDate, note, updatedBy } = {}) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.status !== 'READY_TO_DELIVER') {
+    throw new Error('Chỉ có thể kích hoạt giao hàng khi sản phẩm đã được Owner nghiệm thu đạt (READY_TO_DELIVER).');
+  }
+
+  await order.update({
+    status: 'DELIVERING',
+    delivery_address: deliveryAddress || order.delivery_address,
+    expected_date: deliveryDate || order.expected_date,
+    note: note ? (order.note ? `${order.note}\n[Giao hàng]: ${note}` : note) : order.note,
+    modifieby: updatedBy || null,
+  });
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Sales xác nhận giao hàng thành công -> Chuyển sang COMPLETED
+ */
+async function completeDelivery(orderId, { updatedBy } = {}) {
+  const order = await CustomerOrder.findByPk(orderId);
+  if (!order) {
+    throw new Error('Không tìm thấy đơn hàng.');
+  }
+  if (order.status !== 'DELIVERING' && order.status !== 'READY_TO_DELIVER') {
+    throw new Error('Chỉ có thể hoàn tất khi đơn hàng đang trong quá trình giao hàng.');
+  }
+
+  await order.update({
+    status: 'COMPLETED',
+    delivered_date: new Date(),
+    modifieby: updatedBy || null,
+  });
+
+  return findOrderById(orderId);
+}
+
+/**
+ * Lấy danh sách đơn hàng được phân công cho Leader
+ */
+async function getOrdersForLeader(leaderId, { search, status, page = 1, limit = 10 } = {}) {
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
+  const offset = (pageNum - 1) * limitNum;
+
+  const whereClause = { assigned_to: leaderId };
+  if (status && status !== 'ALL') {
+    whereClause.status = status;
+  }
+  if (search && search.trim()) {
+    const trimmed = search.trim();
+    whereClause[Op.or] = [
+      { order_code: { [Op.like]: `%${trimmed}%` } },
+      { contact_name: { [Op.like]: `%${trimmed}%` } },
+      { contact_phone: { [Op.like]: `%${trimmed}%` } },
+    ];
+  }
+
+  const { rows, count } = await CustomerOrder.findAndCountAll({
+    where: whereClause,
+    include: [
+      {
+        model: Contract,
+        as: 'contract',
+        attributes: ['contract_id', 'contract_code', 'status', 'request_id'],
+      },
+      {
+        model: CustomerOrderItem,
+        as: 'items',
+        include: [
+          { model: Product, as: 'product', attributes: ['product_id', 'product_code', 'product_name'], required: false },
+          { model: ProductCategory, as: 'category', attributes: ['category_id', 'category_name'], required: false },
+          { model: ProductRoom, as: 'room', attributes: ['room_id', 'room_name'], required: false },
+          { model: ProductMaterial, as: 'material', attributes: ['material_id', 'material_name'], required: false },
+          { model: ProductColor, as: 'color', attributes: ['color_id', 'color_name'], required: false },
+        ],
+      },
+    ],
+    order: [['order_id', 'DESC']],
+    limit: limitNum,
+    offset,
+    distinct: true,
+  });
+
+  return {
+    orders: rows,
+    totalItems: count,
+    totalPages: Math.ceil(count / limitNum) || 1,
+    currentPage: pageNum,
+    itemsPerPage: limitNum,
+  };
+}
+
 module.exports = {
   CustomerOrder,
   generateNextOrderCode,
@@ -515,4 +786,12 @@ module.exports = {
   updateOrderStatus,
   VALID_STATUSES,
   NEXT_ORDER_STATUS,
+  assignLeaderToCustomerOrder,
+  leaderAcceptOrder,
+  leaderUpdateProgress,
+  leaderSubmitInspection,
+  ownerInspectOrder,
+  confirmDelivery,
+  completeDelivery,
+  getOrdersForLeader,
 };
