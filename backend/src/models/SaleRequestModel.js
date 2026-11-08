@@ -441,18 +441,28 @@ async function createSalesOrderRequest({
 
     // Tạo OrderRequestImages
     if (images && images.length > 0) {
-      const imagesData = images.map((img, idx) => {
-        const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
-        return {
-          request_id: orderRequest.request_id,
-          request_item_id: (typeof img === 'object' && (img.requestItemId || img.request_item_id)) || null,
-          image_url: url,
-          sort_order: (typeof img === 'object' && img.sortOrder) || idx,
-          createby: createdBy || 'Sales',
-        };
-      });
+      const imagesData = images
+        .map((img, idx) => {
+          let url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+          if (!url || typeof url !== 'string' || !url.trim()) return null;
+          url = url.trim();
+          if (url.length > 255) {
+            console.warn('[SaleRequestModel] Truncating image_url > 255 chars to fit column');
+            url = url.substring(0, 255);
+          }
+          return {
+            request_id: orderRequest.request_id,
+            request_item_id: (typeof img === 'object' && (img.requestItemId || img.request_item_id)) || null,
+            image_url: url,
+            sort_order: (typeof img === 'object' && img.sortOrder) || idx,
+            createby: createdBy || 'Sales',
+          };
+        })
+        .filter(Boolean);
 
-      await OrderRequestImage.bulkCreate(imagesData, { transaction });
+      if (imagesData.length > 0) {
+        await OrderRequestImage.bulkCreate(imagesData, { transaction });
+      }
     }
 
     await transaction.commit();
@@ -533,17 +543,28 @@ async function updateSalesOrderRequest(requestId, {
     // Cập nhật images nếu truyền lên
     if (images && Array.isArray(images)) {
       await OrderRequestImage.destroy({ where: { request_id: requestId }, transaction });
-      const imagesData = images.map((img, idx) => {
-        const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
-        return {
-          request_id: requestId,
-          request_item_id: (typeof img === 'object' && (img.requestItemId || img.request_item_id)) || null,
-          image_url: url,
-          sort_order: (typeof img === 'object' && img.sortOrder) || idx,
-          createby: updatedBy || 'Sales',
-        };
-      });
-      await OrderRequestImage.bulkCreate(imagesData, { transaction });
+      const imagesData = images
+        .map((img, idx) => {
+          let url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+          if (!url || typeof url !== 'string' || !url.trim()) return null;
+          url = url.trim();
+          if (url.length > 255) {
+            console.warn('[SaleRequestModel] Truncating image_url > 255 chars to fit column');
+            url = url.substring(0, 255);
+          }
+          return {
+            request_id: requestId,
+            request_item_id: (typeof img === 'object' && (img.requestItemId || img.request_item_id)) || null,
+            image_url: url,
+            sort_order: (typeof img === 'object' && img.sortOrder) || idx,
+            createby: updatedBy || 'Sales',
+          };
+        })
+        .filter(Boolean);
+
+      if (imagesData.length > 0) {
+        await OrderRequestImage.bulkCreate(imagesData, { transaction });
+      }
     }
 
     await transaction.commit();

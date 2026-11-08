@@ -26,11 +26,28 @@ const {
   completeOrder,
 } = require('../controllers/saleOrderController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
+const upload = require('../middlewares/uploadMiddleware');
 
 const router = express.Router();
 
 // Bắt buộc đăng nhập và chỉ cho phép role SALES hoặc OWNER
 router.use(authenticate, requireRole('SALES', 'OWNER'));
+
+// ── Upload hình ảnh thiết kế / may đo (Cloudinary) ────────
+router.post('/upload-images', (req, res) => {
+  upload.array('images', 10)(req, res, (err) => {
+    if (err) {
+      console.error('[saleOrderRoutes.upload-images]', err);
+      return res.status(400).json({ message: err.message || 'Lỗi khi tải ảnh lên máy chủ' });
+    }
+    const urls = (req.files || []).map((f) => f.path || f.url || f.secure_url).filter(Boolean);
+    return res.status(200).json({
+      message: 'Tải lên hình ảnh thiết kế thành công',
+      urls,
+      images: urls,
+    });
+  });
+});
 
 // ── Kho sản phẩm dành cho POS ─────────────────────────────
 router.get('/products', getWarehouseProducts);

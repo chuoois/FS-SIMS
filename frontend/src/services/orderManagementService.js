@@ -49,7 +49,13 @@ export async function updateOrderStatus(id, data) {
  */
 export async function getOwnerRequests(params = {}) {
   const response = await api.get('/order-management/owner/requests', { params });
-  return response.data;
+  const raw = response.data || {};
+  const list = raw.data || raw.requests || [];
+  return {
+    ...raw,
+    data: list,
+    requests: list,
+  };
 }
 
 /**
@@ -73,7 +79,15 @@ export async function reviewOwnerRequest(id, payload) {
  */
 export async function getStaffLeaders() {
   const response = await api.get('/order-management/leaders');
-  return response.data;
+  const d = response.data;
+  const list = d?.data || d?.leaders || (Array.isArray(d) ? d : []);
+  return {
+    ...d,
+    data: list,
+    leaders: d?.leaders || list,
+    staff: d?.staff || list,
+    allStaff: d?.allStaff || list,
+  };
 }
 
 /**
@@ -97,7 +111,13 @@ export async function inspectOrder(orderId, payload) {
  */
 export async function getLeaderOrders(params = {}) {
   const response = await api.get('/order-management/leader/orders', { params });
-  return response.data;
+  const d = response.data;
+  const list = d?.data || d?.orders || (Array.isArray(d) ? d : []);
+  return {
+    ...d,
+    data: list,
+    orders: list,
+  };
 }
 
 /**
@@ -121,5 +141,24 @@ export async function leaderUpdateProgress(orderId, payload = {}) {
  */
 export async function leaderSubmitInspection(orderId, payload = {}) {
   const response = await api.post(`/order-management/leader/orders/${orderId}/submit-inspection`, payload);
+  return response.data;
+}
+
+
+/**
+ * 15. Upload hình ảnh nghiệm thu sản phẩm lên server / Cloudinary
+ */
+export async function uploadInspectionImages(files) {
+  const formData = new FormData();
+  if (Array.isArray(files)) {
+    files.forEach((file) => formData.append('images', file));
+  } else if (files instanceof FileList) {
+    Array.from(files).forEach((file) => formData.append('images', file));
+  } else if (files) {
+    formData.append('images', files);
+  }
+  const response = await api.post('/order-management/upload-inspection-image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return response.data;
 }

@@ -1,4 +1,4 @@
-// =========================================================
+﻿// =========================================================
 // RequestsPage.jsx
 // Trang quản lý yêu cầu mua hàng của khách (Role Sale)
 // Sale xem, duyệt và chuyển yêu cầu thành hợp đồng DRAFT
@@ -32,6 +32,9 @@ import {
   Plus,
   Minus,
   Trash2,
+  AlertTriangle,
+  PenTool,
+  Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -57,6 +60,9 @@ const formatDate = (d) =>
 const REQUEST_STATUS_OPTIONS = [
   { value: 'ALL', label: 'Tất cả trạng thái' },
   { value: 'PENDING', label: 'Chờ xử lý' },
+  { value: 'REQUEST_CHANGE', label: 'Cần chỉnh sửa' },
+  { value: 'APPROVED', label: 'Đã duyệt sơ bộ' },
+  { value: 'DESIGN_FINALIZED', label: 'Đã chốt thiết kế' },
   { value: 'PROCESSING', label: 'Đang xử lý' },
   { value: 'CONVERTED', label: 'Đã chuyển HĐ' },
   { value: 'REJECTED', label: 'Đã từ chối' },
@@ -85,6 +91,27 @@ function RequestStatusBadge({ status }) {
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
           <Clock className="h-3 w-3" />
           Chờ xử lý
+        </span>
+      );
+    case 'REQUEST_CHANGE':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-800 border border-orange-200">
+          <AlertTriangle className="h-3 w-3" />
+          Yêu cầu sửa
+        </span>
+      );
+    case 'APPROVED':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+          <CheckCircle2 className="h-3 w-3" />
+          Đã duyệt sơ bộ
+        </span>
+      );
+    case 'DESIGN_FINALIZED':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">
+          <Lock className="h-3 w-3" />
+          Đã chốt thiết kế
         </span>
       );
     case 'PROCESSING':
@@ -118,7 +145,7 @@ function RequestStatusBadge({ status }) {
 }
 
 // ─── Detail Modal ──────────────────────────────────────────
-function RequestDetailModal({ requestId, onClose, onConvert }) {
+function RequestDetailModal({ requestId, onClose, onConvert, onEdit }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -137,7 +164,7 @@ function RequestDetailModal({ requestId, onClose, onConvert }) {
     return () => { cancelled = true; };
   }, [requestId]);
 
-  const canConvert = detail && detail.status !== 'CONVERTED' && detail.status !== 'REJECTED';
+  const canConvert = detail && detail.status !== 'CONVERTED' && detail.status !== 'REJECTED' && detail.status !== 'REQUEST_CHANGE';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -168,6 +195,36 @@ function RequestDetailModal({ requestId, onClose, onConvert }) {
                 </div>
                 <RequestStatusBadge status={detail.status} />
               </div>
+
+              {/* Cảnh báo Chủ xưởng yêu cầu sửa */}
+              {detail.status === 'REQUEST_CHANGE' && (
+                <div className="rounded-lg bg-orange-50 border border-orange-300 p-4 space-y-1.5 text-sm">
+                  <div className="flex items-center gap-2 font-semibold text-orange-900">
+                    <AlertTriangle className="h-4 w-4 text-orange-600 shrink-0" />
+                    Chủ xưởng yêu cầu chỉnh sửa thiết kế / thông số kỹ thuật
+                  </div>
+                  {detail.rejectReason ? (
+                    <div className="rounded bg-white/90 p-2.5 text-xs text-orange-950 border border-orange-200">
+                      <span className="font-semibold text-orange-800">Ý kiến phản hồi từ Chủ xưởng: </span>
+                      <span className="italic">{detail.rejectReason}</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-orange-700">
+                      Vui lòng kiểm tra lại kích thước, vật liệu hoặc ảnh thiết kế theo trao đổi với xưởng.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Thông báo nếu đã từ chối */}
+              {detail.status === 'REJECTED' && detail.rejectReason && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-800 space-y-1">
+                  <p className="font-semibold flex items-center gap-1 text-red-900">
+                    <XCircle className="h-4 w-4 text-red-600" /> Lý do từ chối:
+                  </p>
+                  <p className="italic pl-5">{detail.rejectReason}</p>
+                </div>
+              )}
 
               {/* Thông tin khách */}
               <div className="rounded-lg border border-stone-200 p-4 space-y-2">
@@ -310,6 +367,18 @@ function RequestDetailModal({ requestId, onClose, onConvert }) {
                 >
                   Đóng
                 </button>
+                {detail.status === 'REQUEST_CHANGE' && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      if (onEdit) onEdit(detail.requestId);
+                    }}
+                    className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 active:bg-orange-800 shadow-sm transition"
+                  >
+                    <PenTool className="h-4 w-4" />
+                    Chỉnh sửa bản vẽ & Gửi lại
+                  </button>
+                )}
                 {canConvert && (
                   <button
                     onClick={() => onConvert(detail)}
@@ -911,18 +980,60 @@ export function RequestsPage() {
     setTimeout(() => navigate('/sale/contracts'), 800);
   }
 
+  const pendingChangeRequests = useMemo(() => {
+    return requests.filter((r) => r.status === 'REQUEST_CHANGE');
+  }, [requests]);
+
   return (
     <div className="min-h-screen bg-stone-50 p-4 sm:p-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <ClipboardList className="h-6 w-6 text-amber-600" />
-          <h1 className="text-2xl font-bold text-stone-800">Yêu cầu của khách hàng</h1>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <ClipboardList className="h-6 w-6 text-amber-600" />
+            <h1 className="text-2xl font-bold text-stone-800">Yêu cầu của khách hàng</h1>
+          </div>
+          <p className="text-sm text-stone-500 pl-9">
+            Xem và chuyển yêu cầu mua hàng thành hợp đồng
+          </p>
         </div>
-        <p className="text-sm text-stone-500 pl-9">
-          Xem và chuyển yêu cầu mua hàng thành hợp đồng
-        </p>
+        <button
+          onClick={() => navigate('/sale/requests/create')}
+          className="inline-flex items-center gap-2 rounded-lg bg-amber-800 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-amber-900 transition self-start sm:self-auto"
+        >
+          <Plus className="h-4 w-4" />
+          Tạo đơn theo yêu cầu
+        </button>
       </div>
+
+      {/* Banner cảnh báo đơn cần chỉnh sửa */}
+      {pendingChangeRequests.length > 0 && (
+        <div className="mb-4 rounded-xl border border-orange-300 bg-orange-50/90 p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-orange-900">
+                Có {pendingChangeRequests.length} yêu cầu cần Sales chỉnh sửa theo ý kiến Chủ xưởng
+              </p>
+              <p className="text-xs text-orange-700 mt-0.5">
+                Nhấn nút <strong className="font-semibold text-orange-800">"Sửa đơn"</strong> hoặc mở chi tiết yêu cầu để cập nhật lại thông số/bản vẽ và gửi lại thẩm định.
+              </p>
+            </div>
+          </div>
+          {statusFilter !== 'REQUEST_CHANGE' && (
+            <button
+              onClick={() => {
+                setStatusFilter('REQUEST_CHANGE');
+                setPage(1);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 shadow-sm shrink-0"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              Lọc {pendingChangeRequests.length} đơn cần sửa
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter Bar */}
       <div className="mb-4 rounded-xl bg-white border border-stone-200 p-4 shadow-sm space-y-3">
@@ -1048,6 +1159,11 @@ export function RequestsPage() {
                       <span className="font-mono text-xs font-bold text-amber-700">
                         {req.requestCode}
                       </span>
+                      {req.status === 'REQUEST_CHANGE' && req.rejectReason && (
+                        <p className="mt-1 text-[11px] font-medium text-orange-700 line-clamp-1 max-w-[200px]" title={req.rejectReason}>
+                          ⚠️ Sửa: {req.rejectReason}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-stone-800">{req.customerName}</p>
@@ -1075,8 +1191,21 @@ export function RequestsPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
+
+                        {/* Nút sửa đơn khi Chủ xưởng yêu cầu sửa */}
+                        {req.status === 'REQUEST_CHANGE' && (
+                          <button
+                            onClick={() => navigate(`/sale/requests/create?editId=${req.requestId}`)}
+                            title="Chỉnh sửa theo ý kiến Chủ xưởng"
+                            className="flex items-center gap-1 rounded-lg border border-orange-300 bg-orange-100 px-2 py-1.5 text-xs font-bold text-orange-800 hover:bg-orange-200 transition shadow-sm"
+                          >
+                            <PenTool className="h-3.5 w-3.5 text-orange-700" />
+                            Sửa đơn
+                          </button>
+                        )}
+
                         {/* Chuyển thành HĐ */}
-                        {req.status !== 'CONVERTED' && req.status !== 'REJECTED' && (
+                        {req.status !== 'CONVERTED' && req.status !== 'REJECTED' && req.status !== 'REQUEST_CHANGE' && (
                           <button
                             onClick={() => setConvertRequest(req)}
                             title="Chuyển thành Hợp đồng"
@@ -1086,6 +1215,7 @@ export function RequestsPage() {
                             Tạo HĐ
                           </button>
                         )}
+
                         {/* Xem hợp đồng đã tạo */}
                         {req.status === 'CONVERTED' && req.contract && (
                           <button
@@ -1128,6 +1258,7 @@ export function RequestsPage() {
         <RequestDetailModal
           requestId={detailId}
           onClose={() => setDetailId(null)}
+          onEdit={(reqId) => navigate(`/sale/requests/create?editId=${reqId}`)}
           onConvert={(req) => {
             setDetailId(null);
             setConvertRequest(req);

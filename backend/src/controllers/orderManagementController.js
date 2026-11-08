@@ -40,12 +40,14 @@ const {
  */
 async function getOrders(req, res) {
   try {
-    const { search, status, order_type, page = 1, limit = 10 } = req.query;
+    const { search, search_by, status, order_type, page = 1, limit = 10, sort = 'NEWEST' } = req.query;
 
     const result = await getOrdersWithPagination({
       search: typeof search === 'string' ? search.trim() : '',
+      search_by: typeof search_by === 'string' ? search_by.trim() : 'ALL',
       status: typeof status === 'string' ? status.trim().toUpperCase() : 'ALL',
       order_type: typeof order_type === 'string' ? order_type.trim().toUpperCase() : 'ALL',
+      sort,
       page: Math.max(1, parseInt(page, 10) || 1),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
     });
@@ -290,28 +292,57 @@ async function reviewRequest(req, res) {
  */
 async function getStaffLeaders(req, res) {
   try {
-    const leaderRole = await UserRole.findOne({ where: { role_code: 'LEADERSTAFF' } });
-    const roleId = leaderRole ? leaderRole.role_id : 3;
-
-    const leaders = await UserAccount.findAll({
-      where: { role_id: roleId, status: 'ACTIVE' },
-      attributes: ['user_account_id', 'full_name', 'email', 'phone_number'],
-      order: [['full_name', 'ASC']],
+    const internalUsers = await UserAccount.findAll({
+      where: {
+        role_id: [1, 2, 3],
+        status: ['ACTIVE', 'active', 'Active'],
+      },
+      include: [
+        {
+          model: UserRole,
+          as: 'role',
+          attributes: ['role_id', 'role_code', 'role_name'],
+        },
+      ],
+      attributes: ['user_account_id', 'full_name', 'email', 'phone_number', 'role_id'],
+      order: [['role_id', 'DESC'], ['full_name', 'ASC']],
     });
 
-    return res.status(200).json({
-      message: 'Lấy danh sách Tổ trưởng thành công',
-      data: leaders.map((l) => ({
+    const dtoList = (internalUsers || []).map((l) => {
+      const roleCode = l.role?.role_code || (l.role_id === 3 ? 'LEADERSTAFF' : l.role_id === 2 ? 'SALES' : 'OWNER');
+      const roleName = l.role?.role_name || (l.role_id === 3 ? 'Tổ trưởng sản xuất' : l.role_id === 2 ? 'Nhân viên kinh doanh / Kỹ thuật' : 'Chủ xưởng');
+      return {
         userAccountId: l.user_account_id,
+        user_account_id: l.user_account_id,
+        id: l.user_account_id,
         fullName: l.full_name,
+        full_name: l.full_name,
         email: l.email,
         phoneNumber: l.phone_number,
-      })),
+        phone_number: l.phone_number,
+        roleId: l.role_id,
+        role_id: l.role_id,
+        roleCode,
+        role_code: roleCode,
+        roleName,
+        role_name: roleName,
+      };
+    });
+
+    const leaders = dtoList.filter((u) => u.roleCode === 'LEADERSTAFF' || u.roleId === 3);
+    const staff = dtoList.filter((u) => (u.roleCode === 'SALES' || u.roleId === 2) && u.roleCode !== 'LEADERSTAFF');
+
+    return res.status(200).json({
+      message: 'Lấy danh sách nhân sự thành công',
+      data: dtoList,
+      leaders: leaders.length > 0 ? leaders : dtoList,
+      staff: staff.length > 0 ? staff : dtoList,
+      allStaff: dtoList,
     });
   } catch (error) {
     console.error('[orderManagementController.getStaffLeaders]', error);
     return res.status(500).json({
-      message: 'Lỗi máy chủ khi lấy danh sách Tổ trưởng',
+      message: 'Lỗi máy chủ khi lấy danh sách nhân sự',
       error: error.message,
     });
   }
@@ -325,20 +356,21 @@ async function assignLeader(req, res) {
   try {
     const { id } = req.params;
     const orderId = parseInt(id, 10);
-    const { leaderId } = req.body;
+    const { leaderId, assigned_to, staffId, note } = req.body;
+    const targetLeaderId = leaderId || assigned_to;
 
     if (!orderId || isNaN(orderId) || orderId <= 0) {
       return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
     }
-    if (!leaderId) {
+    if (!targetLeaderId) {
       return res.status(400).json({ message: 'Vui lòng chọn Tổ trưởng phụ trách.' });
     }
 
     const assignedBy = req.user?.email || req.user?.full_name || 'Owner';
-    const order = await assignLeaderToCustomerOrder(orderId, leaderId, { assignedBy });
+    const order = await assignLeaderToCustomerOrder(orderId, targetLeaderId, { assignedBy, staffId, note });
 
     return res.status(200).json({
-      message: 'Phân công Tổ trưởng thành công',
+      message: 'Phân công nhân sự sản xuất thành công',
       order: toOrderManagementDTO(order),
     });
   } catch (error) {
@@ -358,21 +390,19 @@ async function inspectOrder(req, res) {
   try {
     const { id } = req.params;
     const orderId = parseInt(id, 10);
-    const { passed, rejectReason } = req.body;
+    const { passed, rejectReason, result, reason } = req.body;
+    const isPassed = passed !== undefined ? Boolean(passed) : result === 'PASSED';
+    const finalReason = rejectReason || reason;
 
     if (!orderId || isNaN(orderId) || orderId <= 0) {
       return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
     }
 
     const inspectedBy = req.user?.email || req.user?.full_name || 'Owner';
-    const order = await ownerInspectOrder(orderId, {
-      passed: Boolean(passed),
-      rejectReason,
-      inspectedBy,
-    });
+    const order = await ownerInspectOrder(orderId, { passed: isPassed, rejectReason: finalReason, inspectedBy });
 
     return res.status(200).json({
-      message: passed ? 'Nghiệm thu đạt yêu cầu' : 'Đã từ chối nghiệm thu, chuyển lại cho Tổ trưởng xử lý',
+      message: isPassed ? 'Nghiệm thu đạt yêu cầu' : 'Đã từ chối nghiệm thu, chuyển lại cho Tổ trưởng xử lý',
       order: toOrderManagementDTO(order),
     });
   } catch (error) {
@@ -472,9 +502,9 @@ async function leaderSubmit(req, res) {
     const { id } = req.params;
     const orderId = parseInt(id, 10);
     const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
-    const { note } = req.body;
+    const { note, images } = req.body;
 
-    const order = await leaderSubmitInspection(orderId, leaderId, { note });
+    const order = await leaderSubmitInspection(orderId, leaderId, { note, images });
     return res.status(200).json({
       message: 'Đã gửi yêu cầu nghiệm thu lên Chủ xưởng thành công',
       order: toOrderManagementDTO(order),

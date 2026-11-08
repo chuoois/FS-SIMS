@@ -18,7 +18,7 @@ export function CartProvider({ children }) {
   const [error, setError] = useState('');
 
   const refreshCart = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || (user?.roleId && user.roleId !== 4)) {
       setCart({ items: [], itemCount: 0, subtotal: 0 });
       setError('');
       setLoading(false);
@@ -33,16 +33,21 @@ export function CartProvider({ children }) {
       setCart(nextCart);
       return nextCart;
     } catch (requestError) {
+      if (requestError.response?.status === 403) {
+        setCart({ items: [], itemCount: 0, subtotal: 0 });
+        setError('');
+        return null;
+      }
       console.error('[CartContext] Không thể tải giỏ hàng:', requestError);
       setError(requestError.response?.data?.message || 'Không thể tải giỏ hàng. Vui lòng thử lại.');
       throw requestError;
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.roleId]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || (user?.roleId && user.roleId !== 4)) {
       setCart({ items: [], itemCount: 0, subtotal: 0 });
       setError('');
       setLoading(false);
@@ -60,6 +65,10 @@ export function CartProvider({ children }) {
       })
       .catch((requestError) => {
         if (cancelled) return;
+        if (requestError.response?.status === 403) {
+          setCart({ items: [], itemCount: 0, subtotal: 0 });
+          return;
+        }
         console.error('[CartContext] Không thể tải giỏ hàng:', requestError);
         setError(requestError.response?.data?.message || 'Không thể tải giỏ hàng. Vui lòng thử lại.');
       })
@@ -70,7 +79,7 @@ export function CartProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, user?.userAccountId]);
+  }, [isAuthenticated, user?.userAccountId, user?.roleId]);
 
   const applyMutation = useCallback(async (mutation) => {
     const response = await mutation();

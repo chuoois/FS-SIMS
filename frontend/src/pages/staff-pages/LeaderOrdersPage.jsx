@@ -38,6 +38,7 @@ import {
   leaderAcceptOrder,
   leaderUpdateProgress,
   leaderSubmitInspection,
+  uploadInspectionImages,
   getOrderDetail,
 } from '../../services/orderManagementService';
 import { TablePagination } from '../../components/common/TablePagination';
@@ -125,6 +126,10 @@ export const LeaderOrdersPage = () => {
   // Modal Gửi nghiệm thu
   const [inspectionModalOpen, setInspectionModalOpen] = useState(false);
   const [inspectionNote, setInspectionNote] = useState('');
+  const [inspectionImages, setInspectionImages] = useState([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [searchBy, setSearchBy] = useState('ALL'); // 'ALL' | 'CUSTOMER_NAME' | 'ORDER_CODE' | 'PHONE'
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -132,11 +137,22 @@ export const LeaderOrdersPage = () => {
       const params = {
         page,
         limit,
-        status: statusFilter,
-        search: search.trim() || undefined,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined,
       };
+      if (search.trim()) {
+        const kw = search.trim();
+        if (searchBy === 'ORDER_CODE') params.order_code = kw;
+        else if (searchBy === 'CUSTOMER_NAME') params.customer_name = kw;
+        else if (searchBy === 'PHONE') {
+          params.search = kw;
+          params.search_by = 'PHONE';
+        } else {
+          params.search = kw;
+          params.search_by = 'ALL';
+        }
+      }
       const res = await getLeaderOrders(params);
-      setOrders(res.orders || []);
+      setOrders(res.data || res.orders || (Array.isArray(res) ? res : []));
       if (res.pagination) setPagination(res.pagination);
     } catch (err) {
       console.error('Lỗi khi tải đơn hàng của Tổ trưởng:', err);
@@ -144,7 +160,7 @@ export const LeaderOrdersPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, statusFilter, search]);
+  }, [page, limit, statusFilter, search, searchBy]);
 
   useEffect(() => {
     fetchOrders();
@@ -156,7 +172,7 @@ export const LeaderOrdersPage = () => {
       setDetailModalOpen(true);
       setLoadingDetail(true);
       const res = await getOrderDetail(order.orderId);
-      if (res.order) setSelectedOrder(res.order);
+      if (res && res.order) setSelectedOrder(res.order); else if (res && res.data) setSelectedOrder(res.data);
     } catch (err) {
       console.error('Lỗi khi lấy chi tiết đơn:', err);
     } finally {
@@ -202,16 +218,73 @@ export const LeaderOrdersPage = () => {
     }
   };
 
-  // 3. Gửi yêu cầu nghiệm thu
+  // Xử lý upload ảnh nghiệm thu
+  const handlePhotoFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    try {
+      setUploadingPhotos(true);
+      // Thử upload lên server / Cloudinary trước
+      try {
+        const uploadRes = await uploadInspectionImages(files);
+        const urls = uploadRes.urls || uploadRes.images || [];
+        if (urls.length > 0) {
+          setInspectionImages((prev) => [...prev, ...urls]);
+          toast.success(`Đã tải lên ${urls.length} ảnh thành phẩm.`);
+          e.target.value = '';
+          return;
+        }
+      } catch (uploadErr) {
+        console.warn('Upload API không khả dụng, dùng data URL preview cục bộ:', uploadErr);
+      }
+
+      // Fallback: FileReader data URL
+      files.forEach((file) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (reader.result) {
+            setInspectionImages((prev) => [...prev, reader.result]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+      toast.success(`Đã thêm ${files.length} ảnh thành phẩm.`);
+      e.target.value = '';
+    } catch (err) {
+      console.error('Lỗi tải ảnh:', err);
+      toast.error('Không thể đọc file ảnh.');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
+
+  const handleAddPhotoUrl = (e) => {
+    e.preventDefault();
+    if (!newPhotoUrl.trim()) return;
+    setInspectionImages((prev) => [...prev, newPhotoUrl.trim()]);
+    setNewPhotoUrl('');
+    toast.success('Đã thêm liên kết ảnh.');
+  };
+
+  const handleRemovePhoto = (index) => {
+    setInspectionImages((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  // 3. Gửi yêu cầu nghiệm thu kèm ảnh
   const handleSubmitInspection = async (e) => {
     e.preventDefault();
     if (!selectedOrder) return;
     try {
       setActionLoading(true);
-      await leaderSubmitInspection(selectedOrder.orderId, { note: inspectionNote });
-      toast.success('Đã gửi yêu cầu nghiệm thu lên Chủ xưởng!');
+      await leaderSubmitInspection(selectedOrder.orderId, {
+        note: inspectionNote.trim(),
+        images: inspectionImages,
+      });
+      toast.success('Đã gửi yêu cầu nghiệm thu kèm hình ảnh lên Chủ xưởng thành công!');
       setInspectionModalOpen(false);
       setInspectionNote('');
+      setInspectionImages([]);
       fetchOrders();
       if (selectedOrder) {
         setSelectedOrder((prev) => ({ ...prev, status: 'UNDER_INSPECTION' }));
@@ -250,35 +323,95 @@ export const LeaderOrdersPage = () => {
         </button>
       </div>
 
-      {/* ── Bộ lọc & Tìm kiếm ── */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm text-xs">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo mã đơn, tên khách, số điện thoại..."
-            className="w-full rounded-lg border border-stone-200 pl-9 pr-4 py-2 text-xs focus:border-amber-800 focus:outline-none"
-          />
+      {/* ── Khu vực Tìm kiếm & Bộ lọc (Search & Filters) ── */}
+      <div className="flex flex-col gap-3.5 rounded-xl border border-stone-200 bg-white p-4 shadow-sm text-xs">
+        {/* Hàng 1: Tiêu chí tìm kiếm & Ô nhập từ khóa */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-52">
+            <select
+              aria-label="Tiêu chí tìm kiếm"
+              value={searchBy}
+              onChange={(e) => {
+                setSearchBy(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-3 pr-8 text-xs font-semibold text-stone-800 focus:border-amber-500 focus:bg-white focus:outline-none"
+            >
+              <option value="ALL">🔍 Tất cả tiêu chí</option>
+              <option value="CUSTOMER_NAME">👤 Tên khách hàng</option>
+              <option value="ORDER_CODE">🏷️ Mã đơn hàng</option>
+              <option value="PHONE">📞 Số điện thoại</option>
+            </select>
+          </div>
+
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder={
+                searchBy === 'ORDER_CODE'
+                  ? 'Nhập mã đơn hàng...'
+                  : searchBy === 'CUSTOMER_NAME'
+                  ? 'Nhập họ tên khách hàng...'
+                  : searchBy === 'PHONE'
+                  ? 'Nhập số điện thoại khách...'
+                  : 'Tìm theo mã đơn, tên khách, số điện thoại...'
+              }
+              className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-8 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setPage(1);
+                }}
+                className="absolute right-2.5 top-2.5 rounded p-0.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="w-full sm:w-44 rounded-lg border border-stone-200 px-3 py-2 text-xs focus:border-amber-800 focus:outline-none bg-white font-medium"
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="CONFIRMED">Chờ tiếp nhận</option>
-            <option value="IN_PRODUCTION">Đang gia công</option>
-            <option value="UNDER_INSPECTION">Chờ nghiệm thu</option>
-            <option value="READY_TO_DELIVER">Nghiệm thu đạt</option>
-            <option value="COMPLETED">Hoàn thành</option>
-          </select>
+        {/* Hàng 2: Dropdowns trạng thái & nút Làm mới */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-stone-100 pt-3">
+          <div className="flex items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+              className="rounded-lg border border-stone-200 bg-stone-50 py-1.5 px-3 text-xs font-semibold text-stone-700 focus:border-amber-500 focus:bg-white focus:outline-none"
+            >
+              <option value="ALL">📋 Tất cả trạng thái sản xuất</option>
+              <option value="CONFIRMED">⏳ Chờ tiếp nhận</option>
+              <option value="IN_PRODUCTION">🔨 Đang gia công</option>
+              <option value="UNDER_INSPECTION">🔍 Chờ Owner nghiệm thu</option>
+              <option value="READY_TO_DELIVER">✅ Nghiệm thu đạt (Chờ giao)</option>
+              <option value="COMPLETED">🎉 Hoàn tất đơn</option>
+            </select>
+
+            {(search || statusFilter !== 'ALL' || searchBy !== 'ALL') && (
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setSearchBy('ALL');
+                  setStatusFilter('ALL');
+                  setPage(1);
+                }}
+                className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100"
+              >
+                Xóa bộ lọc
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -548,16 +681,26 @@ export const LeaderOrdersPage = () => {
         </div>
       )}
 
-      {/* ── MODAL GỬI NGHIỆM THU LÊN OWNER ── */}
+      {/* ── MODAL GỬI NGHIỆM THU KÈM HÌNH ẢNH THÀNH PHẨM LÊN OWNER ── */}
       {inspectionModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-stone-900 mb-2 flex items-center gap-2">
-              <Send className="h-5 w-5 text-purple-700" />
-              Gửi yêu cầu nghiệm thu #{selectedOrder.orderCode}
-            </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl my-8 border border-stone-200">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 mb-3">
+              <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+                <Send className="h-5 w-5 text-purple-700" />
+                Nộp nghiệm thu sản phẩm #{selectedOrder.orderCode}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setInspectionModalOpen(false)}
+                className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
             <p className="text-xs text-stone-500 mb-4">
-              Xác nhận xưởng đã hoàn tất gia công sản phẩm theo đúng bản vẽ kỹ thuật. Chủ xưởng sẽ kiểm tra và nghiệm thu trước khi chuyển Sales giao hàng.
+              Xác nhận xưởng đã hoàn tất gia công sản phẩm. Vui lòng chụp và tải ảnh thành phẩm thực tế để Chủ xưởng đối chiếu bản vẽ thiết kế trước khi chuyển Sales giao hàng.
             </p>
 
             <form onSubmit={handleSubmitInspection} className="space-y-4 text-xs">
@@ -569,12 +712,82 @@ export const LeaderOrdersPage = () => {
                   rows="3"
                   value={inspectionNote}
                   onChange={(e) => setInspectionNote(e.target.value)}
-                  placeholder="VD: Đã hoàn thiện sơn PU 3 lớp, phụ kiện Hafele lắp khít, test chịu lực đạt yêu cầu."
+                  placeholder="VD: Đã hoàn thiện sơn PU 3 lớp, các mối ghép khít, phụ kiện Hafele lắp chuẩn, tải trọng đạt yêu cầu."
                   className="w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-purple-700 focus:outline-none"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Khu vực Upload Ảnh Thành Phẩm */}
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  📸 Tải ảnh thành phẩm thực tế để Chủ xưởng thẩm định:
+                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-lg border border-dashed border-purple-400 bg-purple-50 px-4 py-2 font-semibold text-purple-800 hover:bg-purple-100 transition shadow-2xs">
+                    <Package className="h-4 w-4" />
+                    <span>Chọn ảnh từ máy tính (Có thể chọn nhiều)</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handlePhotoFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {uploadingPhotos && (
+                    <span className="flex items-center gap-1 text-purple-700 text-xs">
+                      <RotateCw className="h-3.5 w-3.5 animate-spin" /> Đang tải...
+                    </span>
+                  )}
+                </div>
+
+                {/* Hoặc dán link ảnh */}
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="url"
+                    value={newPhotoUrl}
+                    onChange={(e) => setNewPhotoUrl(e.target.value)}
+                    placeholder="Hoặc dán URL ảnh trực tiếp (https://...)"
+                    className="flex-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs focus:border-purple-700 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddPhotoUrl}
+                    className="rounded-lg bg-stone-100 px-3 py-1.5 font-semibold text-stone-700 hover:bg-stone-200"
+                  >
+                    Thêm link
+                  </button>
+                </div>
+
+                {/* Danh sách ảnh đã đính kèm */}
+                {inspectionImages.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2 p-2 rounded-lg bg-stone-50 border border-stone-200 max-h-40 overflow-y-auto">
+                    {inspectionImages.map((img, idx) => (
+                      <div key={idx} className="relative group rounded-md overflow-hidden border border-stone-200 aspect-video bg-white">
+                        <img
+                          src={img}
+                          alt={`Thành phẩm ${idx + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(idx)}
+                          className="absolute top-1 right-1 rounded-full bg-rose-600 p-1 text-white shadow-xs opacity-80 hover:opacity-100"
+                          title="Xóa ảnh này"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5 text-center text-xs text-stone-400">
+                    Chưa có ảnh nào được đính kèm. Khuyến khích chụp 1-3 góc để Chủ xưởng thẩm định nhanh chóng.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-stone-100">
                 <button
                   type="button"
                   onClick={() => setInspectionModalOpen(false)}
@@ -584,8 +797,8 @@ export const LeaderOrdersPage = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
-                  className="rounded-lg bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 disabled:opacity-50"
+                  disabled={actionLoading || uploadingPhotos}
+                  className="rounded-lg bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 disabled:opacity-50 transition shadow-sm"
                 >
                   {actionLoading ? 'Đang gửi...' : 'Xác nhận nộp nghiệm thu'}
                 </button>

@@ -461,13 +461,26 @@ async function findCustomerOrderById(orderId, customerAccountId) {
 // Các hàm bổ sung cho Manage Order (Owner / Sales)
 // ============================================================
 
-const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'COMPLETED', 'CANCELLED'];
+const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED', 'CANCELLED'];
+
+const ALLOWED_NEXT_STATUSES = {
+  NEW: ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED: ['IN_PRODUCTION', 'CANCELLED'],
+  IN_PRODUCTION: ['COMPLETED', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'CANCELLED'],
+  PROCESSING: ['COMPLETED', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'CANCELLED'],
+  UNDER_INSPECTION: ['READY_TO_DELIVER', 'IN_PRODUCTION', 'CANCELLED'],
+  READY_TO_DELIVER: ['DELIVERING', 'COMPLETED', 'CANCELLED'],
+  DELIVERING: ['COMPLETED', 'CANCELLED'],
+};
 
 const NEXT_ORDER_STATUS = {
   NEW: 'CONFIRMED',
   CONFIRMED: 'IN_PRODUCTION',
-  IN_PRODUCTION: 'COMPLETED',
-  PROCESSING: 'COMPLETED',
+  IN_PRODUCTION: 'UNDER_INSPECTION',
+  PROCESSING: 'UNDER_INSPECTION',
+  UNDER_INSPECTION: 'READY_TO_DELIVER',
+  READY_TO_DELIVER: 'DELIVERING',
+  DELIVERING: 'COMPLETED',
 };
 
 /**
@@ -518,9 +531,9 @@ async function updateOrderStatus(orderId, newStatus, { updatedBy } = {}) {
     throw new Error(`Đơn hàng đã ở trạng thái "${normalizedStatus}".`);
   }
 
-  const expectedNext = NEXT_ORDER_STATUS[order.status];
-  if (expectedNext && expectedNext !== normalizedStatus) {
-    throw new Error(`Không thể chuyển từ trạng thái "${order.status}" sang "${normalizedStatus}". Trạng thái kế tiếp hợp lệ là "${expectedNext}".`);
+  const allowed = ALLOWED_NEXT_STATUSES[order.status];
+  if (allowed && !allowed.includes(normalizedStatus)) {
+    throw new Error(`Không thể chuyển từ trạng thái "${order.status}" sang "${normalizedStatus}". Trạng thái kế tiếp hợp lệ: ${allowed.join(', ')}.`);
   }
 
   const updateData = { status: normalizedStatus, modifieby: updatedBy || null };
@@ -536,13 +549,13 @@ async function updateOrderStatus(orderId, newStatus, { updatedBy } = {}) {
 /**
  * Owner phân công Leader phụ trách đơn hàng
  */
-async function assignLeaderToCustomerOrder(orderId, leaderId, { assignedBy } = {}) {
+async function assignLeaderToCustomerOrder(orderId, leaderId, { assignedBy, staffId, note } = {}) {
   const order = await CustomerOrder.findByPk(orderId);
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
-  if (order.status !== 'CONFIRMED' && order.status !== 'IN_PRODUCTION') {
-    throw new Error('Chỉ có thể phân công Tổ trưởng khi đơn hàng ở trạng thái ĐÃ XÁC NHẬN hoặc ĐANG SẢN XUẤT.');
+  if (order.status !== 'CONFIRMED' && order.status !== 'IN_PRODUCTION' && order.status !== 'NEW') {
+    throw new Error('Chỉ có thể phân công Tổ trưởng khi đơn hàng ở trạng thái MỚI, ĐÃ XÁC NHẬN hoặc ĐANG SẢN XUẤT.');
   }
 
   // Kiểm tra tài khoản leader
@@ -551,11 +564,39 @@ async function assignLeaderToCustomerOrder(orderId, leaderId, { assignedBy } = {
     throw new Error('Không tìm thấy tài khoản Tổ trưởng.');
   }
 
-  await order.update({
-    assigned_to: leaderId,
-    modifieby: assignedBy || null,
-  });
+  let staff = null;
+  if (staffId && String(staffId) !== String(leaderId)) {
+    staff = await UserAccount.findByPk(staffId);
+  }
 
+  const assignmentNoteParts = [];
+  if (order.note) assignmentNoteParts.push(order.note);
+
+  const assignDetails = [`Tổ trưởng: ${leader.full_name}`];
+  if (staff) {
+    assignDetails.push(`Thợ/Kỹ thuật: ${staff.full_name}`);
+  }
+  if (note && String(note).trim()) {
+    assignDetails.push(`Chỉ đạo: ${String(note).trim()}`);
+  }
+  assignmentNoteParts.push(`[Phân công SX]: ${assignDetails.join(' | ')}`);
+
+  let updatedNote = assignmentNoteParts.join('\n');
+  if (updatedNote.length > 490) {
+    updatedNote = updatedNote.slice(-490);
+  }
+
+  const updatePayload = {
+    assigned_to: leaderId,
+    note: updatedNote,
+    modifieby: assignedBy || null,
+  };
+  // Khi phân công từ CONFIRMED, tự động chuyển sang IN_PRODUCTION
+  if (order.status === 'CONFIRMED') {
+    updatePayload.status = 'IN_PRODUCTION';
+  }
+
+  await order.update(updatePayload);
   return findOrderById(orderId);
 }
 
@@ -610,7 +651,7 @@ async function leaderUpdateProgress(orderId, leaderId, { note } = {}) {
 /**
  * Leader hoàn thành sản xuất và gửi yêu cầu nghiệm thu lên Owner
  */
-async function leaderSubmitInspection(orderId, leaderId, { note } = {}) {
+async function leaderSubmitInspection(orderId, leaderId, { note, images } = {}) {
   const order = await CustomerOrder.findByPk(orderId);
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
@@ -622,9 +663,22 @@ async function leaderSubmitInspection(orderId, leaderId, { note } = {}) {
     throw new Error('Chỉ có thể gửi nghiệm thu khi đơn hàng đang trong tiến trình sản xuất (IN_PRODUCTION).');
   }
 
-  const updatedNote = note
-    ? (order.note ? `${order.note}\n[Gửi nghiệm thu]: ${note}` : `[Gửi nghiệm thu]: ${note}`)
-    : order.note;
+  const noteParts = [];
+  if (order.note) noteParts.push(order.note);
+  if (note && String(note).trim()) {
+    noteParts.push(`[Gửi nghiệm thu]: ${String(note).trim()}`);
+  }
+  if (images && images.length > 0) {
+    const imgList = Array.isArray(images) ? images.filter(Boolean) : [images];
+    if (imgList.length > 0) {
+      noteParts.push(`[Ảnh nghiệm thu]: ${imgList.join(', ')}`);
+    }
+  }
+
+  let updatedNote = noteParts.join('\n');
+  if (updatedNote.length > 490) {
+    updatedNote = updatedNote.slice(-490);
+  }
 
   await order.update({
     status: 'UNDER_INSPECTION',

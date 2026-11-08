@@ -1,4 +1,4 @@
-// =========================================================
+﻿// =========================================================
 // OwnerRequestsTab.jsx
 // Tab Thẩm định Yêu cầu Thiết kế & May đo (Design Requests) cho Chủ xưởng (Owner)
 //
@@ -42,6 +42,7 @@ const formatVND = (val) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(val || 0);
 
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—');
+const formatTime = (d) => (d ? new Date(d).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
 
 const getStatusBadge = (status) => {
   switch (status) {
@@ -128,7 +129,8 @@ export const OwnerRequestsTab = () => {
         search: search.trim() || undefined,
       };
       const res = await getOwnerRequests(params);
-      setRequests(res.requests || []);
+      const list = res.data || res.requests || [];
+      setRequests(Array.isArray(list) ? list : []);
       if (res.pagination) setPagination(res.pagination);
     } catch (err) {
       console.error('Lỗi khi tải danh sách yêu cầu cho Owner:', err);
@@ -280,8 +282,11 @@ export const OwnerRequestsTab = () => {
                     <td className="px-4 py-3 text-center font-bold text-stone-800">
                       {(r.items || []).length}
                     </td>
-                    <td className="px-4 py-3 text-stone-600 font-mono">
-                      {formatDate(r.createdAt)}
+                    <td className="px-4 py-3 text-stone-600 font-mono text-xs">
+                      <div className="font-semibold text-stone-800">{formatDate(r.createdAt)}</div>
+                      {formatTime(r.createdAt) && (
+                        <div className="text-[11px] text-stone-400 mt-0.5">{formatTime(r.createdAt)}</div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">{getStatusBadge(r.status)}</td>
                     <td className="px-4 py-3 text-center">

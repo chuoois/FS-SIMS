@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Filter,
   ClipboardList,
   Search,
   RotateCw,
@@ -44,6 +45,7 @@ import {
   getStaffLeaders,
   assignLeaderToOrder,
   inspectOrder,
+  getOwnerRequests,
 } from '../../services/orderManagementService';
 import { TablePagination } from '../../components/common/TablePagination';
 import OwnerRequestsTab from './OwnerRequestsTab';
@@ -98,6 +100,18 @@ const formatCurrency = (amount) => {
 };
 
 // ─── Định dạng ngày tháng ─────────────────────────────────
+const formatDateTime = (dateString) => {
+  if (!dateString) return '—';
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return timeStr + ' - ' + dateStr;
+  } catch {
+    return dateString;
+  }
+};
 const formatDate = (dateString) => {
   if (!dateString) return '—';
   try {
@@ -127,14 +141,36 @@ const StatusBadge = ({ status }) => {
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
           <Clock className="h-3.5 w-3.5" />
-          Đã xác nhận
+          Chờ phân công SX
         </span>
       );
     case 'IN_PRODUCTION':
+    case 'PROCESSING':
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
+          <Hammer className="h-3.5 w-3.5" />
+          Đang gia công
+        </span>
+      );
+    case 'UNDER_INSPECTION':
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-semibold text-purple-800 border border-purple-200 animate-pulse">
           <Clock className="h-3.5 w-3.5" />
-          Đang xử lý
+          Chờ nghiệm thu
+        </span>
+      );
+    case 'READY_TO_DELIVER':
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 border border-indigo-200">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Đã nghiệm thu (Chờ giao)
+        </span>
+      );
+    case 'DELIVERING':
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 border border-teal-200">
+          <Package className="h-3.5 w-3.5" />
+          Đang giao hàng
         </span>
       );
     case 'COMPLETED':
@@ -221,7 +257,7 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
               )}
               <div className="flex items-center gap-3 text-xs text-stone-500">
                 {order.createdAt && (
-                  <span>Ngày tạo: {formatDate(order.createdAt)}</span>
+                  <span>Ngày tạo: {formatDateTime(order.createdAt)}</span>
                 )}
                 {order.expectedDate && (
                   <span className="font-medium text-stone-700">
@@ -229,6 +265,38 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
                   </span>
                 )}
               </div>
+            </div>
+          </div>
+
+                    {/* Stepper 6 bước quy trình sản xuất & hoàn tất */}
+          <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-3 flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-amber-800" />
+              <span>Tiến trình đơn hàng (Quy trình chuẩn 6 Bước)</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center text-xs">
+              {[
+                { step: 1, label: '1. Chốt đơn & Ký HĐ', active: ['CONFIRMED', 'IN_PRODUCTION', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
+                { step: 2, label: '2. Duyệt & Phân công', active: ['IN_PRODUCTION', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
+                { step: 3, label: '3. Gia công xưởng', active: ['IN_PRODUCTION', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
+                { step: 4, label: '4. Gửi nghiệm thu', active: ['UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
+                { step: 5, label: '5. Nghiệm thu Đạt', active: ['READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
+                { step: 6, label: '6. Giao & Hoàn tất', active: order.status === 'COMPLETED' },
+              ].map((s) => (
+                <div
+                  key={s.step}
+                  className={`rounded-lg p-2 border font-medium transition ${
+                    s.active
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800 font-bold'
+                      : 'border-stone-200 bg-white text-stone-400'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    {s.active ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <Clock className="h-3 w-3" />}
+                    <span>{s.label}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -447,7 +515,7 @@ function CancelConfirmDialog({ order, loading, onConfirm, onClose }) {
 }
 
 // ─── Trang chính ManageOrdersPage ─────────────────────────
-export function ManageOrdersPage() {
+export function ManageOrdersPage({ defaultTab } = {}) {
   // States danh sách
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -455,6 +523,9 @@ export function ManageOrdersPage() {
 
   // Filters & Phân trang
   const [search, setSearch] = useState('');
+  const [searchBy, setSearchBy] = useState('ALL'); // 'ALL' | 'CUSTOMER_NAME' | 'ORDER_CODE' | 'PHONE'
+  const [zoomImage, setZoomImage] = useState(null);
+  const [leadersLoading, setLeadersLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [orderTypeFilter, setOrderTypeFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -471,12 +542,54 @@ export function ManageOrdersPage() {
   const [cancelOrder, setCancelOrder] = useState(null);
   const [advanceLoadingId, setAdvanceLoadingId] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('ORDERS'); // 'ORDERS' | 'REQUESTS'
+
+  const getInitialTab = () => {
+    if (defaultTab === 'REQUESTS') return 'REQUESTS';
+    if (typeof window !== 'undefined' && window.location?.search?.includes('tab=REQUESTS')) {
+      return 'REQUESTS';
+    }
+    return 'ORDERS';
+  };
+  const [activeTab, setActiveTab] = useState(getInitialTab);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  const checkPendingRequests = useCallback(async () => {
+    try {
+      const res = await getOwnerRequests({ status: 'PENDING', limit: 1 });
+      const total = res.pagination?.totalItems ?? (res.data || res.requests || []).length ?? 0;
+      setPendingRequestsCount(total);
+    } catch (err) {
+      // Safe catch
+    }
+  }, []);
+
+  useEffect(() => {
+    checkPendingRequests();
+  }, [checkPendingRequests, activeTab]);
+
+  const handleSwitchTab = (tab) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined' && window.history?.pushState) {
+      try {
+        const url = new URL(window.location.href);
+        if (tab === 'REQUESTS') {
+          url.searchParams.set('tab', 'REQUESTS');
+        } else {
+          url.searchParams.delete('tab');
+        }
+        window.history.pushState({}, '', url.toString());
+      } catch (e) {
+        // Safe catch
+      }
+    }
+  };
 
   // Modal Phân công Tổ trưởng
   const [assignLeaderOrder, setAssignLeaderOrder] = useState(null);
   const [leaders, setLeaders] = useState([]);
+  const [staffList, setStaffList] = useState([]);
   const [selectedLeaderId, setSelectedLeaderId] = useState('');
+  const [selectedStaffId, setSelectedStaffId] = useState('');
   const [assignNote, setAssignNote] = useState('');
   const [assignLoading, setAssignLoading] = useState(false);
 
@@ -484,23 +597,39 @@ export function ManageOrdersPage() {
     setAssignLeaderOrder(order);
     try {
       const res = await getStaffLeaders();
-      const list = res.leaders || [];
+      const list = res.leaders || res.data || (Array.isArray(res) ? res : []);
+      const rawStf = res.staff || res.allStaff || res.data || [];
+      const stf = rawStf.filter((s) => (s.roleCode === 'SALES' || s.roleId === 2) && s.roleCode !== 'LEADERSTAFF');
       setLeaders(list);
-      if (list.length > 0) {
-        setSelectedLeaderId(list[0].user_account_id);
+      setStaffList(stf);
+      setSelectedStaffId('');
+      const existingLeaderId = order.assignedTo || order.assigned_to || order.leaderId;
+      if (existingLeaderId && list.some((l) => (l.userAccountId || l.user_account_id) == existingLeaderId)) {
+        setSelectedLeaderId(existingLeaderId);
+      } else if (list.length > 0) {
+        setSelectedLeaderId(list[0].userAccountId || list[0].user_account_id);
+      } else {
+        setSelectedLeaderId('');
       }
     } catch (err) {
       console.error('Lỗi khi tải danh sách tổ trưởng:', err);
+      toast.error('Không thể tải danh sách Tổ trưởng/Quản lý.');
     }
   };
 
   const handleConfirmAssignLeader = async (e) => {
     e.preventDefault();
-    if (!assignLeaderOrder || !selectedLeaderId) return;
+    if (!assignLeaderOrder) return;
+    if (!selectedLeaderId) {
+      toast.error('Vui lòng chọn Tổ trưởng / Quản lý xưởng cần giao việc.');
+      return;
+    }
     try {
       setAssignLoading(true);
       await assignLeaderToOrder(assignLeaderOrder.orderId, {
         leaderId: selectedLeaderId,
+        assigned_to: selectedLeaderId,
+        staffId: selectedStaffId || undefined,
         note: assignNote,
       });
       toast.success('Đã phân công Tổ trưởng cho đơn hàng #' + assignLeaderOrder.orderCode);
@@ -508,7 +637,7 @@ export function ManageOrdersPage() {
       setAssignNote('');
       fetchOrders();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Không thể phân công Tổ trưởng.');
+      toast.error(err.response?.data?.message || err.message || 'Không thể phân công Tổ trưởng.');
     } finally {
       setAssignLoading(false);
     }
@@ -676,7 +805,7 @@ export function ManageOrdersPage() {
       <div className="flex border-b border-stone-200 gap-2">
         <button
           type="button"
-          onClick={() => setActiveTab('ORDERS')}
+          onClick={() => handleSwitchTab('ORDERS')}
           className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
             activeTab === 'ORDERS'
               ? 'border-amber-800 text-amber-900 bg-amber-50/50'
@@ -689,7 +818,7 @@ export function ManageOrdersPage() {
 
         <button
           type="button"
-          onClick={() => setActiveTab('REQUESTS')}
+          onClick={() => handleSwitchTab('REQUESTS')}
           className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
             activeTab === 'REQUESTS'
               ? 'border-amber-800 text-amber-900 bg-amber-50/50'
@@ -698,6 +827,11 @@ export function ManageOrdersPage() {
         >
           <ClipboardList className="h-4 w-4" />
           <span>Thẩm định yêu cầu thiết kế (Design Requests)</span>
+          {pendingRequestsCount > 0 && (
+            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-extrabold text-white animate-pulse">
+              {pendingRequestsCount} chờ duyệt
+            </span>
+          )}
         </button>
       </div>
 
@@ -705,6 +839,32 @@ export function ManageOrdersPage() {
         <OwnerRequestsTab />
       ) : (
         <>
+          {/* Thông báo nổi bật nếu có đơn yêu cầu mới đang chờ thẩm định */}
+          {pendingRequestsCount > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="rounded-full bg-amber-500/20 p-2 text-amber-800 shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-700" />
+                </div>
+                <div>
+                  <p className="font-bold text-amber-950 text-sm">
+                    Có {pendingRequestsCount} yêu cầu may đo / thiết kế mới từ Sales đang chờ bạn thẩm định và chốt thiết kế!
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    Vui lòng duyệt thông số kỹ thuật và hình ảnh bản vẽ trước khi Sales tạo hợp đồng.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSwitchTab('REQUESTS')}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-800 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-900 transition whitespace-nowrap shrink-0"
+              >
+                <span>Xem & Thẩm định ngay</span>
+                <span>&rarr;</span>
+              </button>
+            </div>
+          )}
 
       {/* ── Tiêu đề & Nút thao tác ───────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -810,8 +970,17 @@ export function ManageOrdersPage() {
                 setSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 shadow-sm"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => { setSearch(''); setCurrentPage(1); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           {/* Lọc Trạng thái & Loại đơn */}
@@ -905,39 +1074,39 @@ export function ManageOrdersPage() {
 
                   return (
                     <tr key={order.orderId} className="transition hover:bg-stone-50/80">
-                      {/* Mã đơn */}
-                      <td className="whitespace-nowrap py-3.5 pl-4 pr-3 sm:pl-6 font-semibold text-amber-800">
-                        {order.orderCode}
-                      </td>
-
-                      {/* Loại đơn */}
-                      <td className="whitespace-nowrap px-3 py-3.5">
-                        <span className="inline-block rounded-md bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-700">
+                      {/* Mã đơn & Loại đơn */}
+                      <td className="whitespace-nowrap py-3.5 pl-4 pr-3 sm:pl-6">
+                        <div className="font-mono font-bold text-amber-800 text-xs">
+                          {order.orderCode}
+                        </div>
+                        <span className="inline-block mt-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-600">
                           {ORDER_TYPE_LABELS[order.orderType] || order.orderType}
                         </span>
                       </td>
 
                       {/* Khách hàng */}
                       <td className="px-3 py-3.5">
-                        <div className="font-medium text-stone-800 flex items-center gap-1.5">
+                        <div className="font-semibold text-stone-800 flex items-center gap-1.5 text-xs">
                           <User className="h-3.5 w-3.5 text-stone-400 shrink-0" />
                           <span>{order.contactName}</span>
                         </div>
-                        <div className="text-xs text-stone-400 flex items-center gap-1 mt-0.5">
-                          <Phone className="h-3 w-3 text-stone-300" />
+                        <div className="text-xs text-stone-500 flex items-center gap-1 mt-0.5">
+                          <Phone className="h-3 w-3 text-stone-400" />
                           <span>{order.contactPhone}</span>
                         </div>
                       </td>
 
-                      {/* Nhân viên phụ trách */}
-                      <td className="whitespace-nowrap px-3 py-3.5 text-stone-600">
+                      {/* Nhân viên phụ trách / Tổ trưởng */}
+                      <td className="whitespace-nowrap px-3 py-3.5 text-xs">
                         {order.staffName ? (
-                          <div className="flex items-center gap-1.5">
-                            <ShoppingBag className="h-3.5 w-3.5 text-stone-400" />
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                            <Hammer className="h-3.5 w-3.5 text-amber-700 shrink-0" />
                             <span>{order.staffName}</span>
                           </div>
                         ) : (
-                          <span className="text-stone-400">—</span>
+                          <span className="inline-flex items-center gap-1 text-xs text-stone-400 italic">
+                            Chưa phân công
+                          </span>
                         )}
                       </td>
 
@@ -946,27 +1115,26 @@ export function ManageOrdersPage() {
                         <StatusBadge status={order.status} />
                       </td>
 
-                      {/* Tổng tiền */}
-                      <td className="whitespace-nowrap px-3 py-3.5 text-right font-bold text-stone-900">
-                        {formatCurrency(order.totalAmount)}
+                      {/* Tài chính & Thu tiền */}
+                      <td className="whitespace-nowrap px-3 py-3.5 text-right text-xs">
+                        <div className="font-bold text-stone-900">
+                          {formatCurrency(order.totalAmount)}
+                        </div>
+                        {order.remainingAmount > 0 ? (
+                          <div className="text-[11px] font-semibold text-rose-600 mt-0.5">
+                            Còn lại: {formatCurrency(order.remainingAmount)}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">
+                            Đã thanh toán đủ
+                          </div>
+                        )}
                       </td>
 
                       {/* Thao tác */}
                       <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
                         <div className="inline-flex items-center gap-1.5">
-                          {/* Nút Giao việc cho Leader khi CONFIRMED */}
-                          {order.status === 'CONFIRMED' && (
-                            <button
-                              onClick={() => handleOpenAssignLeader(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
-                              title="Phân công Tổ trưởng xưởng"
-                            >
-                              <Hammer className="h-3.5 w-3.5" />
-                              <span>Giao việc</span>
-                            </button>
-                          )}
-
-                          {/* Nút Nghiệm thu khi UNDER_INSPECTION */}
+                          {/* Nút Nghiệm thu chất lượng khi UNDER_INSPECTION */}
                           {order.status === 'UNDER_INSPECTION' && (
                             <button
                               onClick={() => {
@@ -974,31 +1142,33 @@ export function ManageOrdersPage() {
                                 setInspectResult('PASSED');
                                 setInspectReason('');
                               }}
-                              className="inline-flex items-center gap-1 rounded-md border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-800 shadow-sm transition hover:bg-purple-100 active:scale-95"
-                              title="Nghiệm thu chất lượng"
+                              className="inline-flex items-center gap-1 rounded-md bg-purple-700 px-2.5 py-1 text-xs font-bold text-white shadow-sm hover:bg-purple-800 transition active:scale-95 animate-pulse"
+                              title="Xem ảnh thành phẩm và đánh giá nghiệm thu"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" />
-                              <span>Nghiệm thu</span>
+                              <span>Thẩm định nghiệm thu</span>
                             </button>
                           )}
 
-                          {/* Nút Xem chi tiết */}
-                          <button
-                            onClick={() => handleViewDetail(order)}
-                            className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-amber-800 active:scale-95"
-                            title="Xem chi tiết đơn hàng"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            <span>Chi tiết</span>
-                          </button>
+                          {/* Nút Giao việc cho Leader khi NEW, CONFIRMED, hoặc IN_PRODUCTION */}
+                          {(order.status === 'CONFIRMED' || order.status === 'NEW' || order.status === 'IN_PRODUCTION') && (
+                            <button
+                              onClick={() => handleOpenAssignLeader(order)}
+                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+                              title={order.staffName ? `Đã giao: ${order.staffName} (Bấm để đổi)` : "Phân công Tổ trưởng xưởng"}
+                            >
+                              <Hammer className="h-3.5 w-3.5" />
+                              <span>{order.staffName ? 'Đổi giao việc' : 'Giao việc'}</span>
+                            </button>
+                          )}
 
-                          {/* Nút hành động chuyển sang trạng thái hợp lệ tiếp theo */}
-                          {nextConfig && (
+                          {/* Nút chuyển trạng thái kế tiếp (quy trình tuần tự) */}
+                          {nextConfig && order.status !== 'UNDER_INSPECTION' && (
                             <button
                               onClick={() => handleAdvanceStatus(order)}
                               disabled={isAdvancing}
                               className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
-                              title={`Chuyển trạng thái sang ${nextConfig.nextLabel}`}
+                              title={`Chuyển sang ${nextConfig.nextLabel}`}
                             >
                               {isAdvancing ? (
                                 <RotateCw className="h-3.5 w-3.5 animate-spin" />
@@ -1009,13 +1179,22 @@ export function ManageOrdersPage() {
                             </button>
                           )}
 
-                          {/* Nút Hủy đơn hàng */}
+                          {/* Xem chi tiết */}
+                          <button
+                            onClick={() => handleViewDetail(order)}
+                            className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95"
+                            title="Xem chi tiết đơn hàng"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-stone-400" />
+                            <span>Chi tiết</span>
+                          </button>
+
+                          {/* Hủy đơn hàng */}
                           {canCancel && (
                             <button
                               onClick={() => setCancelOrder(order)}
-                              disabled={isAdvancing}
-                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100 active:scale-95 disabled:opacity-50"
-                              title="Hủy đơn hàng"
+                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 shadow-sm transition hover:bg-rose-100 active:scale-95"
+                              title="Hủy đơn hàng này"
                             >
                               <Ban className="h-3.5 w-3.5" />
                               <span>Hủy</span>
@@ -1081,21 +1260,72 @@ export function ManageOrdersPage() {
             <form onSubmit={handleConfirmAssignLeader} className="space-y-4 text-xs">
               <div>
                 <label className="block font-semibold text-stone-700 mb-1">
-                  Chọn Tổ trưởng xưởng:
+                  Chọn Tổ trưởng / Quản lý xưởng: <span className="text-rose-500">*</span>
+                </label>
+                {leadersLoading ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 text-stone-600 text-xs">
+                    <RotateCw className="h-4 w-4 animate-spin text-amber-800" />
+                    <span>Đang tải danh sách Tổ trưởng xưởng...</span>
+                  </div>
+                ) : leaders.length === 0 ? (
+                  <div className="space-y-2">
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800 text-xs">
+                      Chưa tìm thấy tài khoản Tổ trưởng/Quản lý nào đang hoạt động.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => loadLeaders()}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 hover:underline"
+                    >
+                      <RotateCw className="h-3 w-3" /> Thử tải lại danh sách
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedLeaderId}
+                    onChange={(e) => setSelectedLeaderId(e.target.value)}
+                    className="w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-amber-800 focus:outline-none bg-white font-medium"
+                    required
+                  >
+                    <option value="">-- Chọn Tổ trưởng xưởng --</option>
+                    {leaders.map((ldr) => {
+                      const ldrId = ldr.userAccountId || ldr.user_account_id;
+                      const name = ldr.fullName || ldr.full_name;
+                      const contact = ldr.phoneNumber || ldr.phone_number || ldr.email;
+                      return (
+                        <option key={ldrId} value={ldrId}>
+                          {name} ({contact})
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
+              {/* Chọn Thợ / Nhân viên kỹ thuật đồng hành */}
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">
+                  Thợ chính / Nhân viên kỹ thuật phụ trách: <span className="text-stone-400 text-[11px] font-normal">(Tùy chọn)</span>
                 </label>
                 <select
-                  value={selectedLeaderId}
-                  onChange={(e) => setSelectedLeaderId(e.target.value)}
+                  value={selectedStaffId}
+                  onChange={(e) => setSelectedStaffId(e.target.value)}
                   className="w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-amber-800 focus:outline-none bg-white font-medium"
                 >
-                  {leaders.map((ldr) => (
-                    <option key={ldr.user_account_id} value={ldr.user_account_id}>
-                      {ldr.full_name} ({ldr.email || ldr.phone_number})
-                    </option>
-                  ))}
+                  <option value="">-- Để trống (Tổ trưởng tự phân công) --</option>
+                  {staffList.map((stf) => {
+                    const stfId = stf.userAccountId || stf.user_account_id;
+                    const name = stf.fullName || stf.full_name;
+                    const role = stf.roleName || stf.roleCode || 'Nhân sự';
+                    const contact = stf.phoneNumber || stf.phone_number || stf.email;
+                    return (
+                      <option key={stfId} value={stfId}>
+                        {name} ({role}{contact ? ` - ${contact}` : ''})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
-              <div>
+<div>
                 <label className="block font-semibold text-stone-700 mb-1">
                   Ghi chú chỉ đạo cho xưởng:
                 </label>
@@ -1117,8 +1347,8 @@ export function ManageOrdersPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={assignLoading}
-                  className="rounded-lg bg-amber-800 px-5 py-2 font-bold text-white hover:bg-amber-900 disabled:opacity-50"
+                  disabled={assignLoading || leaders.length === 0}
+                  className="rounded-lg bg-amber-800 px-5 py-2 font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition shadow-sm"
                 >
                   {assignLoading ? 'Đang giao...' : 'Xác nhận giao việc'}
                 </button>
@@ -1128,45 +1358,125 @@ export function ManageOrdersPage() {
         </div>
       )}
 
-      {/* ── Modal Nghiệm thu chất lượng ── */}
+      {/* ── Modal Nghiệm thu chất lượng & Xem ảnh thành phẩm ── */}
       {inspectTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-stone-900 mb-2 flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-purple-700" />
-              Nghiệm thu chất lượng sản phẩm #{inspectTarget.orderCode}
-            </h3>
-            <p className="text-xs text-stone-500 mb-4">
-              Kiểm tra sản phẩm thực tế theo đúng bản vẽ thiết kế đã khóa. Nếu đạt, đơn hàng sẽ chuyển sang cho Sales để kích hoạt giao hàng.
-            </p>
-            <form onSubmit={handleConfirmInspect} className="space-y-4 text-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 mb-4">
+              <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-purple-700" />
+                Thẩm định & Nghiệm thu sản phẩm #{inspectTarget.orderCode}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setInspectTarget(null)}
+                className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Thông tin nộp từ Tổ trưởng */}
+            <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 mb-4 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-purple-900">
+                  Tổ trưởng phụ trách: {inspectTarget.staffName || inspectTarget.leaderName || 'Xưởng gia công'}
+                </span>
+                <span className="rounded bg-purple-200/70 px-2 py-0.5 text-[10px] font-bold text-purple-800">
+                  Chờ Chủ xưởng duyệt
+                </span>
+              </div>
+              {inspectTarget.inspectionNote && (
+                <div className="text-stone-700">
+                  <span className="font-semibold text-purple-900">Ghi chú tự kiểm: </span>
+                  {inspectTarget.inspectionNote}
+                </div>
+              )}
+            </div>
+
+            {/* Thư viện ảnh thành phẩm Leader đã gửi */}
+            <div className="mb-4">
+              <label className="block font-semibold text-stone-800 text-xs mb-2">
+                📸 Hình ảnh thành phẩm thực tế từ xưởng:{' '}
+                {inspectTarget.inspectionImages && inspectTarget.inspectionImages.length > 0 ? (
+                  <span className="text-purple-700 font-bold">
+                    ({inspectTarget.inspectionImages.length} ảnh)
+                  </span>
+                ) : (
+                  <span className="text-stone-400 font-normal">(Chưa có ảnh)</span>
+                )}
+              </label>
+
+              {inspectTarget.inspectionImages && inspectTarget.inspectionImages.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2.5 max-h-48 overflow-y-auto p-1">
+                  {inspectTarget.inspectionImages.map((imgUrl, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setZoomImage(imgUrl)}
+                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-stone-200 bg-stone-100 aspect-video shadow-xs hover:border-purple-600 hover:shadow-md transition"
+                      title="Bấm để phóng to xem chi tiết"
+                    >
+                      <img
+                        src={imgUrl}
+                        alt={`Ảnh thành phẩm ${idx + 1}`}
+                        className="h-full w-full object-cover group-hover:scale-105 transition duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                        <Eye className="h-5 w-5 text-white drop-shadow" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-stone-200 p-3 text-center text-xs text-stone-400">
+                  Tổ trưởng chưa đính kèm ảnh sản phẩm.
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleConfirmInspect} className="space-y-4 text-xs pt-2 border-t border-stone-100">
               <div>
-                <label className="block font-semibold text-stone-700 mb-1">
-                  Kết quả nghiệm thu:
+                <label className="block font-semibold text-stone-700 mb-2">
+                  Đánh giá nghiệm thu của Chủ xưởng: <span className="text-rose-500">*</span>
                 </label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-emerald-800">
+                <div className="grid grid-cols-2 gap-3">
+                  <label
+                    className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer font-bold transition ${
+                      inspectResult === 'PASSED'
+                        ? 'border-emerald-500 bg-emerald-50/60 text-emerald-900 shadow-xs'
+                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="inspectRes"
                       value="PASSED"
                       checked={inspectResult === 'PASSED'}
                       onChange={() => setInspectResult('PASSED')}
+                      className="text-emerald-600 focus:ring-emerald-500"
                     />
-                    ĐẠT (Chuyển giao hàng)
+                    <span>✅ ĐẠT (Chuyển giao hàng)</span>
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-rose-800">
+                  <label
+                    className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer font-bold transition ${
+                      inspectResult === 'FAILED'
+                        ? 'border-rose-500 bg-rose-50/60 text-rose-900 shadow-xs'
+                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                    }`}
+                  >
                     <input
                       type="radio"
                       name="inspectRes"
                       value="FAILED"
                       checked={inspectResult === 'FAILED'}
                       onChange={() => setInspectResult('FAILED')}
+                      className="text-rose-600 focus:ring-rose-500"
                     />
-                    KHÔNG ĐẠT (Trả xưởng sửa)
+                    <span>❌ KHÔNG ĐẠT (Trả xưởng sửa)</span>
                   </label>
                 </div>
               </div>
+
               {inspectResult === 'FAILED' && (
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">
@@ -1177,28 +1487,51 @@ export function ManageOrdersPage() {
                     required
                     value={inspectReason}
                     onChange={(e) => setInspectReason(e.target.value)}
-                    placeholder="VD: Cánh cửa tủ bị xệ 2mm, nước sơn cạnh dưới chưa đều..."
-                    className="w-full rounded-lg border border-red-300 p-2 text-xs focus:border-red-600 focus:outline-none"
+                    placeholder="VD: Nước sơn cạnh đáy chưa đều, cánh cửa tủ bị cọ 2mm, cần chà nhám và phun lại..."
+                    className="w-full rounded-lg border border-red-300 p-2.5 text-xs focus:border-red-600 focus:outline-none"
                   />
                 </div>
               )}
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setInspectTarget(null)}
                   className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
                 >
-                  Hủy
+                  Đóng
                 </button>
                 <button
                   type="submit"
                   disabled={inspectLoading}
-                  className="rounded-lg bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 disabled:opacity-50"
+                  className="rounded-lg bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 disabled:opacity-50 transition shadow-sm"
                 >
-                  {inspectLoading ? 'Đang xử lý...' : 'Xác nhận nghiệm thu'}
+                  {inspectLoading ? 'Đang lưu...' : 'Xác nhận nghiệm thu'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Phóng to ảnh (Lightbox) ── */}
+      {zoomImage && (
+        <div
+          onClick={() => setZoomImage(null)}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4 cursor-zoom-out"
+        >
+          <div className="relative max-w-4xl max-h-[90vh]">
+            <img
+              src={zoomImage}
+              alt="Phóng to ảnh nghiệm thu"
+              className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
+            />
+            <button
+              onClick={() => setZoomImage(null)}
+              className="absolute -top-3 -right-3 rounded-full bg-white p-1.5 text-stone-800 shadow-lg hover:bg-stone-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
       )}

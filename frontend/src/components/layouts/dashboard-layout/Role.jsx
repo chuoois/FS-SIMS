@@ -27,7 +27,8 @@ export const roles = {
     items: [
       { label: 'Tổng quan', path: '', icon: LayoutDashboard },
       { label: 'Quản lý tài khoản', path: 'accounts', icon: UserCog },
-      { label: 'Quản lý đơn hàng', path: 'orders', icon: ClipboardList },
+      { label: 'Quản lý đơn hàng', path: 'orders', icon: Package },
+      { label: 'Duyệt yêu cầu may đo', path: 'requests', icon: ClipboardList },
       { label: 'Nhà cung cấp', path: 'suppliers', icon: Building2 },
       { label: 'Sản phẩm', path: 'products', icon: Boxes },
       { label: 'Quản lý nguyên vật liệu', path: 'materials', icon: Package },
@@ -44,7 +45,7 @@ export const roles = {
     base: '/sale',
     items: [
       { label: 'Tạo đơn hàng (POS)', path: 'create-order', icon: Receipt },
-      { label: 'Tạo yêu cầu may đo', path: 'requests/create', icon: PenTool },
+      { label: 'Tạo đơn theo yêu cầu', path: 'requests/create', icon: PenTool },
       { label: 'Đơn hàng', path: 'orders', icon: Package },
       { label: 'Hợp đồng', path: 'contracts', icon: FileText },
       { label: 'Yêu cầu của khách', path: 'requests', icon: ClipboardList },
@@ -72,6 +73,6 @@ export const resolveItems = (role) =>
   role.items.map((i, index) => ({
     ...i,
     to: i.path === '#' ? '#' : i.path ? `${role.base}/${i.path}` : role.base,
-    end: !i.path,
+    end: i.end !== undefined ? i.end : true,
     key: `${role.base}-${i.label}-${index}`,
   }));

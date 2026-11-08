@@ -148,3 +148,21 @@ export async function completeOrderDelivery(orderId, payload = {}) {
   const response = await api.post(`/sale-orders/orders/${orderId}/complete`, payload);
   return response.data;
 }
+
+/**
+ * 19. Tải lên danh sách hình ảnh thiết kế / may đo (Cloudinary)
+ */
+export async function uploadRequestImages(files) {
+  const formData = new FormData();
+  if (Array.isArray(files)) {
+    files.forEach((file) => formData.append('images', file));
+  } else if (files instanceof FileList) {
+    Array.from(files).forEach((file) => formData.append('images', file));
+  } else if (files) {
+    formData.append('images', files);
+  }
+  const response = await api.post('/sale-orders/upload-images', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}

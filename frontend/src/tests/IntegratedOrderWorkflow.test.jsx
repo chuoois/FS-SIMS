@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CreateOrderRequestPage } from '../pages/sale-pages/CreateOrderRequestPage';
 import { LeaderOrdersPage } from '../pages/staff-pages/LeaderOrdersPage';
+import { OwnerRequestsTab } from '../pages/owner-pages/OwnerRequestsTab';
+import { ManageOrdersPage } from '../pages/owner-pages/ManageOrdersPage';
 import * as saleOrderService from '../services/saleOrderService';
 import * as orderManagementService from '../services/orderManagementService';
 
@@ -18,6 +20,9 @@ vi.mock('../services/saleOrderService', () => ({
 }));
 
 vi.mock('../services/orderManagementService', () => ({
+  getOrders: vi.fn(),
+  updateOrderStatus: vi.fn(),
+  cancelOrder: vi.fn(),
   getLeaderOrders: vi.fn(),
   leaderAcceptOrder: vi.fn(),
   leaderUpdateProgress: vi.fn(),
@@ -66,7 +71,7 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
     );
 
     // Tiêu đề
-    expect(screen.getByText(/Lập Yêu Cầu Thiết Kế & May Đo Mới/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tạo đơn theo yêu cầu/i)).toBeInTheDocument();
     expect(screen.getByText(/1. Thông tin khách hàng & Giao nhận/i)).toBeInTheDocument();
     expect(screen.getByText(/2. Chi tiết sản phẩm & Thông số kỹ thuật/i)).toBeInTheDocument();
     expect(screen.getByText(/3. Hình ảnh thiết kế & Bản vẽ 3D\/2D/i)).toBeInTheDocument();
@@ -116,6 +121,19 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
   });
 
   it('3. LeaderOrdersPage: Hiển thị danh sách đơn sản xuất và nút Tiếp nhận / Nghiệm thu', async () => {
+    orderManagementService.getOrderDetail.mockResolvedValue({
+      order: {
+        orderId: 502,
+        orderCode: 'ORD-LEADER-002',
+        contactName: 'Lê Gia Công',
+        contactPhone: '0908888888',
+        orderType: 'CUSTOM',
+        status: 'IN_PRODUCTION',
+        totalAmount: 25000000,
+        expectedDate: '2026-11-25',
+        items: [{ orderItemId: 2, itemName: 'Tủ bếp Acrylic', lengthCm: 320, widthCm: 60, heightCm: 240, quantity: 1, unitPrice: 25000000 }],
+      },
+    });
     orderManagementService.getLeaderOrders.mockResolvedValue({
       orders: [
         {
@@ -154,6 +172,170 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
       expect(screen.getByText('Khách Hàng Xưởng')).toBeInTheDocument();
       expect(screen.getAllByText('Chờ tiếp nhận').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByRole('button', { name: /Tiếp nhận/i })).toBeInTheDocument();
+    });
+  });
+
+  it('4. OwnerRequestsTab: Hiển thị đơn yêu cầu thiết kế từ Sales để Chủ xưởng thẩm định và chốt thiết kế', async () => {
+    orderManagementService.getOwnerRequests.mockResolvedValue({
+      message: 'Lấy danh sách yêu cầu thiết kế thành công',
+      data: [
+        {
+          requestId: 88,
+          requestCode: 'REQ-20261107-0088',
+          contactName: 'Trần Khách May Đo',
+          contactPhone: '0988888888',
+          orderType: 'CUSTOM',
+          status: 'PENDING',
+          createdAt: '2026-11-07T10:00:00Z',
+          items: [{ itemName: 'Tủ rượu gỗ sồi', lengthCm: 200, widthCm: 60, heightCm: 210, quantity: 1 }],
+          images: [],
+        },
+      ],
+      pagination: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+    });
+
+    render(
+      <MemoryRouter>
+        <OwnerRequestsTab />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('REQ-20261107-0088')).toBeInTheDocument();
+      expect(screen.getByText('Trần Khách May Đo')).toBeInTheDocument();
+      expect(screen.getAllByText('Chờ thẩm định').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole('button', { name: /Thẩm định & Chốt/i })).toBeInTheDocument();
+    });
+  });
+  it('5. LeaderOrdersPage: Gửi yêu cầu nghiệm thu kèm ảnh thành phẩm lên Owner', async () => {
+    const user = userEvent.setup();
+    orderManagementService.getLeaderOrders.mockResolvedValue({
+      orders: [
+        {
+          orderId: 502,
+          orderCode: 'ORD-LEADER-002',
+          contactName: 'Lê Gia Công',
+          contactPhone: '0908888888',
+          orderType: 'CUSTOM',
+          status: 'IN_PRODUCTION',
+          totalAmount: 25000000,
+          expectedDate: '2026-11-25',
+          items: [{ orderItemId: 2, itemName: 'Tủ bếp Acrylic', lengthCm: 320, widthCm: 60, heightCm: 240, quantity: 1, unitPrice: 25000000 }],
+        },
+      ],
+      pagination: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+    });
+
+    render(
+      <MemoryRouter>
+        <LeaderOrdersPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('ORD-LEADER-002')).toBeInTheDocument();
+      expect(screen.getAllByText('Đang gia công').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Mở chi tiết đơn hàng
+    const detailBtn = screen.getByRole('button', { name: /Chi tiết/i });
+    await user.click(detailBtn);
+
+    // Trong modal chi tiết, bấm "Gửi Chủ xưởng nghiệm thu"
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Gửi Chủ xưởng nghiệm thu/i })).toBeInTheDocument();
+    });
+    const sendInspectBtn = screen.getByRole('button', { name: /Gửi Chủ xưởng nghiệm thu/i });
+    await user.click(sendInspectBtn);
+
+    // Modal nộp nghiệm thu xuất hiện
+    await waitFor(() => {
+      expect(screen.getByText(/Nộp nghiệm thu sản phẩm/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Tải ảnh thành phẩm thực tế/i).length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Nhập ghi chú tự kiểm
+    const noteInput = screen.getByPlaceholderText(/VD: Đã hoàn thiện sơn PU 3 lớp/i);
+    fireEvent.change(noteInput, { target: { value: 'Sản phẩm hoàn thiện sơn bóng, kiểm tra phụ kiện đạt chuẩn.' } });
+
+    // Dán link ảnh minh họa thành phẩm
+    const linkInput = screen.getByPlaceholderText(/Hoặc dán URL ảnh trực tiếp/i);
+    fireEvent.change(linkInput, { target: { value: 'https://example.com/finished-product.jpg' } });
+    const addLinkBtn = screen.getByRole('button', { name: /Thêm link/i });
+    await user.click(addLinkBtn);
+
+    // Bấm nộp nghiệm thu
+    const submitInspectBtn = screen.getByRole('button', { name: /Xác nhận nộp nghiệm thu/i });
+    await user.click(submitInspectBtn);
+
+    await waitFor(() => {
+      expect(orderManagementService.leaderSubmitInspection).toHaveBeenCalledWith(
+        502,
+        expect.objectContaining({
+          note: 'Sản phẩm hoàn thiện sơn bóng, kiểm tra phụ kiện đạt chuẩn.',
+          images: expect.arrayContaining(['https://example.com/finished-product.jpg']),
+        })
+      );
+    });
+  });
+
+  it('6. ManageOrdersPage: Hiển thị đơn Chờ nghiệm thu (UNDER_INSPECTION), xem ảnh thành phẩm và bấm Đạt nghiệm thu', async () => {
+    const user = userEvent.setup();
+    orderManagementService.getOrders.mockResolvedValue({
+      orders: [
+        {
+          orderId: 601,
+          orderCode: 'ORD-INSPECT-001',
+          contactName: 'Khách Đặt Tủ',
+          contactPhone: '0933333333',
+          staffName: 'Lê Văn Tổ Trưởng',
+          orderType: 'CUSTOM',
+          status: 'UNDER_INSPECTION',
+          totalAmount: 30000000,
+          paidAmount: 15000000,
+          remainingAmount: 15000000,
+          inspectionNote: 'Đã hoàn thiện sắc nét, kiểm tra đóng mở êm.',
+          inspectionImages: ['https://example.com/cabinet-front.jpg'],
+          items: [],
+        },
+      ],
+      pagination: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+    });
+
+    render(
+      <MemoryRouter>
+        <ManageOrdersPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('ORD-INSPECT-001')).toBeInTheDocument();
+      expect(screen.getAllByText('Chờ nghiệm thu').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole('button', { name: /Thẩm định nghiệm thu/i })).toBeInTheDocument();
+    });
+
+    // Mở modal thẩm định nghiệm thu
+    const inspectBtn = screen.getByRole('button', { name: /Thẩm định nghiệm thu/i });
+    await user.click(inspectBtn);
+
+    // Modal thẩm định xuất hiện với thông tin và ảnh thành phẩm
+    await waitFor(() => {
+      expect(screen.getByText(/Thẩm định & Nghiệm thu sản phẩm/i)).toBeInTheDocument();
+      expect(screen.getByText(/Đã hoàn thiện sắc nét, kiểm tra đóng mở êm/i)).toBeInTheDocument();
+      expect(screen.getByAltText(/Ảnh thành phẩm 1/i)).toBeInTheDocument();
+    });
+
+    // Bấm Xác nhận nghiệm thu (mặc định ĐẠT)
+    const confirmBtn = screen.getByRole('button', { name: /Xác nhận nghiệm thu/i });
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(orderManagementService.inspectOrder).toHaveBeenCalledWith(
+        601,
+        expect.objectContaining({
+          result: 'PASSED',
+        })
+      );
     });
   });
 });

@@ -62,6 +62,10 @@ export const OwnerRouter = {
           element: <ManageOrdersPage />,
         },
         {
+          path: "requests",
+          element: <ManageOrdersPage defaultTab="REQUESTS" />,
+        },
+        {
           path: "analytics",
           element: (
             <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">

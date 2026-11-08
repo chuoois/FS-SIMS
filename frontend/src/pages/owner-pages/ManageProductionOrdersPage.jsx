@@ -806,11 +806,16 @@ export const ManageProductionOrdersPage = () => {
                     required
                   >
                     <option value="">-- Chọn Trưởng nhóm --</option>
-                    {staffLeaders.map((ldr) => (
-                      <option key={ldr.user_account_id} value={ldr.user_account_id}>
-                        {ldr.full_name} ({ldr.phone_number || ldr.email})
-                      </option>
-                    ))}
+                    {staffLeaders.map((ldr) => {
+                      const ldrId = ldr.user_account_id || ldr.userAccountId;
+                      const name = ldr.full_name || ldr.fullName;
+                      const contact = ldr.phone_number || ldr.phoneNumber || ldr.email;
+                      return (
+                        <option key={ldrId} value={ldrId}>
+                          {name} ({contact})
+                        </option>
+                      );
+                    })}
                   </select>
                 )}
               </div>
