@@ -340,7 +340,7 @@ export const ManageFinancialReportsPage = () => {
             title="Mở hộp thoại in hoặc lưu thành file PDF"
           >
             <Printer className="h-4 w-4" />
-            <span>Xuất PDF</span>
+            <span>Xuất PDF / In</span>
           </button>
         </div>
       </div>

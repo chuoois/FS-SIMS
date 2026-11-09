@@ -12,11 +12,9 @@ const {
   createProductionOrderHandler,
   assignLeader,
   cancelProductionOrderHandler,
-  updateDesignFileHandler,
 } = require('../controllers/productionOrderController');
 
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
-const upload = require('../middlewares/uploadMiddleware');
 
 const router = express.Router();
 
@@ -37,11 +35,7 @@ router.get('/', getProductionOrders);
 
 // 4. POST /api/production-orders
 //    Tạo mới lệnh gia công từ đơn hàng khách hàng
-router.post('/', upload.single('design_file'), createProductionOrderHandler);
-
-// 4b. PATCH /api/production-orders/:id/design-file
-//     Cập nhật bản vẽ kỹ thuật cho lệnh gia công
-router.patch('/:id/design-file', upload.single('design_file'), updateDesignFileHandler);
+router.post('/', createProductionOrderHandler);
 
 // 5. PATCH /api/production-orders/:id/assign-leader
 //    Gán trưởng nhóm sản xuất cho lệnh gia công
@@ -52,4 +46,3 @@ router.patch('/:id/assign-leader', assignLeader);
 router.post('/:id/cancel', cancelProductionOrderHandler);
 
 module.exports = router;
-

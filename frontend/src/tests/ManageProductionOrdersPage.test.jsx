@@ -12,12 +12,6 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
-// Mock URL.createObjectURL & revokeObjectURL cho JSDOM
-if (typeof window !== 'undefined') {
-  window.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
-  window.URL.revokeObjectURL = vi.fn();
-}
-
 describe('ManageProductionOrdersPage Component', () => {
   const mockOrders = [
     {
@@ -30,7 +24,6 @@ describe('ManageProductionOrdersPage Component', () => {
       status: 'DRAFT',
       planned_start: '2026-11-01',
       planned_end: '2026-11-15',
-      design_file_url: 'https://cloudinary.com/drawings/blueprint-001.jpg',
       assigned_to: 5,
       leader_name: 'Trần Văn Trưởng',
       leader_phone: '0901234567',
@@ -45,7 +38,6 @@ describe('ManageProductionOrdersPage Component', () => {
       status: 'IN_PROGRESS',
       planned_start: '2026-11-05',
       planned_end: '2026-11-20',
-      design_file_url: null,
       assigned_to: null,
       leader_name: null,
       leader_phone: null,
@@ -60,7 +52,6 @@ describe('ManageProductionOrdersPage Component', () => {
       status: 'COMPLETED',
       planned_start: '2026-10-01',
       planned_end: '2026-10-25',
-      design_file_url: null,
       assigned_to: 6,
       leader_name: 'Lê Văn Phó',
       leader_phone: '0907654321',
@@ -125,9 +116,8 @@ describe('ManageProductionOrdersPage Component', () => {
       expect(screen.getByText('Trần Văn Trưởng')).toBeInTheDocument();
       expect(screen.getByText('Chưa phân công')).toBeInTheDocument();
       expect(screen.getAllByText('Chờ sản xuất').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Đang xử lý').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Đang gia công').length).toBeGreaterThan(0);
       expect(screen.getAllByText('Hoàn thành').length).toBeGreaterThan(0);
-      expect(screen.getByText('Xem bản vẽ')).toBeInTheDocument();
     });
   });
 
@@ -161,8 +151,6 @@ describe('ManageProductionOrdersPage Component', () => {
     expect(screen.getByLabelText(/Đơn hàng cần gia công/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Ngày bắt đầu dự kiến/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Ngày kết thúc dự kiến/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bản vẽ kỹ thuật \/ Bản thiết kế/i)).toBeInTheDocument();
-    expect(screen.getByText(/Nhấn để chọn file bản vẽ/i)).toBeInTheDocument();
   });
 
   it('5. Mở modal phân công khi bấm nút "Phân công"', async () => {
@@ -203,106 +191,6 @@ describe('ManageProductionOrdersPage Component', () => {
 
     await waitFor(() => {
       expect(productionOrderService.cancelProductionOrder).toHaveBeenCalledWith(1);
-    });
-  });
-
-  it('7. Mở modal xem chi tiết bản vẽ kỹ thuật khi bấm "Xem bản vẽ"', async () => {
-    const user = userEvent.setup();
-    render(<ManageProductionOrdersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('PO-20261031-0001')).toBeInTheDocument();
-    });
-
-    const viewBlueprintBtn = screen.getByRole('button', { name: /Xem bản vẽ/i });
-    await user.click(viewBlueprintBtn);
-
-    expect(screen.getByRole('heading', { name: /Bản Vẽ Kỹ Thuật — PO-20261031-0001/i })).toBeInTheDocument();
-    const img = screen.getByAltText('Bản vẽ PO-20261031-0001');
-    expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('src', 'https://cloudinary.com/drawings/blueprint-001.jpg');
-  });
-
-  it('8. Mở modal tải lên bản vẽ khi bấm "Tải lên" trên lệnh chưa có bản vẽ', async () => {
-    const user = userEvent.setup();
-    render(<ManageProductionOrdersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('PO-20261031-0002')).toBeInTheDocument();
-    });
-
-    const uploadBtns = screen.getAllByRole('button', { name: /Tải lên/i });
-    await user.click(uploadBtns[0]);
-
-    expect(screen.getByRole('heading', { name: /Tải Lên Bản Vẽ Kỹ Thuật/i })).toBeInTheDocument();
-    expect(screen.getByText(/Lệnh gia công: PO-20261031-0002/i)).toBeInTheDocument();
-  });
-
-  it('9. Cho phép tải lên file bản vẽ khi tạo lệnh gia công mới', async () => {
-    const user = userEvent.setup();
-    productionOrderService.createProductionOrder.mockResolvedValueOnce({
-      message: 'Tạo lệnh gia công thành công',
-    });
-
-    render(<ManageProductionOrdersPage />);
-
-    const createBtn = screen.getByRole('button', { name: /Tạo lệnh gia công/i });
-    await user.click(createBtn);
-
-    // Chọn đơn hàng
-    const orderSelect = screen.getByLabelText(/Đơn hàng cần gia công/i);
-    await user.selectOptions(orderSelect, '20');
-
-    // Giả lập chọn file hình ảnh bản vẽ
-    const file = new File(['mock drawing binary'], 'ban-ve-ban-an.png', { type: 'image/png' });
-    const fileInput = document.getElementById('create-design-file-input');
-    await user.upload(fileInput, file);
-
-    // Kiểm tra tên file hiển thị trên UI sau khi chọn
-    expect(screen.getByText('ban-ve-ban-an.png')).toBeInTheDocument();
-
-    // Bấm nút submit
-    const submitBtn = screen.getByRole('button', { name: /^Tạo lệnh$/i });
-    await user.click(submitBtn);
-
-    await waitFor(() => {
-      expect(productionOrderService.createProductionOrder).toHaveBeenCalledWith(
-        expect.objectContaining({
-          order_id: 20,
-          design_file: file,
-        })
-      );
-    });
-  });
-
-  it('10. Cho phép cập nhật bản vẽ kỹ thuật cho lệnh gia công đã tạo', async () => {
-    const user = userEvent.setup();
-    productionOrderService.updateProductionOrderDesignFile.mockResolvedValueOnce({
-      message: 'Cập nhật bản vẽ kỹ thuật thành công',
-    });
-
-    render(<ManageProductionOrdersPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('PO-20261031-0002')).toBeInTheDocument();
-    });
-
-    const uploadBtns = screen.getAllByRole('button', { name: /Tải lên/i });
-    await user.click(uploadBtns[0]);
-
-    expect(screen.getByRole('heading', { name: /Tải Lên Bản Vẽ Kỹ Thuật/i })).toBeInTheDocument();
-
-    const file = new File(['updated blueprint content'], 'ban-ve-moi.jpg', { type: 'image/jpeg' });
-    const fileInput = document.getElementById('upload-drawing-file-input');
-    await user.upload(fileInput, file);
-
-    expect(screen.getByText('ban-ve-moi.jpg')).toBeInTheDocument();
-
-    const saveBtn = screen.getByRole('button', { name: /Lưu bản vẽ/i });
-    await user.click(saveBtn);
-
-    await waitFor(() => {
-      expect(productionOrderService.updateProductionOrderDesignFile).toHaveBeenCalledWith(2, file);
     });
   });
 });

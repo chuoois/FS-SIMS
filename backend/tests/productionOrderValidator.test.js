@@ -14,7 +14,6 @@ describe('productionOrderValidator - validateCreateProductionOrderInput', () => 
     const res = validateCreateProductionOrderInput({
       planned_start: '2026-11-01',
       planned_end: '2026-11-15',
-      design_file_url: null,
     });
     expect(res.isValid).toBe(false);
     expect(res.error).toMatch(/chọn đơn hàng/i);
@@ -25,7 +24,6 @@ describe('productionOrderValidator - validateCreateProductionOrderInput', () => 
       order_id: -5,
       planned_start: '2026-11-01',
       planned_end: '2026-11-15',
-      design_file_url: null,
     });
     expect(res.isValid).toBe(false);
     expect(res.error).toMatch(/ID đơn hàng không hợp lệ/i);
@@ -35,7 +33,6 @@ describe('productionOrderValidator - validateCreateProductionOrderInput', () => 
     const res = validateCreateProductionOrderInput({
       order_id: 1,
       planned_end: '2026-11-15',
-      design_file_url: null,
     });
     expect(res.isValid).toBe(false);
     expect(res.error).toMatch(/Ngày bắt đầu dự kiến không hợp lệ/i);
@@ -65,26 +62,13 @@ describe('productionOrderValidator - validateCreateProductionOrderInput', () => 
       order_id: 10,
       planned_start: '2026-11-01',
       planned_end: '2026-11-15',
-      design_file_url: null,
     });
     expect(res.isValid).toBe(true);
     expect(res.value).toEqual({
       order_id: 10,
       planned_start: '2026-11-01',
       planned_end: '2026-11-15',
-      design_file_url: null,
     });
-  });
-
-  test('hợp lệ và lưu design_file_url khi truyền vào', () => {
-    const res = validateCreateProductionOrderInput({
-      order_id: 10,
-      planned_start: '2026-11-01',
-      planned_end: '2026-11-15',
-      design_file_url: 'https://cloudinary.com/drawings/blueprint-001.jpg',
-    });
-    expect(res.isValid).toBe(true);
-    expect(res.value.design_file_url).toBe('https://cloudinary.com/drawings/blueprint-001.jpg');
   });
 });
 
@@ -123,7 +107,6 @@ describe('productionOrderValidator - toProductionOrderDTO', () => {
       status: 'DRAFT',
       planned_start: '2026-11-01',
       planned_end: '2026-11-15',
-      design_file_url: null,
       customerOrder: {
         order_code: 'ORD-001',
         order_type: 'CUSTOM',
@@ -144,6 +127,5 @@ describe('productionOrderValidator - toProductionOrderDTO', () => {
     expect(dto.customer_name).toBe('Anh Nam');
     expect(dto.leader_name).toBe('Trần Văn Trưởng');
     expect(dto.leader_email).toBe('truong@test.com');
-    expect(dto.design_file_url).toBeNull();
   });
 });

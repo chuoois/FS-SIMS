@@ -10,6 +10,7 @@ import { ManageMaterialExportPage } from "../../pages/owner-pages/ManageMaterial
 import { ManageProductionOrdersPage } from "../../pages/owner-pages/ManageProductionOrdersPage";
 import { ManageOrdersPage } from "../../pages/owner-pages/ManageOrdersPage";
 import { ManageFinancialReportsPage } from "../../pages/owner-pages/ManageFinancialReportsPage";
+import { ManageCustomerRequestsPage } from "../../pages/owner-pages/ManageCustomerRequestsPage";
 
 export const OwnerRouter = {
   path: "/owner",
@@ -65,6 +66,10 @@ export const OwnerRouter = {
         {
           path: "financial-reports",
           element: <ManageFinancialReportsPage />,
+        },
+        {
+          path: "customer-requests",
+          element: <ManageCustomerRequestsPage />,
         },
         {
           path: "analytics",

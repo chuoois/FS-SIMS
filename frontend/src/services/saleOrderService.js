@@ -108,3 +108,13 @@ export async function convertRequestToContract(requestId, payload = {}) {
   const response = await api.post(`/sale-orders/requests/${requestId}/convert-to-contract`, payload);
   return response.data;
 }
+
+/**
+ * 14. Chủ xưởng gửi bản thiết kế (file + ghi chú) sang cho Sales
+ */
+export async function updateRequestDesign(requestId, formData) {
+  const response = await api.patch(`/sale-orders/requests/${requestId}/design`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}

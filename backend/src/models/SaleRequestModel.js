@@ -314,4 +314,28 @@ module.exports = {
   getRequestsWithPagination,
   findRequestById,
   convertRequestToContract,
+  updateDesignFile,
 };
+
+/**
+ * Cập nhật bản thiết kế (design_note + design_file_url) cho 1 yêu cầu CUSTOM
+ * Chỉ OWNER mới được gọi hàm này
+ */
+async function updateDesignFile(requestId, { designNote, designFileUrl, updatedBy }) {
+  const request = await OrderRequest.findByPk(requestId);
+  if (!request) {
+    const err = new Error('Không tìm thấy yêu cầu.');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (request.order_type !== 'CUSTOM') {
+    const err = new Error('Chỉ có thể gửi bản thiết kế cho đơn đặt theo yêu cầu (CUSTOM).');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (designNote !== undefined) request.design_note = designNote || null;
+  if (designFileUrl !== undefined) request.design_file_url = designFileUrl || null;
+  request.modifieby = updatedBy || null;
+  await request.save();
+  return request;
+}

@@ -45,6 +45,7 @@ jest.mock('../src/models/SaleRequestModel', () => ({
   getRequestsWithPagination: jest.fn(),
   findRequestById: jest.fn(),
   convertRequestToContract: jest.fn(),
+  updateDesignFile: jest.fn(),
 }));
 
 jest.mock('../src/models/CustomerOrderModel', () => ({
@@ -71,11 +72,19 @@ const {
   getRequestsWithPagination,
   findRequestById: findSaleRequestById,
   convertRequestToContract,
+  updateDesignFile,
 } = require('../src/models/SaleRequestModel');
 
 const SALES_ROLE_ID = 2;
 const salesToken = jwt.sign(
   { sub: 5, email: 'sale@fssims.com', role: SALES_ROLE_ID },
+  process.env.JWT_SECRET,
+  { expiresIn: '1h' }
+);
+
+const OWNER_ROLE_ID = 1;
+const ownerToken = jwt.sign(
+  { sub: 1, email: 'owner@fssims.com', role: OWNER_ROLE_ID },
   process.env.JWT_SECRET,
   { expiresIn: '1h' }
 );
@@ -367,6 +376,45 @@ describe('Sale Orders API (/api/sale-orders)', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.data.contractCode).toBe('HD-20261103-0050');
+    });
+  });
+
+  describe('PATCH /api/sale-orders/requests/:id/design', () => {
+    test('trả về 200 khi Chủ xưởng cập nhật bản thiết kế và ghi chú thành công', async () => {
+      updateDesignFile.mockResolvedValue({
+        request_id: 1,
+        design_note: 'Bản vẽ CAD hoàn chỉnh',
+        design_file_url: 'https://cloudinary.com/design.pdf',
+      });
+
+      const res = await request(app)
+        .patch('/api/sale-orders/requests/1/design')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          design_note: 'Bản vẽ CAD hoàn chỉnh',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.designNote).toBe('Bản vẽ CAD hoàn chỉnh');
+    });
+
+    test('trả về 403 khi Sale cố tình gọi API gửi bản thiết kế', async () => {
+      const res = await request(app)
+        .patch('/api/sale-orders/requests/1/design')
+        .set('Authorization', `Bearer ${salesToken}`)
+        .send({
+          design_note: 'Thử gửi',
+        });
+
+      expect(res.status).toBe(403);
+    });
+
+    test('trả về 400 khi mã request id không hợp lệ', async () => {
+      const res = await request(app)
+        .patch('/api/sale-orders/requests/invalid-id/design')
+        .set('Authorization', `Bearer ${ownerToken}`);
+
+      expect(res.status).toBe(400);
     });
   });
 });

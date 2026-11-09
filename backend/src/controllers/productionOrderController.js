@@ -12,7 +12,6 @@ const {
   createProductionOrder,
   assignLeaderToOrder,
   cancelProductionOrder,
-  updateProductionOrderDesignFile,
   getEligibleCustomerOrders,
 } = require('../models/ProductionOrderModel');
 
@@ -104,30 +103,23 @@ async function getStaffLeadersList(req, res) {
  */
 async function createProductionOrderHandler(req, res) {
   try {
-    const designFileUrl = req.file
-      ? (req.file.path || req.file.secure_url)
-      : (req.body.design_file_url || null);
-
-    const validation = validateCreateProductionOrderInput({
-      ...req.body,
-      design_file_url: designFileUrl,
-    });
+    const validation = validateCreateProductionOrderInput(req.body);
     if (!validation.isValid) {
       return res.status(400).json({ message: validation.error });
     }
 
-    const { order_id, planned_start, planned_end, design_file_url } = validation.value;
+    const { order_id, planned_start, planned_end } = validation.value;
     const userEmail = req.user ? req.user.email : 'system';
 
     const po = await createProductionOrder({
       orderId: order_id,
       plannedStart: planned_start,
       plannedEnd: planned_end,
-      designFileUrl: design_file_url,
       createBy: userEmail,
     });
 
     const poDetail = await findProductionOrderById(po.production_id);
+
 
     return res.status(201).json({
       message: 'Tạo lệnh gia công thành công.',
@@ -213,6 +205,7 @@ async function cancelProductionOrderHandler(req, res) {
     const userEmail = req.user ? req.user.email : 'system';
     await cancelProductionOrder(productionId, userEmail);
 
+
     return res.status(200).json({
       message: 'Hủy lệnh gia công thành công. Đơn hàng liên kết đã được hoàn trả về trạng thái CONFIRMED.',
     });
@@ -225,34 +218,6 @@ async function cancelProductionOrderHandler(req, res) {
   }
 }
 
-async function updateDesignFileHandler(req, res) {
-  try {
-    const { id } = req.params;
-    const productionId = Number(id);
-    if (!productionId || isNaN(productionId) || productionId <= 0) {
-      return res.status(400).json({ message: 'Mã lệnh gia công không hợp lệ.' });
-    }
-
-    const designFileUrl = req.file
-      ? (req.file.path || req.file.secure_url)
-      : (req.body.design_file_url || null);
-
-    const userEmail = req.user ? req.user.email : 'system';
-    const updated = await updateProductionOrderDesignFile(productionId, designFileUrl, userEmail);
-
-    return res.status(200).json({
-      message: 'Cập nhật bản vẽ kỹ thuật thành công.',
-      productionOrder: toProductionOrderDTO(updated),
-    });
-  } catch (error) {
-    console.error('[productionOrderController.updateDesignFileHandler]', error);
-    const isNotFound = error.message && error.message.includes('Không tìm thấy');
-    return res.status(isNotFound ? 404 : 500).json({
-      message: error.message || 'Lỗi máy chủ khi cập nhật bản vẽ',
-      error: error.message,
-    });
-  }
-}
 
 module.exports = {
   getProductionOrders,
@@ -261,6 +226,5 @@ module.exports = {
   createProductionOrderHandler,
   assignLeader,
   cancelProductionOrderHandler,
-  updateDesignFileHandler,
 };
 

@@ -25,16 +25,15 @@ export const roles = {
     base: '/owner',
     items: [
       { label: 'Báo cáo tài chính', path: 'financial-reports', icon: BarChart3 },
-      { label: 'Quản lý tài khoản', path: 'accounts', icon: UserCog },
       { label: 'Quản lý đơn hàng', path: 'orders', icon: ClipboardList },
+      { label: 'Yêu cầu khách hàng', path: 'customer-requests', icon: ClipboardList },
       { label: 'Nhà cung cấp', path: 'suppliers', icon: Building2 },
       { label: 'Sản phẩm', path: 'products', icon: Boxes },
       { label: 'Quản lý nguyên vật liệu', path: 'materials', icon: Package },
       { label: 'Phiếu nhập hàng', path: 'purchase-receipts', icon: Receipt },
       { label: 'Phiếu xuất kho', path: 'material-exports', icon: FileText },
       { label: 'Lệnh gia công', path: 'production-orders', icon: Hammer },
-      { label: 'Khách hàng', path: '#', icon: Users },
-      { label: 'Cài đặt', path: '#', icon: Settings },
+      { label: 'Quản lý tài khoản', path: 'accounts', icon: UserCog },
     ],
   },
   sale: {

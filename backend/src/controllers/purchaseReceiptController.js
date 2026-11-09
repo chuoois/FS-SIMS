@@ -343,6 +343,7 @@ async function confirmReceipt(req, res) {
       },
     });
 
+
     return res.status(200).json({
       message: 'Xác nhận nhập kho thành công. Số lượng tồn kho nguyên vật liệu đã được cập nhật.',
       receipt: toReceiptDetailDTO(updated),
@@ -392,6 +393,7 @@ async function cancelReceipt(req, res) {
         modifieby: userEmail || 'system',
       },
     });
+
 
     return res.status(200).json({
       message: 'Hủy phiếu nhập thành công.',
