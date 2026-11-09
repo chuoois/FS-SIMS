@@ -600,6 +600,14 @@ function toRequestDTO(raw) {
       lengthCm: it.length_cm,
       widthCm: it.width_cm,
       heightCm: it.height_cm,
+      images: (r.images || [])
+        .filter((img) => img.request_item_id && Number(img.request_item_id) === Number(it.request_item_id))
+        .map((img) => ({
+          imageId: img.request_image_id,
+          imageUrl: img.image_url,
+          requestItemId: img.request_item_id,
+          sortOrder: img.sort_order,
+        })),
     })),
     images: (r.images || []).map((img) => ({
       imageId: img.request_image_id,

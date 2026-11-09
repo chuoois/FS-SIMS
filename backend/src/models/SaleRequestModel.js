@@ -418,51 +418,86 @@ async function createSalesOrderRequest({
     }, { transaction });
 
     // Tạo OrderRequestItems
+    const createdItems = [];
     if (items && items.length > 0) {
-      const itemsData = items.map((it) => ({
-        request_id: orderRequest.request_id,
-        product_id: it.productId || it.product_id || null,
-        item_name: it.itemName || it.item_name || 'Món đồ nội thất',
-        category_id: it.categoryId || it.category_id || null,
-        room_id: it.roomId || it.room_id || null,
-        material_id: it.materialId || it.material_id || null,
-        color_id: it.colorId || it.color_id || null,
-        length_cm: it.lengthCm || it.length_cm || null,
-        width_cm: it.widthCm || it.width_cm || null,
-        height_cm: it.heightCm || it.height_cm || null,
-        quantity: Number(it.quantity) || 1,
-        unit_price: Number(it.unitPrice ?? it.unit_price) || 0,
-        description: it.description || it.technicalNotes || it.technical_notes || null,
-        createby: createdBy || 'Sales',
-      }));
-
-      await OrderRequestItem.bulkCreate(itemsData, { transaction });
+      for (const it of items) {
+        const itemRecord = await OrderRequestItem.create({
+          request_id: orderRequest.request_id,
+          product_id: it.productId || it.product_id || null,
+          item_name: it.itemName || it.item_name || 'Món đồ nội thất',
+          category_id: it.categoryId || it.category_id || null,
+          room_id: it.roomId || it.room_id || null,
+          material_id: it.materialId || it.material_id || null,
+          color_id: it.colorId || it.color_id || null,
+          length_cm: it.lengthCm || it.length_cm || null,
+          width_cm: it.widthCm || it.width_cm || null,
+          height_cm: it.heightCm || it.height_cm || null,
+          quantity: Number(it.quantity) || 1,
+          unit_price: Number(it.unitPrice ?? it.unit_price) || 0,
+          description: it.description || it.technicalNotes || it.technical_notes || null,
+          createby: createdBy || 'Sales',
+        }, { transaction });
+        createdItems.push(itemRecord);
+      }
     }
 
-    // Tạo OrderRequestImages
-    if (images && images.length > 0) {
-      const imagesData = images
-        .map((img, idx) => {
-          let url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
-          if (!url || typeof url !== 'string' || !url.trim()) return null;
-          url = url.trim();
-          if (url.length > 255) {
-            console.warn('[SaleRequestModel] Truncating image_url > 255 chars to fit column');
-            url = url.substring(0, 255);
-          }
-          return {
-            request_id: orderRequest.request_id,
-            request_item_id: (typeof img === 'object' && (img.requestItemId || img.request_item_id)) || null,
-            image_url: url,
-            sort_order: (typeof img === 'object' && img.sortOrder) || idx,
-            createby: createdBy || 'Sales',
-          };
-        })
-        .filter(Boolean);
+    // Tạo OrderRequestImages (từ images riêng của từng item hoặc mảng images tổng)
+    const allImagesToCreate = [];
 
-      if (imagesData.length > 0) {
-        await OrderRequestImage.bulkCreate(imagesData, { transaction });
-      }
+    // 1. Lấy ảnh từ từng item (nếu có it.images)
+    if (items && items.length > 0) {
+      items.forEach((it, idx) => {
+        const targetItemId = createdItems[idx] ? createdItems[idx].request_item_id : null;
+        if (it.images && Array.isArray(it.images)) {
+          it.images.forEach((img, imgIdx) => {
+            const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+            if (url && typeof url === 'string' && url.trim()) {
+              allImagesToCreate.push({
+                request_id: orderRequest.request_id,
+                request_item_id: targetItemId,
+                image_url: url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim(),
+                sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : imgIdx,
+                createby: createdBy || 'Sales',
+              });
+            }
+          });
+        }
+      });
+    }
+
+    // 2. Lấy ảnh từ mảng images cấp cao nhất (nếu có)
+    if (images && images.length > 0) {
+      images.forEach((img, idx) => {
+        const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+        if (!url || typeof url !== 'string' || !url.trim()) return;
+
+        let targetItemId = null;
+        if (typeof img === 'object') {
+          if (img.itemIndex !== undefined && createdItems[img.itemIndex]) {
+            targetItemId = createdItems[img.itemIndex].request_item_id;
+          } else if (img.requestItemId || img.request_item_id) {
+            targetItemId = img.requestItemId || img.request_item_id;
+          }
+        }
+
+        const cleanUrl = url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim();
+        const alreadyAdded = allImagesToCreate.some(
+          (ex) => ex.image_url === cleanUrl && ex.request_item_id === targetItemId
+        );
+        if (!alreadyAdded) {
+          allImagesToCreate.push({
+            request_id: orderRequest.request_id,
+            request_item_id: targetItemId,
+            image_url: cleanUrl,
+            sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : idx,
+            createby: createdBy || 'Sales',
+          });
+        }
+      });
+    }
+
+    if (allImagesToCreate.length > 0) {
+      await OrderRequestImage.bulkCreate(allImagesToCreate, { transaction });
     }
 
     await transaction.commit();
@@ -519,51 +554,90 @@ async function updateSalesOrderRequest(requestId, {
     }, { transaction });
 
     // Cập nhật items nếu truyền lên
+    const createdItems = [];
     if (items && Array.isArray(items)) {
       await OrderRequestItem.destroy({ where: { request_id: requestId }, transaction });
-      const itemsData = items.map((it) => ({
-        request_id: requestId,
-        product_id: it.productId || it.product_id || null,
-        item_name: it.itemName || it.item_name || 'Món đồ nội thất',
-        category_id: it.categoryId || it.category_id || null,
-        room_id: it.roomId || it.room_id || null,
-        material_id: it.materialId || it.material_id || null,
-        color_id: it.colorId || it.color_id || null,
-        length_cm: it.lengthCm || it.length_cm || null,
-        width_cm: it.widthCm || it.width_cm || null,
-        height_cm: it.heightCm || it.height_cm || null,
-        quantity: Number(it.quantity) || 1,
-        unit_price: Number(it.unitPrice ?? it.unit_price) || 0,
-        description: it.description || it.technicalNotes || it.technical_notes || null,
-        createby: updatedBy || 'Sales',
-      }));
-      await OrderRequestItem.bulkCreate(itemsData, { transaction });
+      for (const it of items) {
+        const itemRecord = await OrderRequestItem.create({
+          request_id: requestId,
+          product_id: it.productId || it.product_id || null,
+          item_name: it.itemName || it.item_name || 'Món đồ nội thất',
+          category_id: it.categoryId || it.category_id || null,
+          room_id: it.roomId || it.room_id || null,
+          material_id: it.materialId || it.material_id || null,
+          color_id: it.colorId || it.color_id || null,
+          length_cm: it.lengthCm || it.length_cm || null,
+          width_cm: it.widthCm || it.width_cm || null,
+          height_cm: it.heightCm || it.height_cm || null,
+          quantity: Number(it.quantity) || 1,
+          unit_price: Number(it.unitPrice ?? it.unit_price) || 0,
+          description: it.description || it.technicalNotes || it.technical_notes || null,
+          createby: updatedBy || 'Sales',
+        }, { transaction });
+        createdItems.push(itemRecord);
+      }
     }
 
     // Cập nhật images nếu truyền lên
-    if (images && Array.isArray(images)) {
+    if ((images && Array.isArray(images)) || (items && Array.isArray(items))) {
       await OrderRequestImage.destroy({ where: { request_id: requestId }, transaction });
-      const imagesData = images
-        .map((img, idx) => {
-          let url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
-          if (!url || typeof url !== 'string' || !url.trim()) return null;
-          url = url.trim();
-          if (url.length > 255) {
-            console.warn('[SaleRequestModel] Truncating image_url > 255 chars to fit column');
-            url = url.substring(0, 255);
-          }
-          return {
-            request_id: requestId,
-            request_item_id: (typeof img === 'object' && (img.requestItemId || img.request_item_id)) || null,
-            image_url: url,
-            sort_order: (typeof img === 'object' && img.sortOrder) || idx,
-            createby: updatedBy || 'Sales',
-          };
-        })
-        .filter(Boolean);
 
-      if (imagesData.length > 0) {
-        await OrderRequestImage.bulkCreate(imagesData, { transaction });
+      const allImagesToCreate = [];
+
+      // 1. Lấy ảnh từ từng item (nếu có it.images)
+      if (items && Array.isArray(items)) {
+        items.forEach((it, idx) => {
+          const targetItemId = createdItems[idx] ? createdItems[idx].request_item_id : null;
+          if (it.images && Array.isArray(it.images)) {
+            it.images.forEach((img, imgIdx) => {
+              const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+              if (url && typeof url === 'string' && url.trim()) {
+                allImagesToCreate.push({
+                  request_id: requestId,
+                  request_item_id: targetItemId,
+                  image_url: url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim(),
+                  sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : imgIdx,
+                  createby: updatedBy || 'Sales',
+                });
+              }
+            });
+          }
+        });
+      }
+
+      // 2. Lấy ảnh từ mảng images cấp cao nhất (nếu có)
+      if (images && Array.isArray(images)) {
+        images.forEach((img, idx) => {
+          const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+          if (!url || typeof url !== 'string' || !url.trim()) return;
+
+          let targetItemId = null;
+          if (typeof img === 'object') {
+            if (img.itemIndex !== undefined && createdItems[img.itemIndex]) {
+              targetItemId = createdItems[img.itemIndex].request_item_id;
+            } else if (img.requestItemId || img.request_item_id) {
+              targetItemId = img.requestItemId || img.request_item_id;
+            }
+          }
+
+          const cleanUrl = url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim();
+          const alreadyAdded = allImagesToCreate.some(
+            (ex) => ex.image_url === cleanUrl && ex.request_item_id === targetItemId
+          );
+          if (!alreadyAdded) {
+            allImagesToCreate.push({
+              request_id: requestId,
+              request_item_id: targetItemId,
+              image_url: cleanUrl,
+              sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : idx,
+              createby: updatedBy || 'Sales',
+            });
+          }
+        });
+      }
+
+      if (allImagesToCreate.length > 0) {
+        await OrderRequestImage.bulkCreate(allImagesToCreate, { transaction });
       }
     }
 
