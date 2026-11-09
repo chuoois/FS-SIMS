@@ -18,8 +18,7 @@ const productionOrderRoutes = require('./routes/productionOrderRoutes');
 const orderManagementRoutes = require('./routes/orderManagementRoutes');
 const cartRoutes = require('./routes/cartRoutes');
 const customerOrderRoutes = require('./routes/customerOrderRoutes');
-
-
+const financialReportRoutes = require('./routes/financialReportRoutes');
 
 const app = express();
 
@@ -51,8 +50,7 @@ app.use('/api/production-orders', productionOrderRoutes);
 app.use('/api/order-management', orderManagementRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/customer-orders', customerOrderRoutes);
-
-
+app.use('/api/financial-reports', financialReportRoutes);
 
 // Middleware xử lý lỗi tập trung
 app.use((err, req, res, next) => {

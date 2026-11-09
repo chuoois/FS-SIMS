@@ -494,9 +494,7 @@ export const ManageMaterialExportPage = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-900">
-              <FileText className="h-6 w-6 text-amber-800" />
-            </div>
+            
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-stone-900">
                 Quản Lý Phiếu Xuất Kho

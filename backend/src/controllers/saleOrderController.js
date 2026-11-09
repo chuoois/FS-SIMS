@@ -28,6 +28,7 @@ const {
   getRequestsWithPagination: getRequestsModel,
   findRequestById: findRequestByIdModel,
   convertRequestToContract: convertRequestToContractModel,
+  updateDesignFile: updateDesignFileModel,
 } = require('../models/SaleRequestModel');
 
 const {
@@ -540,6 +541,47 @@ async function convertRequestToContract(req, res) {
 }
 
 /**
+ * 14. PATCH /api/sale-orders/requests/:id/design
+ * Owner gửi bản thiết kế (file + ghi chú) cho yêu cầu CUSTOM
+ * File upload đã được xử lý qua uploadDesignMiddleware trước khi vào đây
+ */
+async function updateDesignFile(req, res) {
+  try {
+    const { id } = req.params;
+    const requestId = parseInt(id, 10);
+    if (!requestId || isNaN(requestId) || requestId <= 0) {
+      return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
+    }
+
+    const { design_note } = req.body;
+    // req.file được set bởi uploadDesignMiddleware (nếu có upload)
+    const designFileUrl = req.file?.path || req.file?.secure_url || null;
+
+    const updated = await updateDesignFileModel(requestId, {
+      designNote: design_note !== undefined ? design_note : undefined,
+      designFileUrl: designFileUrl !== null ? designFileUrl : undefined,
+      updatedBy: req.user?.email || 'OWNER',
+    });
+
+    return res.status(200).json({
+      message: 'Cập nhật bản thiết kế thành công.',
+      data: {
+        requestId: updated.request_id,
+        designNote: updated.design_note,
+        designFileUrl: updated.design_file_url,
+      },
+    });
+  } catch (error) {
+    console.error('[saleOrderController.updateDesignFile]', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      message: error.message || 'Lỗi máy chủ khi cập nhật bản thiết kế.',
+      error: error.message,
+    });
+  }
+}
+
+/**
  * DTO chuyển đổi OrderRequest sang JSON trả về FE
  */
 function toRequestDTO(raw) {
@@ -566,6 +608,8 @@ function toRequestDTO(raw) {
     approvedAt: r.approved_at,
     staffNote: r.staff_note,
     rejectReason: r.reject_reason,
+    designNote: r.design_note,
+    designFileUrl: r.design_file_url,
     assignedTo: r.assigned_to,
     assigneeName: r.assignee?.full_name || null,
     customerFullName: r.customer?.full_name || r.contact_name,
@@ -609,5 +653,6 @@ module.exports = {
   getRequests,
   getRequestById,
   convertRequestToContract,
+  updateDesignFile,
 };
 

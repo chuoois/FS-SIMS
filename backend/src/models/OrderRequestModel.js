@@ -23,6 +23,8 @@ const OrderRequest = sequelize.define('OrderRequest', {
     approved_at: { type: DataTypes.DATE, allowNull: true },
     staff_note: { type: DataTypes.STRING(500), allowNull: true },
     reject_reason: { type: DataTypes.STRING(500), allowNull: true },
+    design_note: { type: DataTypes.TEXT, allowNull: true },
+    design_file_url: { type: DataTypes.STRING(500), allowNull: true },
     createby: { type: DataTypes.STRING(100), allowNull: true },
     modifieby: { type: DataTypes.STRING(100), allowNull: true },
 }, {
