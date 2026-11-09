@@ -18,6 +18,10 @@ if (!OrderRequest.associations || !OrderRequest.associations.items) {
   OrderRequest.hasMany(OrderRequestItem, { foreignKey: 'request_id', as: 'items' });
   OrderRequestItem.belongsTo(OrderRequest, { foreignKey: 'request_id', as: 'request' });
 }
+if (!OrderRequestItem.associations || !OrderRequestItem.associations.images) {
+  OrderRequestItem.hasMany(OrderRequestImage, { foreignKey: 'request_item_id', as: 'images' });
+  OrderRequestImage.belongsTo(OrderRequestItem, { foreignKey: 'request_item_id', as: 'item' });
+}
 if (!OrderRequest.associations || !OrderRequest.associations.images) {
   OrderRequest.hasMany(OrderRequestImage, { foreignKey: 'request_id', as: 'images' });
 }
@@ -89,6 +93,19 @@ async function getRequestsWithPagination({
         model: OrderRequestItem,
         as: 'items',
         required: false,
+        include: [
+          {
+            model: OrderRequestImage,
+            as: 'images',
+            required: false,
+          },
+        ],
+      },
+      {
+        model: OrderRequestImage,
+        as: 'images',
+        where: { request_item_id: null },
+        required: false,
       },
       {
         model: Contract,
@@ -132,10 +149,18 @@ async function findRequestById(requestId) {
         model: OrderRequestItem,
         as: 'items',
         required: false,
+        include: [
+          {
+            model: OrderRequestImage,
+            as: 'images',
+            required: false,
+          },
+        ],
       },
       {
         model: OrderRequestImage,
         as: 'images',
+        where: { request_item_id: null },
         required: false,
       },
       {
@@ -318,10 +343,16 @@ module.exports = {
 };
 
 /**
- * Cập nhật bản thiết kế (design_note + design_file_url) cho 1 yêu cầu CUSTOM
+ * Cập nhật bản thiết kế & mô tả kỹ thuật cho 1 yêu cầu CUSTOM:
+ * - Hỗ trợ cập nhật cho từng sản phẩm (order_request_item) qua requestItemId:
+ *   + Ảnh lưu vào bảng order_request_image (với request_item_id = requestItemId)
+ *   + Ghi chú/mô tả lưu vào trường description của order_request_item
+ * - Hoặc cập nhật cấp yêu cầu (toàn bộ đơn) khi không có requestItemId:
+ *   + Ảnh lưu vào bảng order_request_image (với request_item_id = NULL)
+ *   + Ghi chú/mô tả lưu vào trường description của order_request
  * Chỉ OWNER mới được gọi hàm này
  */
-async function updateDesignFile(requestId, { designNote, designFileUrl, updatedBy }) {
+async function updateDesignFile(requestId, { requestItemId, description, imageUrl, updatedBy }) {
   const request = await OrderRequest.findByPk(requestId);
   if (!request) {
     const err = new Error('Không tìm thấy yêu cầu.');
@@ -333,9 +364,70 @@ async function updateDesignFile(requestId, { designNote, designFileUrl, updatedB
     err.statusCode = 400;
     throw err;
   }
-  if (designNote !== undefined) request.design_note = designNote || null;
-  if (designFileUrl !== undefined) request.design_file_url = designFileUrl || null;
+
+  let targetItem = null;
+  if (requestItemId) {
+    targetItem = await OrderRequestItem.findOne({
+      where: {
+        request_item_id: requestItemId,
+        request_id: requestId,
+      },
+    });
+    if (!targetItem) {
+      const err = new Error('Không tìm thấy sản phẩm trong yêu cầu này.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // 1. Cập nhật mô tả kỹ thuật cho từng sản phẩm
+    if (description !== undefined && description !== null && description.trim() !== '') {
+      targetItem.description = description.trim();
+    }
+    targetItem.modifieby = updatedBy || null;
+    await targetItem.save();
+
+    // 2. Lưu ảnh thiết kế gắn trực tiếp với sản phẩm này
+    if (imageUrl) {
+      const maxSort = (await OrderRequestImage.max('sort_order', {
+        where: {
+          request_id: requestId,
+          request_item_id: requestItemId,
+        },
+      })) || 0;
+      await OrderRequestImage.create({
+        request_id: requestId,
+        request_item_id: requestItemId,
+        image_url: imageUrl,
+        sort_order: (maxSort || 0) + 1,
+        createby: updatedBy || null,
+      });
+    }
+  } else {
+    // Cập nhật chung ở cấp yêu cầu
+    if (description !== undefined && description !== null && description.trim() !== '') {
+      request.description = description.trim();
+    }
+
+    if (imageUrl) {
+      const maxSort = (await OrderRequestImage.max('sort_order', {
+        where: {
+          request_id: requestId,
+          request_item_id: null,
+        },
+      })) || 0;
+      await OrderRequestImage.create({
+        request_id: requestId,
+        request_item_id: null,
+        image_url: imageUrl,
+        sort_order: (maxSort || 0) + 1,
+        createby: updatedBy || null,
+      });
+    }
+  }
+
   request.modifieby = updatedBy || null;
   await request.save();
-  return request;
+
+  // Trả về request đầy đủ chi tiết sau khi cập nhật
+  return findRequestById(requestId);
 }
