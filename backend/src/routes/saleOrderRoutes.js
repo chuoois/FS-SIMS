@@ -19,12 +19,13 @@ const {
   getRequests,
   getRequestById,
   convertRequestToContract,
-  getCustomers,
   createSalesRequest,
   updateSalesRequest,
   deliverOrder,
   completeOrder,
   updateDesignFile,
+  getSaleCustomers,
+  getSaleCustomerById,
 } = require('../controllers/saleOrderController');
 const { createProductMaterial, createProductColor } = require('../controllers/productManagerController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
@@ -59,8 +60,9 @@ router.get('/metadata', getProductMetadata);
 router.post('/materials', createProductMaterial);
 router.post('/colors', createProductColor);
 
-// ── Danh sách khách hàng cho Sales ────────────────────────
-router.get('/customers', getCustomers);
+// ── Quản lý & tra cứu Khách hàng (Customers) ──────────────
+router.get('/customers', getSaleCustomers);
+router.get('/customers/:id', getSaleCustomerById);
 
 // ── Luồng Hợp đồng (Contract) ──────────────────────────────
 router.post('/contracts', createOfflineContract);

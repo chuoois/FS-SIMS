@@ -31,7 +31,15 @@ const {
   findRequestById: findRequestByIdModel,
   convertRequestToContract: convertRequestToContractModel,
   updateDesignFile: updateDesignFileModel,
+  getCustomersForSales,
+  createSalesOrderRequest,
+  updateSalesOrderRequest,
 } = require('../models/SaleRequestModel');
+
+const {
+  getCustomersWithPagination: getCustomersModel,
+  findCustomerById: findCustomerByIdModel,
+} = require('../models/SaleCustomerModel');
 
 const {
   validateCreateOfflineContractInput,
@@ -662,15 +670,34 @@ function toRequestDTO(raw) {
 
 /**
  * GET /api/sale-orders/customers
- * Lấy danh sách khách hàng (Role CUSTOMER) cho dropdown/autocomplete
+ * Lấy danh sách khách hàng dành cho Sales:
+ * - Nếu có phân trang (page) hoặc lọc trạng thái (status): trả về danh sách có phân trang và thống kê
+ * - Nếu không có page: trả về danh sách phục vụ dropdown/autocomplete
  */
-async function getCustomers(req, res) {
+async function getSaleCustomers(req, res) {
   try {
-    const { search } = req.query;
+    const { page, limit, search, search_by, status } = req.query;
+
+    // Phân trang & Quản lý khách hàng
+    if (page !== undefined || status !== undefined) {
+      const result = await getCustomersModel({ page, limit, search, search_by, status });
+      return res.status(200).json({
+        message: 'Lấy danh sách khách hàng thành công',
+        data: result.customers,
+        pagination: {
+          totalItems: result.totalItems,
+          totalPages: result.totalPages,
+          currentPage: result.currentPage,
+          itemsPerPage: result.itemsPerPage,
+        },
+      });
+    }
+
+    // Dropdown / Autocomplete cho tạo đơn
     const customers = await getCustomersForSales({ search });
     return res.status(200).json({
       message: 'Lấy danh sách khách hàng thành công',
-      data: customers.map((c) => ({
+      data: (customers || []).map((c) => ({
         customerAccountId: c.user_account_id,
         fullName: c.full_name,
         phoneNumber: c.phone_number,
@@ -679,11 +706,29 @@ async function getCustomers(req, res) {
       })),
     });
   } catch (error) {
-    console.error('[saleOrderController.getCustomers]', error);
+    console.error('[saleOrderController.getSaleCustomers]', error);
     return res.status(500).json({
       message: 'Lỗi máy chủ khi lấy danh sách khách hàng',
       error: error.message,
     });
+  }
+}
+
+/**
+ * GET /api/sale-orders/customers/:id
+ * Lấy chi tiết 1 khách hàng kèm lịch sử dành cho Sales
+ */
+async function getSaleCustomerById(req, res) {
+  try {
+    const { id } = req.params;
+    const customer = await findCustomerByIdModel(id);
+    if (!customer) {
+      return res.status(404).json({ message: 'Không tìm thấy khách hàng' });
+    }
+    return res.status(200).json({ message: 'Lấy thông tin khách hàng thành công', data: customer });
+  } catch (error) {
+    console.error('[saleOrderController.getSaleCustomerById]', error);
+    return res.status(500).json({ message: 'Lỗi máy chủ khi lấy thông tin khách hàng', error: error.message });
   }
 }
 
@@ -824,10 +869,13 @@ module.exports = {
   getRequests,
   getRequestById,
   convertRequestToContract,
-  getCustomers,
   createSalesRequest,
   updateSalesRequest,
   deliverOrder,
   completeOrder,
   updateDesignFile,
+  getSaleCustomers,
+  getSaleCustomerById,
+  getCustomers: getSaleCustomers,
+  getCustomerById: getSaleCustomerById,
 };
