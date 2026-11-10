@@ -25,6 +25,7 @@ const {
   deliverOrder,
   completeOrder,
 } = require('../controllers/saleOrderController');
+const { createProductMaterial, createProductColor } = require('../controllers/productManagerController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
 
@@ -53,6 +54,8 @@ router.post('/upload-images', (req, res) => {
 router.get('/products', getWarehouseProducts);
 router.get('/products/:id', getProductDetail);
 router.get('/metadata', getProductMetadata);
+router.post('/materials', createProductMaterial);
+router.post('/colors', createProductColor);
 
 // ── Danh sách khách hàng cho Sales ────────────────────────
 router.get('/customers', getCustomers);

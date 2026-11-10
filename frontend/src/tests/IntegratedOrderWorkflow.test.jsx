@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -15,6 +15,9 @@ vi.mock('../services/saleOrderService', () => ({
   createSalesOrderRequest: vi.fn(),
   updateSalesOrderRequest: vi.fn(),
   getRequestById: vi.fn(),
+  uploadRequestImages: vi.fn(),
+  createRequestMaterial: vi.fn(),
+  createRequestColor: vi.fn(),
   confirmOrderDelivery: vi.fn(),
   completeOrderDelivery: vi.fn(),
 }));
@@ -72,7 +75,7 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
 
     // Tiêu đề
     expect(screen.getByText(/Tạo đơn theo yêu cầu/i)).toBeInTheDocument();
-    expect(screen.getByText(/1. Thông tin khách hàng & Giao nhận/i)).toBeInTheDocument();
+    expect(screen.getByText(/1. Thông tin khách hàng/i)).toBeInTheDocument();
     expect(screen.getByText(/2. Chi tiết sản phẩm & Thông số kỹ thuật/i)).toBeInTheDocument();
     expect(screen.getByText(/3. Hình ảnh thiết kế & Bản vẽ 3D\/2D/i)).toBeInTheDocument();
 
@@ -117,6 +120,73 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
       expect(screen.getByText(/Xác nhận thông tin yêu cầu trước khi gửi Chủ xưởng/i)).toBeInTheDocument();
       expect(screen.getByText(/200 x 60 x 210 cm/i)).toBeInTheDocument();
       expect(screen.getByText('Trần Khách May Đo')).toBeInTheDocument();
+    });
+  });
+
+  it('2b. CreateOrderRequestPage: Chế độ chỉnh sửa (?editId) cho phép tìm và thêm mới Chất liệu & Màu sắc trực tiếp', async () => {
+    const user = userEvent.setup();
+    saleOrderService.getRequestById.mockResolvedValue({
+      data: {
+        requestId: 77,
+        requestCode: 'RQ-EDIT-0077',
+        contactName: 'Phạm Văn Sửa',
+        contactPhone: '0911223344',
+        title: 'Đơn cần bổ sung chất liệu & màu',
+        items: [
+          {
+            requestItemId: 7701,
+            itemName: 'Tủ áo gỗ mới',
+            materialId: 1,
+            colorId: 1,
+            quantity: 1,
+            unitPrice: 10000000,
+          },
+        ],
+      },
+    });
+    saleOrderService.createRequestMaterial.mockResolvedValue({
+      data: { material_id: 99, material_name: 'Gỗ Óc Chó Mỹ' },
+    });
+    saleOrderService.createRequestColor.mockResolvedValue({
+      data: { color_id: 88, color_name: 'Sơn Trắng Ngọc Trai', hex_value: '#F5F5F0' },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/sale/requests/create?editId=77']}>
+        <CreateOrderRequestPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByDisplayValue('Tủ áo gỗ mới');
+    const materialInput = await screen.findByPlaceholderText(/Chọn hoặc gõ để tìm\/thêm chất liệu/i);
+    const colorInput = await screen.findByPlaceholderText(/Chọn hoặc gõ để tìm\/thêm màu sắc/i);
+    await waitFor(() => {
+      expect(materialInput).toHaveValue('Gỗ Sồi');
+      expect(colorInput).toHaveValue('Màu gỗ tự nhiên');
+    });
+
+    await user.click(materialInput);
+    await user.clear(materialInput);
+    await user.type(materialInput, 'Gỗ Óc Chó Mỹ');
+    const addMatBtn = await screen.findByText(/Thêm mới chất liệu: "Gỗ Óc Chó Mỹ"/i);
+    fireEvent.mouseDown(addMatBtn);
+
+    await waitFor(() => {
+      expect(saleOrderService.createRequestMaterial).toHaveBeenCalledWith({ material_name: 'Gỗ Óc Chó Mỹ' });
+      expect(materialInput).toHaveValue('Gỗ Óc Chó Mỹ');
+    });
+
+    await user.click(colorInput);
+    await user.clear(colorInput);
+    await user.type(colorInput, 'Sơn Trắng Ngọc Trai');
+    const addColorBtn = await screen.findByText(/Thêm mới màu sắc: "Sơn Trắng Ngọc Trai"/i);
+    fireEvent.mouseDown(addColorBtn);
+
+    await waitFor(() => {
+      expect(saleOrderService.createRequestColor).toHaveBeenCalledWith(
+        expect.objectContaining({ color_name: 'Sơn Trắng Ngọc Trai' })
+      );
+      expect(colorInput).toHaveValue('Sơn Trắng Ngọc Trai');
     });
   });
 

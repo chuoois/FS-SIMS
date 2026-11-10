@@ -166,3 +166,19 @@ export async function uploadRequestImages(files) {
   });
   return response.data;
 }
+
+/**
+ * 20. Thêm mới chất liệu (loại gỗ) trực tiếp từ form tạo/sửa yêu cầu
+ */
+export async function createRequestMaterial(data) {
+  const response = await api.post('/sale-orders/materials', data);
+  return response.data;
+}
+
+/**
+ * 21. Thêm mới màu sắc (màu sơn) trực tiếp từ form tạo/sửa yêu cầu
+ */
+export async function createRequestColor(data) {
+  const response = await api.post('/sale-orders/colors', data);
+  return response.data;
+}
