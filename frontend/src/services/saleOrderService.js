@@ -162,17 +162,25 @@ export async function uploadRequestImages(files) {
     formData.append('images', files);
   }
   const response = await api.post('/sale-orders/upload-images', formData, {
- * 14. Chủ xưởng gửi bản thiết kế (file + ghi chú) sang cho Sales
- */
-export async function updateRequestDesign(requestId, formData) {
-  const response = await api.patch(`/sale-orders/requests/${requestId}/design`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;
 }
 
 /**
- * 20. Thêm mới chất liệu (loại gỗ) trực tiếp từ form tạo/sửa yêu cầu
+ * 20. Chủ xưởng gửi bản thiết kế (file + ghi chú) sang cho Sales
+ */
+export async function updateRequestDesign(requestId, formData) {
+  const response = await api.patch(
+    `/sale-orders/requests/${requestId}/design`,
+    formData
+  );
+
+  return response.data;
+}
+
+/**
+ * 21. Thêm mới chất liệu (loại gỗ) trực tiếp từ form tạo/sửa yêu cầu
  */
 export async function createRequestMaterial(data) {
   const response = await api.post('/sale-orders/materials', data);
@@ -180,7 +188,7 @@ export async function createRequestMaterial(data) {
 }
 
 /**
- * 21. Thêm mới màu sắc (màu sơn) trực tiếp từ form tạo/sửa yêu cầu
+ * 22. Thêm mới màu sắc (màu sơn) trực tiếp từ form tạo/sửa yêu cầu
  */
 export async function createRequestColor(data) {
   const response = await api.post('/sale-orders/colors', data);

@@ -66,6 +66,8 @@ export const OwnerRouter = {
         {
           path: "requests",
           element: <ManageOrdersPage defaultTab="REQUESTS" />,
+        },
+        {
           path: "financial-reports",
           element: <ManageFinancialReportsPage />,
         },
