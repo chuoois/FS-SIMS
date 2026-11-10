@@ -26,7 +26,7 @@ const {
 } = require('../utils/validators');
 const { sendNewPasswordEmail } = require('../services/mailService');
 
-const ACCESS_TOKEN_EXPIRES = '30s';
+const ACCESS_TOKEN_EXPIRES = '30S';
 const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
 function generateAccessToken(payload) {
@@ -161,6 +161,7 @@ async function login(req, res) {
       sameSite: 'strict',
       maxAge: REFRESH_TOKEN_EXPIRES_MS,
     });
+
 
     return res.status(200).json({
       message: 'Đăng nhập thành công',

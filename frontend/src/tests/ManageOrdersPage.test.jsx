@@ -137,7 +137,7 @@ describe('ManageOrdersPage Component', () => {
   it('hiển thị tiêu đề trang', async () => {
     render(<ManageOrdersPage />);
     await waitFor(() => {
-      expect(screen.getByText('Quản lý đơn hàng')).toBeDefined();
+      expect(screen.getByText(/quản lý đơn hàng/i)).toBeDefined();
     });
   });
 
@@ -187,7 +187,7 @@ describe('ManageOrdersPage Component', () => {
   // ─── 5. Không dùng Select/Dropdown để đổi trạng thái đơn hàng ─────
   it('không sử dụng Select/Dropdown để thay đổi trạng thái đơn hàng', async () => {
     render(<ManageOrdersPage />);
-    await waitFor(() => screen.getByText('Quản lý đơn hàng'));
+    await waitFor(() => screen.getByText(/quản lý đơn hàng/i));
 
     // Không tồn tại select đổi trạng thái như id="new-status" hay nhãn "Trạng thái mới"
     expect(screen.queryByLabelText(/Trạng thái mới/i)).toBeNull();
@@ -197,7 +197,7 @@ describe('ManageOrdersPage Component', () => {
   // ─── 6. Nút hành động chuyển sang trạng thái kế tiếp ─────────────
   it('hiển thị đúng nút hành động kế tiếp cho từng trạng thái đơn hàng', async () => {
     render(<ManageOrdersPage />);
-    await waitFor(() => screen.getByText('Quản lý đơn hàng'));
+    await waitFor(() => screen.getByText(/quản lý đơn hàng/i));
 
     // Đơn NEW (id: 4) -> Nút "Xác nhận đơn"
     expect(screen.getByRole('button', { name: /Xác nhận đơn/i })).toBeDefined();
@@ -214,6 +214,7 @@ describe('ManageOrdersPage Component', () => {
     await waitFor(() => {
       expect(screen.getByText('ORD-20261101-0003')).toBeDefined();
     });
+    await waitFor(() => screen.getByText(/quản lý đơn hàng/i));
 
     // Đơn COMPLETED không có nút chuyển trạng thái nào
     const row = screen.getByText('ORD-20261101-0003').closest('tr');
@@ -319,7 +320,7 @@ describe('ManageOrdersPage Component', () => {
     const user = userEvent.setup();
     render(<ManageOrdersPage />);
 
-    await waitFor(() => screen.getByText('Quản lý đơn hàng'));
+    await waitFor(() => screen.getByText(/quản lý đơn hàng/i));
 
     const selects = screen.getAllByRole('combobox');
     await user.selectOptions(selects[0], 'CONFIRMED');

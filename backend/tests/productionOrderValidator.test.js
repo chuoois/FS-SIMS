@@ -129,4 +129,3 @@ describe('productionOrderValidator - toProductionOrderDTO', () => {
     expect(dto.leader_email).toBe('truong@test.com');
   });
 });
-

@@ -120,6 +120,7 @@ async function createProductionOrderHandler(req, res) {
 
     const poDetail = await findProductionOrderById(po.production_id);
 
+
     return res.status(201).json({
       message: 'Tạo lệnh gia công thành công.',
       productionOrder: toProductionOrderDTO(poDetail),
@@ -204,6 +205,7 @@ async function cancelProductionOrderHandler(req, res) {
     const userEmail = req.user ? req.user.email : 'system';
     await cancelProductionOrder(productionId, userEmail);
 
+
     return res.status(200).json({
       message: 'Hủy lệnh gia công thành công. Đơn hàng liên kết đã được hoàn trả về trạng thái CONFIRMED.',
     });
@@ -215,6 +217,7 @@ async function cancelProductionOrderHandler(req, res) {
     });
   }
 }
+
 
 module.exports = {
   getProductionOrders,

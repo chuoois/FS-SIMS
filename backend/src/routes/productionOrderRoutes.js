@@ -46,4 +46,3 @@ router.patch('/:id/assign-leader', assignLeader);
 router.post('/:id/cancel', cancelProductionOrderHandler);
 
 module.exports = router;
-

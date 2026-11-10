@@ -68,7 +68,7 @@ const StatusBadge = ({ status }) => {
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
           <Hammer className="h-3.5 w-3.5" />
-          Đang xử lý
+          Đang gia công
         </span>
       );
     case 'COMPLETED':
@@ -393,10 +393,10 @@ export const ManageProductionOrdersPage = () => {
           </div>
         </div>
 
-        {/* Đang xử lý */}
+        {/* Đang gia công */}
         <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-5 shadow-sm transition hover:shadow">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-blue-800">Đang xử lý</span>
+            <span className="text-sm font-medium text-blue-800">Đang gia công</span>
             <div className="rounded-lg bg-blue-100 p-2 text-blue-700">
               <Hammer className="h-5 w-5" />
             </div>
@@ -452,7 +452,7 @@ export const ManageProductionOrdersPage = () => {
             >
               <option value="ALL">Tất cả trạng thái</option>
               <option value="DRAFT">Chờ sản xuất (DRAFT)</option>
-              <option value="IN_PROGRESS">Đang xử lý (IN_PROGRESS)</option>
+              <option value="IN_PROGRESS">Đang gia công (IN_PROGRESS)</option>
               <option value="COMPLETED">Hoàn thành (COMPLETED)</option>
               <option value="CANCELLED">Đã hủy (CANCELLED)</option>
             </select>

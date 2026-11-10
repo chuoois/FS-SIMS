@@ -58,4 +58,3 @@ export async function cancelProductionOrder(id) {
   const response = await api.post(`/production-orders/${id}/cancel`);
   return response.data; // { message }
 }
-

@@ -120,6 +120,7 @@ async function cancelOrder(req, res) {
       cancelledBy: req.user?.email || 'OWNER',
     });
 
+
     return res.status(200).json({
       message: 'Hủy đơn hàng thành công.',
       order: toOrderManagementDTO(order),
@@ -162,6 +163,7 @@ async function updateOrderStatus(req, res) {
     const order = await updateOrderStatusModel(orderId, validation.value.status, {
       updatedBy: req.user?.email || 'OWNER',
     });
+
 
     return res.status(200).json({
       message: 'Cập nhật trạng thái đơn hàng thành công.',

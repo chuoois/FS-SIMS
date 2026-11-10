@@ -162,6 +162,10 @@ export async function uploadRequestImages(files) {
     formData.append('images', files);
   }
   const response = await api.post('/sale-orders/upload-images', formData, {
+ * 14. Chủ xưởng gửi bản thiết kế (file + ghi chú) sang cho Sales
+ */
+export async function updateRequestDesign(requestId, formData) {
+  const response = await api.patch(`/sale-orders/requests/${requestId}/design`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;

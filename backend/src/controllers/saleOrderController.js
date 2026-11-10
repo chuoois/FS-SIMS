@@ -30,9 +30,7 @@ const {
   getRequestsWithPagination: getRequestsModel,
   findRequestById: findRequestByIdModel,
   convertRequestToContract: convertRequestToContractModel,
-  getCustomersForSales,
-  createSalesOrderRequest,
-  updateSalesOrderRequest,
+  updateDesignFile: updateDesignFileModel,
 } = require('../models/SaleRequestModel');
 
 const {
@@ -546,6 +544,49 @@ async function convertRequestToContract(req, res) {
 }
 
 /**
+ * 14. PATCH /api/sale-orders/requests/:id/design
+ * Owner gửi ảnh bản thiết kế và mô tả kỹ thuật cho yêu cầu CUSTOM:
+ * - Ảnh lưu vào bảng order_request_image (quan hệ 1-N)
+ * - Mô tả/ghi chú lưu trực tiếp vào trường description có sẵn của bảng order_request
+ */
+async function updateDesignFile(req, res) {
+  try {
+    const { id } = req.params;
+    const requestId = parseInt(id, 10);
+    if (!requestId || isNaN(requestId) || requestId <= 0) {
+      return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
+    }
+
+    const { description, design_note, request_item_id, requestItemId } = req.body;
+    const desc = description !== undefined ? description : design_note;
+    const targetItemId = request_item_id || requestItemId || null;
+    // req.file được set bởi uploadDesignMiddleware (nếu có upload)
+    const imageUrl = req.file?.path || req.file?.secure_url || null;
+
+    const result = await updateDesignFileModel(requestId, {
+      requestItemId: targetItemId ? parseInt(targetItemId, 10) : null,
+      description: desc !== undefined ? desc : undefined,
+      imageUrl: imageUrl !== null ? imageUrl : undefined,
+      updatedBy: req.user?.email || 'OWNER',
+    });
+
+    const responseData = result ? (toRequestDTO(result) || result) : null;
+
+    return res.status(200).json({
+      message: 'Cập nhật bản thiết kế thành công.',
+      data: responseData,
+    });
+  } catch (error) {
+    console.error('[saleOrderController.updateDesignFile]', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      message: error.message || 'Lỗi máy chủ khi cập nhật bản thiết kế.',
+      error: error.message,
+    });
+  }
+}
+
+/**
  * DTO chuyển đổi OrderRequest sang JSON trả về FE
  */
 function toRequestDTO(raw) {
@@ -788,4 +829,5 @@ module.exports = {
   updateSalesRequest,
   deliverOrder,
   completeOrder,
+  updateDesignFile,
 };

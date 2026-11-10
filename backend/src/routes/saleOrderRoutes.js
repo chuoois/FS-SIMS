@@ -24,10 +24,12 @@ const {
   updateSalesRequest,
   deliverOrder,
   completeOrder,
+  updateDesignFile,
 } = require('../controllers/saleOrderController');
 const { createProductMaterial, createProductColor } = require('../controllers/productManagerController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
+const uploadDesign = require('../middlewares/uploadDesignMiddleware');
 
 const router = express.Router();
 
@@ -79,5 +81,6 @@ router.get('/requests/:id', getRequestById);
 router.post('/requests', createSalesRequest);
 router.put('/requests/:id', updateSalesRequest);
 router.post('/requests/:id/convert-to-contract', convertRequestToContract);
+router.patch('/requests/:id/design', requireRole('OWNER'), uploadDesign.single('design_file'), updateDesignFile);
 
 module.exports = router;

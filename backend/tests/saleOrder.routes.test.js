@@ -45,6 +45,7 @@ jest.mock('../src/models/SaleRequestModel', () => ({
   getRequestsWithPagination: jest.fn(),
   findRequestById: jest.fn(),
   convertRequestToContract: jest.fn(),
+  updateDesignFile: jest.fn(),
 }));
 
 jest.mock('../src/models/CustomerOrderModel', () => ({
@@ -71,11 +72,19 @@ const {
   getRequestsWithPagination,
   findRequestById: findSaleRequestById,
   convertRequestToContract,
+  updateDesignFile,
 } = require('../src/models/SaleRequestModel');
 
 const SALES_ROLE_ID = 2;
 const salesToken = jwt.sign(
   { sub: 5, email: 'sale@fssims.com', role: SALES_ROLE_ID },
+  process.env.JWT_SECRET,
+  { expiresIn: '1h' }
+);
+
+const OWNER_ROLE_ID = 1;
+const ownerToken = jwt.sign(
+  { sub: 1, email: 'owner@fssims.com', role: OWNER_ROLE_ID },
   process.env.JWT_SECRET,
   { expiresIn: '1h' }
 );
@@ -367,6 +376,78 @@ describe('Sale Orders API (/api/sale-orders)', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.data.contractCode).toBe('HD-20261103-0050');
+    });
+  });
+
+  describe('PATCH /api/sale-orders/requests/:id/design', () => {
+    test('trả về 200 khi Chủ xưởng cập nhật bản thiết kế và mô tả thành công', async () => {
+      updateDesignFile.mockResolvedValue({
+        request_id: 1,
+        description: 'Bản vẽ CAD hoàn chỉnh',
+        images: [{ imageId: 1, imageUrl: 'https://cloudinary.com/design.png' }],
+      });
+
+      const res = await request(app)
+        .patch('/api/sale-orders/requests/1/design')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          description: 'Bản vẽ CAD hoàn chỉnh',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.description).toBe('Bản vẽ CAD hoàn chỉnh');
+    });
+
+    test('trả về 200 khi Chủ xưởng gửi bản thiết kế và mô tả cho từng sản phẩm (request_item_id)', async () => {
+      updateDesignFile.mockResolvedValue({
+        request_id: 1,
+        items: [
+          {
+            request_item_id: 101,
+            item_name: 'Bàn ăn 6 ghế',
+            description: 'Khung gỗ sồi, mặt đá vân mây 180x90cm',
+            images: [{ request_image_id: 1, image_url: 'https://cloudinary.com/item101-design.png', sort_order: 1 }],
+          },
+        ],
+      });
+
+      const res = await request(app)
+        .patch('/api/sale-orders/requests/1/design')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          request_item_id: 101,
+          description: 'Khung gỗ sồi, mặt đá vân mây 180x90cm',
+        });
+
+      expect(res.status).toBe(200);
+      expect(updateDesignFile).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          requestItemId: 101,
+          description: 'Khung gỗ sồi, mặt đá vân mây 180x90cm',
+        })
+      );
+      expect(res.body.data.items[0].itemName).toBe('Bàn ăn 6 ghế');
+      expect(res.body.data.items[0].images).toHaveLength(1);
+    });
+
+    test('trả về 403 khi Sale cố tình gọi API gửi bản thiết kế', async () => {
+      const res = await request(app)
+        .patch('/api/sale-orders/requests/1/design')
+        .set('Authorization', `Bearer ${salesToken}`)
+        .send({
+          design_note: 'Thử gửi',
+        });
+
+      expect(res.status).toBe(403);
+    });
+
+    test('trả về 400 khi mã request id không hợp lệ', async () => {
+      const res = await request(app)
+        .patch('/api/sale-orders/requests/invalid-id/design')
+        .set('Authorization', `Bearer ${ownerToken}`);
+
+      expect(res.status).toBe(400);
     });
   });
 });
