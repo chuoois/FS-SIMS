@@ -110,12 +110,22 @@ export async function convertRequestToContract(requestId, payload = {}) {
 }
 
 /**
- * 14. Lấy danh sách khách hàng phục vụ dropdown/autocomplete cho Sales
+ * 14. Lấy danh sách khách hàng phục vụ dropdown/autocomplete và trang quản lý cho Sales
  */
-export async function getCustomers(params = {}) {
+export async function getSaleCustomers(params = {}) {
   const response = await api.get('/sale-orders/customers', { params });
   return response.data;
 }
+export const getCustomers = getSaleCustomers;
+
+/**
+ * 14b. Lấy chi tiết 1 khách hàng kèm lịch sử cho Sales
+ */
+export async function getSaleCustomerById(customerId) {
+  const response = await api.get(`/sale-orders/customers/${customerId}`);
+  return response.data;
+}
+export const getCustomerById = getSaleCustomerById;
 
 /**
  * 15. Sales tạo đơn yêu cầu thiết kế / may đo riêng biệt (Order Request)
@@ -175,7 +185,6 @@ export async function updateRequestDesign(requestId, formData) {
     `/sale-orders/requests/${requestId}/design`,
     formData
   );
-
   return response.data;
 }
 

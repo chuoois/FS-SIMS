@@ -6,6 +6,7 @@ import { CreateOrderRequestPage } from "../../pages/sale-pages/CreateOrderReques
 import { OrdersPage } from "../../pages/sale-pages/OrdersPage";
 import { ContractsPage } from "../../pages/sale-pages/ContractsPage";
 import { RequestsPage } from "../../pages/sale-pages/RequestsPage";
+import { CustomersPage } from "../../pages/sale-pages/CustomersPage";
 
 export const SaleRouter = {
   path: "/sale",
@@ -45,6 +46,10 @@ export const SaleRouter = {
         {
           path: "requests",
           element: <RequestsPage />,
+        },
+        {
+          path: "customers",
+          element: <CustomersPage />,
         },
       ],
     },

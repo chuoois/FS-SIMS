@@ -48,6 +48,11 @@ jest.mock('../src/models/SaleRequestModel', () => ({
   updateDesignFile: jest.fn(),
 }));
 
+jest.mock('../src/models/SaleCustomerModel', () => ({
+  getCustomersWithPagination: jest.fn(),
+  findCustomerById: jest.fn(),
+}));
+
 jest.mock('../src/models/CustomerOrderModel', () => ({
   CustomerOrder: {},
   generateNextOrderCode: jest.fn(),
@@ -74,6 +79,11 @@ const {
   convertRequestToContract,
   updateDesignFile,
 } = require('../src/models/SaleRequestModel');
+
+const {
+  getCustomersWithPagination,
+  findCustomerById,
+} = require('../src/models/SaleCustomerModel');
 
 const SALES_ROLE_ID = 2;
 const salesToken = jwt.sign(
@@ -450,5 +460,133 @@ describe('Sale Orders API (/api/sale-orders)', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  // =========================================================
+  // GET /api/sale-orders/customers
+  // =========================================================
+  describe('GET /api/sale-orders/customers', () => {
+    const mockCustomers = [
+      {
+        user_account_id: 10,
+        full_name: 'Nguyễn Thị Mai',
+        email: 'mai@example.com',
+        phone_number: '0901234567',
+        status: 'ACTIVE',
+        address: '123 Nguyễn Trãi, HCM',
+        createdate: '2026-01-15T00:00:00.000Z',
+        totalRequests: 2,
+        totalContracts: 1,
+        totalOrders: 1,
+      },
+    ];
+
+    test('trả về 200 và danh sách khách hàng có phân trang', async () => {
+      getCustomersWithPagination.mockResolvedValue({
+        customers: mockCustomers,
+        totalItems: 1,
+        totalPages: 1,
+        currentPage: 1,
+        itemsPerPage: 10,
+      });
+
+      const res = await request(app)
+        .get('/api/sale-orders/customers')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].full_name).toBe('Nguyễn Thị Mai');
+      expect(res.body.pagination.totalItems).toBe(1);
+    });
+
+    test('trả về 200 khi tìm kiếm theo tên khách hàng', async () => {
+      getCustomersWithPagination.mockResolvedValue({
+        customers: mockCustomers,
+        totalItems: 1,
+        totalPages: 1,
+        currentPage: 1,
+        itemsPerPage: 10,
+      });
+
+      const res = await request(app)
+        .get('/api/sale-orders/customers?search=Mai&search_by=NAME')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(200);
+      expect(getCustomersWithPagination).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'Mai', search_by: 'NAME' })
+      );
+    });
+
+    test('trả về 401 khi không có token', async () => {
+      const res = await request(app).get('/api/sale-orders/customers');
+      expect(res.status).toBe(401);
+    });
+
+    test('trả về 200 và mảng rỗng khi không có khách hàng nào', async () => {
+      getCustomersWithPagination.mockResolvedValue({
+        customers: [],
+        totalItems: 0,
+        totalPages: 0,
+        currentPage: 1,
+        itemsPerPage: 10,
+      });
+
+      const res = await request(app)
+        .get('/api/sale-orders/customers')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(0);
+    });
+  });
+
+  // =========================================================
+  // GET /api/sale-orders/customers/:id
+  // =========================================================
+  describe('GET /api/sale-orders/customers/:id', () => {
+    const mockCustomerDetail = {
+      user_account_id: 10,
+      full_name: 'Nguyễn Thị Mai',
+      email: 'mai@example.com',
+      phone_number: '0901234567',
+      status: 'ACTIVE',
+      address: '123 Nguyễn Trãi, HCM',
+      createdate: '2026-01-15T00:00:00.000Z',
+      requests: [{ request_id: 1, request_code: 'REQ-001', status: 'CONVERTED' }],
+      contracts: [{ contract_id: 1, contract_code: 'CTR-001', status: 'SIGNED', total_amount: 5000000 }],
+      orders: [{ order_id: 1, order_code: 'ORD-001', status: 'COMPLETED', total_amount: 5000000 }],
+    };
+
+    test('trả về 200 kèm lịch sử khi tìm thấy khách hàng', async () => {
+      findCustomerById.mockResolvedValue(mockCustomerDetail);
+
+      const res = await request(app)
+        .get('/api/sale-orders/customers/10')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.full_name).toBe('Nguyễn Thị Mai');
+      expect(res.body.data.requests).toHaveLength(1);
+      expect(res.body.data.contracts).toHaveLength(1);
+      expect(res.body.data.orders).toHaveLength(1);
+    });
+
+    test('trả về 404 khi không tìm thấy khách hàng', async () => {
+      findCustomerById.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get('/api/sale-orders/customers/999')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    test('trả về 401 khi không có token', async () => {
+      const res = await request(app).get('/api/sale-orders/customers/10');
+      expect(res.status).toBe(401);
+    });
+  });
 });
+
 
