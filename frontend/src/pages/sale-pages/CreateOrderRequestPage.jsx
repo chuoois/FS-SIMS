@@ -1135,7 +1135,7 @@ export const CreateOrderRequestPage = () => {
                   <div>
                     <span className="text-xs font-semibold uppercase text-stone-500">Loại đơn</span>
                     <p className="mt-1 font-semibold text-stone-900 text-sm">
-                      {customerInfo.orderType === 'CUSTOM' ? 'May đo thiết kế' : 'Theo mẫu sẵn'}
+                      {customerInfo.orderType === 'CUSTOM' ? 'Đơn hàng theo yêu cầu' : 'Theo mẫu sẵn'}
                     </p>
                   </div>
                   <div className="col-span-3 border-t border-stone-200/60 pt-2">

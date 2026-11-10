@@ -77,7 +77,7 @@ const REQUEST_STATUS_OPTIONS = [
 const ORDER_TYPE_OPTIONS = [
   { value: 'ALL', label: 'Tất cả loại' },
   { value: 'READY', label: 'Hàng có sẵn' },
-  { value: 'CUSTOM', label: 'Đặt theo yêu cầu' },
+  { value: 'CUSTOM', label: 'Đơn hàng theo yêu cầu' },
 ];
 
 const SEARCH_BY_OPTIONS = [
@@ -1028,7 +1028,7 @@ export function RequestsPage() {
                               : 'bg-stone-100 text-stone-700'
                           }`}
                         >
-                          {r.orderType === 'CUSTOM' ? 'May đo thiết kế' : 'Hàng có sẵn'}
+                          {r.orderType === 'CUSTOM' ? 'Đơn hàng theo yêu cầu' : 'Hàng có sẵn'}
                         </span>
                       </td>
 
