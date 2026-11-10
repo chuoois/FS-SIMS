@@ -14,8 +14,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileText,
   User,
+  Phone,
+  Mail,
   MapPin,
   Calendar,
+  Package,
   Plus,
   Trash2,
   Image as ImageIcon,
@@ -587,12 +590,11 @@ export const CreateOrderRequestPage = () => {
       <form onSubmit={handleValidateAndOpenSummary} className="space-y-6">
         {/* ── KHU VỰC 1: THÔNG TIN KHÁCH HÀNG ── */}
         <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-stone-900">
-                1. Thông tin khách hàng
-              </h2>
-            </div>
+          <div className="flex items-center gap-2 border-b border-stone-200 pb-3">
+            <User className="h-4 w-4 text-amber-700" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-stone-900">
+              1. Thông tin khách hàng
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -601,13 +603,16 @@ export const CreateOrderRequestPage = () => {
               <label className="text-xs font-semibold uppercase text-stone-600 block">
                 Tên đơn hàng
               </label>
-              <input
-                type="text"
-                value={customerInfo.title}
-                onChange={(e) => setCustomerInfo((p) => ({ ...p, title: e.target.value }))}
-                placeholder="VD: May đo nội thất phòng khách & phòng ngủ căn hộ A12"
-                className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none font-medium"
-              />
+              <div className="relative mt-1">
+                <FileText className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                <input
+                  type="text"
+                  value={customerInfo.title}
+                  onChange={(e) => setCustomerInfo((p) => ({ ...p, title: e.target.value }))}
+                  placeholder="VD: May đo nội thất phòng khách & phòng ngủ căn hộ A12"
+                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none font-medium"
+                />
+              </div>
             </div>
 
             {/* Họ tên khách hàng */}
@@ -615,14 +620,17 @@ export const CreateOrderRequestPage = () => {
               <label className="text-xs font-semibold uppercase text-stone-600 block">
                 Họ tên khách hàng <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                required
-                value={customerInfo.contactName}
-                onChange={(e) => setCustomerInfo((p) => ({ ...p, contactName: e.target.value }))}
-                placeholder="VD: Nguyễn Văn A"
-                className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
-              />
+              <div className="relative mt-1">
+                <User className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                <input
+                  type="text"
+                  required
+                  value={customerInfo.contactName}
+                  onChange={(e) => setCustomerInfo((p) => ({ ...p, contactName: e.target.value }))}
+                  placeholder="VD: Nguyễn Văn A"
+                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
+                />
+              </div>
             </div>
 
             {/* Số điện thoại */}
@@ -630,14 +638,17 @@ export const CreateOrderRequestPage = () => {
               <label className="text-xs font-semibold uppercase text-stone-600 block">
                 Số điện thoại <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                required
-                value={customerInfo.contactPhone}
-                onChange={(e) => setCustomerInfo((p) => ({ ...p, contactPhone: e.target.value }))}
-                placeholder="VD: 0912345678"
-                className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none font-mono"
-              />
+              <div className="relative mt-1">
+                <Phone className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                <input
+                  type="text"
+                  required
+                  value={customerInfo.contactPhone}
+                  onChange={(e) => setCustomerInfo((p) => ({ ...p, contactPhone: e.target.value }))}
+                  placeholder="VD: 0912345678"
+                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none font-mono"
+                />
+              </div>
             </div>
 
             {/* Email khách hàng */}
@@ -645,13 +656,16 @@ export const CreateOrderRequestPage = () => {
               <label className="text-xs font-semibold uppercase text-stone-600 block">
                 Email
               </label>
-              <input
-                type="email"
-                value={customerInfo.contactEmail}
-                onChange={(e) => setCustomerInfo((p) => ({ ...p, contactEmail: e.target.value }))}
-                placeholder="VD: khachhang@gmail.com"
-                className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
-              />
+              <div className="relative mt-1">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                <input
+                  type="email"
+                  value={customerInfo.contactEmail}
+                  onChange={(e) => setCustomerInfo((p) => ({ ...p, contactEmail: e.target.value }))}
+                  placeholder="VD: khachhang@gmail.com"
+                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
+                />
+              </div>
             </div>
 
             {/* Địa chỉ giao hàng */}
@@ -659,13 +673,16 @@ export const CreateOrderRequestPage = () => {
               <label className="text-xs font-semibold uppercase text-stone-600 block">
                 Địa chỉ giao hàng
               </label>
-              <input
-                type="text"
-                value={customerInfo.deliveryAddress}
-                onChange={(e) => setCustomerInfo((p) => ({ ...p, deliveryAddress: e.target.value }))}
-                placeholder="VD: Căn hộ A12-04 Chung cư Sunrise, 123 Nguyễn Hữu Thọ, Q.7, TP.HCM"
-                className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
-              />
+              <div className="relative mt-1">
+                <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                <input
+                  type="text"
+                  value={customerInfo.deliveryAddress}
+                  onChange={(e) => setCustomerInfo((p) => ({ ...p, deliveryAddress: e.target.value }))}
+                  placeholder="VD: Căn hộ A12-04 Chung cư Sunrise, 123 Nguyễn Hữu Thọ, Q.7, TP.HCM"
+                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
+                />
+              </div>
             </div>
 
             {/* Ngày mong muốn hoàn thiện */}
@@ -673,12 +690,15 @@ export const CreateOrderRequestPage = () => {
               <label className="text-xs font-semibold uppercase text-stone-600 block">
                 Ngày mong muốn hoàn thiện
               </label>
-              <input
-                type="date"
-                value={customerInfo.expectedDate}
-                onChange={(e) => setCustomerInfo((p) => ({ ...p, expectedDate: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
-              />
+              <div className="relative mt-1">
+                <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                <input
+                  type="date"
+                  value={customerInfo.expectedDate}
+                  onChange={(e) => setCustomerInfo((p) => ({ ...p, expectedDate: e.target.value }))}
+                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -686,7 +706,8 @@ export const CreateOrderRequestPage = () => {
         {/* ── KHU VỰC 2: CHI TIẾT SẢN PHẨM ── */}
         <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-3 gap-3">
-            <div>
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-amber-700" />
               <h2 className="text-sm font-bold uppercase tracking-wider text-stone-900">
                 2. Thông số kỹ thuật
               </h2>
@@ -739,14 +760,17 @@ export const CreateOrderRequestPage = () => {
                     <label className="text-xs font-semibold uppercase text-stone-600 block">
                       Tên sản phẩm <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      required
-                      value={it.itemName}
-                      onChange={(e) => handleItemChange(it.id, 'itemName', e.target.value)}
-                      placeholder="VD: Tủ quần áo 4 cánh lùa kịch trần"
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm font-medium focus:border-stone-900 focus:outline-none bg-white"
-                    />
+                    <div className="relative mt-1">
+                      <Package className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                      <input
+                        type="text"
+                        required
+                        value={it.itemName}
+                        onChange={(e) => handleItemChange(it.id, 'itemName', e.target.value)}
+                        placeholder="VD: Tủ quần áo 4 cánh lùa kịch trần"
+                        className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm font-medium focus:border-stone-900 focus:outline-none bg-white"
+                      />
+                    </div>
                   </div>
 
                   {/* Danh mục */}
