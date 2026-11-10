@@ -380,22 +380,55 @@ describe('Sale Orders API (/api/sale-orders)', () => {
   });
 
   describe('PATCH /api/sale-orders/requests/:id/design', () => {
-    test('trả về 200 khi Chủ xưởng cập nhật bản thiết kế và ghi chú thành công', async () => {
+    test('trả về 200 khi Chủ xưởng cập nhật bản thiết kế và mô tả thành công', async () => {
       updateDesignFile.mockResolvedValue({
         request_id: 1,
-        design_note: 'Bản vẽ CAD hoàn chỉnh',
-        design_file_url: 'https://cloudinary.com/design.pdf',
+        description: 'Bản vẽ CAD hoàn chỉnh',
+        images: [{ imageId: 1, imageUrl: 'https://cloudinary.com/design.png' }],
       });
 
       const res = await request(app)
         .patch('/api/sale-orders/requests/1/design')
         .set('Authorization', `Bearer ${ownerToken}`)
         .send({
-          design_note: 'Bản vẽ CAD hoàn chỉnh',
+          description: 'Bản vẽ CAD hoàn chỉnh',
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.data.designNote).toBe('Bản vẽ CAD hoàn chỉnh');
+      expect(res.body.data.description).toBe('Bản vẽ CAD hoàn chỉnh');
+    });
+
+    test('trả về 200 khi Chủ xưởng gửi bản thiết kế và mô tả cho từng sản phẩm (request_item_id)', async () => {
+      updateDesignFile.mockResolvedValue({
+        request_id: 1,
+        items: [
+          {
+            request_item_id: 101,
+            item_name: 'Bàn ăn 6 ghế',
+            description: 'Khung gỗ sồi, mặt đá vân mây 180x90cm',
+            images: [{ request_image_id: 1, image_url: 'https://cloudinary.com/item101-design.png', sort_order: 1 }],
+          },
+        ],
+      });
+
+      const res = await request(app)
+        .patch('/api/sale-orders/requests/1/design')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          request_item_id: 101,
+          description: 'Khung gỗ sồi, mặt đá vân mây 180x90cm',
+        });
+
+      expect(res.status).toBe(200);
+      expect(updateDesignFile).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          requestItemId: 101,
+          description: 'Khung gỗ sồi, mặt đá vân mây 180x90cm',
+        })
+      );
+      expect(res.body.data.items[0].itemName).toBe('Bàn ăn 6 ghế');
+      expect(res.body.data.items[0].images).toHaveLength(1);
     });
 
     test('trả về 403 khi Sale cố tình gọi API gửi bản thiết kế', async () => {

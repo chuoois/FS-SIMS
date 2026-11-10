@@ -5,9 +5,8 @@
 // 1. Xem danh sách yêu cầu đặt làm theo mẫu (CUSTOM) từ khách hàng
 // 2. Thống kê tổng quan (Cards)
 // 3. Tìm kiếm, lọc theo trạng thái, từ khóa
-// 4. Xem chi tiết yêu cầu, quy cách kỹ thuật & ảnh tham khảo của khách
-// 5. Chủ xưởng gửi bản thiết kế (file kỹ thuật/PDF/ảnh) + ghi chú sang cho Sales
-// Đồng bộ giao diện 100% với hệ thống Dashboard Owner
+// 4. Xem chi tiết yêu cầu, quy cách kỹ thuật & danh sách ảnh thiết kế (order_request_image)
+// 5. Chủ xưởng gửi ảnh bản thiết kế (lưu vào order_request_image) và mô tả kỹ thuật (lưu vào description)
 // =========================================================
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -133,57 +132,36 @@ function StatusBadge({ status }) {
   }
 }
 
-// ─── Huy hiệu trạng thái bản thiết kế ─────────────────────
-function DesignStatusBadge({ hasDesign }) {
-  if (hasDesign) {
+// ─── Huy hiệu trạng thái bản thiết kế (đếm số ảnh từ order_request_image) ─
+function DesignStatusBadge({ count = 0 }) {
+  if (count > 0) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        Đã có bản thiết kế
+        Đã có {count} ảnh
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600 border border-stone-200">
       <Clock className="h-3.5 w-3.5 text-stone-400" />
-      Chưa gửi thiết kế
+      Chưa có ảnh
     </span>
   );
 }
 
-// ─── Detail Modal (kèm upload bản thiết kế) ─────────────────
-function RequestDetailModal({ requestId, onClose, onUpdated }) {
-  const [detail, setDetail] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // State gửi bản thiết kế
-  const [designNote, setDesignNote] = useState('');
+// ─── Component Thẻ Bản Thiết Kế Cho Từng Sản Phẩm ────────────────
+function ItemDesignCard({ item, index, requestId, onUpdated }) {
+  const [description, setDescription] = useState(item.description || '');
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
-  const [submittingDesign, setSubmittingDesign] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState(true);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await getRequestById(requestId);
-        if (!cancelled) {
-          setDetail(res.data);
-          if (res.data?.designNote) {
-            setDesignNote(res.data.designNote);
-          }
-        }
-      } catch {
-        if (!cancelled) toast.error('Không tải được chi tiết yêu cầu.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [requestId]);
+    setDescription(item.description || '');
+  }, [item.description]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -203,49 +181,238 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
     }
   };
 
-  const handleSendDesign = async (e) => {
+  const handleSendItemDesign = async (e) => {
     e.preventDefault();
-    if (!selectedFile && !designNote.trim()) {
-      toast.error('Vui lòng chọn file bản thiết kế hoặc nhập ghi chú thiết kế.');
+    if (!selectedFile && !description.trim()) {
+      toast.error('Vui lòng chọn ảnh bản vẽ thiết kế hoặc nhập mô tả kỹ thuật.');
       return;
     }
 
-    setSubmittingDesign(true);
+    setSubmitting(true);
     try {
       const formData = new FormData();
       if (selectedFile) {
         formData.append('design_file', selectedFile);
       }
-      formData.append('design_note', designNote.trim());
+      formData.append('description', description.trim());
+      if (item.requestItemId) {
+        formData.append('request_item_id', item.requestItemId);
+      }
 
       const res = await updateRequestDesign(requestId, formData);
-      toast.success('Đã gửi bản thiết kế sang cho Sales thành công!');
-
-      setDetail((prev) => ({
-        ...prev,
-        designNote: res.data?.designNote !== undefined ? res.data.designNote : designNote,
-        designFileUrl: res.data?.designFileUrl || prev.designFileUrl,
-      }));
+      toast.success(`Đã gửi bản thiết kế cho "${item.itemName}" sang Sales thành công!`);
 
       setSelectedFile(null);
       setFilePreview(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
 
-      if (onUpdated) onUpdated();
+      if (onUpdated) onUpdated(res.data);
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Lỗi khi gửi bản thiết kế sang cho Sales.';
+      const msg = err?.response?.data?.message || 'Lỗi khi gửi bản thiết kế cho sản phẩm này.';
       toast.error(msg);
     } finally {
-      setSubmittingDesign(false);
+      setSubmitting(false);
     }
   };
+
+  const itemImages = item.images || [];
+
+  return (
+    <div className="rounded-xl border border-stone-300 bg-white p-4 shadow-xs space-y-3.5 transition hover:border-amber-400">
+      {/* Header sản phẩm */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-stone-100">
+        <div className="flex items-start gap-2.5">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 font-bold text-xs text-amber-800">
+            #{index + 1}
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-stone-900">{item.itemName}</h4>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 mt-0.5">
+              <span>
+                Kích thước:{' '}
+                <strong className="text-stone-700">
+                  {item.lengthCm && item.widthCm && item.heightCm
+                    ? `${item.lengthCm} × ${item.widthCm} × ${item.heightCm} cm`
+                    : 'Theo thiết kế'}
+                </strong>
+              </span>
+              <span>•</span>
+              <span>
+                Số lượng: <strong className="text-stone-700">{item.quantity}</strong>
+              </span>
+              <span>•</span>
+              <span>
+                Đơn giá dự kiến:{' '}
+                <strong className="text-amber-800">
+                  {item.unitPrice != null ? formatCurrency(item.unitPrice) : 'Chờ báo giá'}
+                </strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-center">
+          {itemImages.length > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Đã có {itemImages.length} ảnh thiết kế
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500 border border-stone-200">
+              <Clock className="h-3.5 w-3.5 text-stone-400" />
+              Chưa có ảnh
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Mô tả kỹ thuật hiện tại của món (nếu có) */}
+      {item.description && (
+        <div className="rounded-lg bg-stone-50 border border-stone-200 p-2.5 text-xs text-stone-700">
+          <span className="font-semibold text-stone-800 block mb-0.5">Mô tả kỹ thuật hiện tại:</span>
+          <p className="whitespace-pre-line">{item.description}</p>
+        </div>
+      )}
+
+      {/* Danh sách ảnh thiết kế của món */}
+      {itemImages.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold text-stone-800 flex items-center gap-1.5">
+            <ImageIcon className="h-3.5 w-3.5 text-amber-700" />
+            Ảnh bản vẽ / thiết kế của sản phẩm ({itemImages.length} ảnh):
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {itemImages.map((img, imgIdx) => (
+              <a
+                key={img.imageId || imgIdx}
+                href={img.imageUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="group relative block overflow-hidden rounded-lg border border-stone-200 bg-stone-100 aspect-square shadow-2xs"
+              >
+                <img
+                  src={img.imageUrl}
+                  alt={`Bản vẽ ${item.itemName} ${imgIdx + 1}`}
+                  className="h-full w-full object-cover transition group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
+                  <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Form tải lên bản thiết kế & cập nhật mô tả kỹ thuật cho món */}
+      <form onSubmit={handleSendItemDesign} className="rounded-lg bg-stone-50/80 p-3.5 border border-stone-200 space-y-3">
+        <p className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
+          <FileUp className="h-4 w-4 text-amber-700" />
+          Tải ảnh bản vẽ thiết kế mới và cập nhật mô tả kỹ thuật cho món này:
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+          <div>
+            <label className="block text-xs font-medium text-stone-700 mb-1">
+              Chọn ảnh bản vẽ kỹ thuật / phối cảnh (JPG, PNG, WebP tối đa 20MB)
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.webp,.pdf"
+              onChange={handleFileChange}
+              className="w-full text-xs text-stone-500 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
+            />
+            {filePreview && (
+              <div className="mt-2">
+                <p className="text-[11px] text-stone-400 mb-1">Ảnh xem trước:</p>
+                <img
+                  src={filePreview}
+                  alt="Preview"
+                  className="max-h-24 rounded border border-stone-200 object-contain"
+                />
+              </div>
+            )}
+            {selectedFile && !filePreview && (
+              <p className="mt-1 text-xs text-stone-600 flex items-center gap-1">
+                <ExternalLink className="h-3.5 w-3.5 text-stone-500" />
+                {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-stone-700 mb-1">
+              Mô tả kỹ thuật cho món này
+            </label>
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Bản vẽ chi tiết kích thước, chất liệu khung, mặt đá, kết cấu mộng gỗ..."
+              className="w-full rounded-lg border border-stone-300 p-2 text-xs text-stone-900 outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <button
+            type="submit"
+            disabled={submitting}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-3.5 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-900 active:scale-95 disabled:opacity-50 transition"
+          >
+            {submitting ? (
+              <RotateCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5" />
+            )}
+            {submitting ? 'Đang gửi...' : 'Gửi bản thiết kế sang Sales'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ─── Detail Modal (Quản lý bản thiết kế từng sản phẩm) ─────────
+function RequestDetailModal({ requestId, onClose, onUpdated }) {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getRequestById(requestId);
+        if (!cancelled) {
+          setDetail(res.data);
+        }
+      } catch {
+        if (!cancelled) toast.error('Không tải được chi tiết yêu cầu.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestId]);
+
+  // Tính tổng số ảnh thiết kế do Chủ xưởng gửi (ở các món sản phẩm)
+  const totalDesignImages = useMemo(() => {
+    if (!detail) return 0;
+    return (detail.items || []).reduce(
+      (sum, it) => sum + (it.images?.length || 0),
+      0
+    );
+  }, [detail]);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
         {/* Header modal */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200 bg-white px-6 py-4">
           <div className="flex items-center gap-2">
@@ -263,7 +430,7 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-6">
           {loading ? (
             <div className="py-12 text-center text-stone-500">
               <RotateCw className="mx-auto h-6 w-6 animate-spin text-amber-700 mb-2" />
@@ -285,121 +452,10 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 border border-violet-200">
-                    Đặt theo yêu cầu (Custom)
+                    Đặt theo yêu cầu 
                   </span>
                   <StatusBadge status={detail.status} />
                 </div>
-              </div>
-
-              {/* KHỐI GỬI BẢN THIẾT KẾ SANG SALES (Tính năng chính cho Owner) */}
-              <div className="rounded-xl border-2 border-amber-300 bg-amber-50/40 p-5 space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                    <FileUp className="h-5 w-5 text-amber-700" />
-                    Bản thiết kế gửi cho bộ phận Sales
-                  </h3>
-                  <DesignStatusBadge hasDesign={!!detail.designFileUrl} />
-                </div>
-
-                {/* Nếu đã có bản thiết kế trước đó */}
-                {detail.designFileUrl && (
-                  <div className="rounded-lg border border-amber-200 bg-white p-3.5 space-y-2">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-800">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                        Bản thiết kế hiện tại:
-                      </div>
-                      <a
-                        href={detail.designFileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-amber-900 transition"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Xem / Mở file thiết kế
-                      </a>
-                    </div>
-
-                    {/* Preview ảnh nếu là file hình */}
-                    {detail.designFileUrl.match(/\.(jpeg|jpg|png|webp)($|\?)/i) && (
-                      <div className="mt-2">
-                        <img
-                          src={detail.designFileUrl}
-                          alt="Bản thiết kế hiện tại"
-                          className="max-h-56 rounded-md border border-stone-200 object-contain bg-stone-50"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Form upload / cập nhật bản thiết kế */}
-                <form onSubmit={handleSendDesign} className="space-y-3 bg-white p-4 rounded-lg border border-stone-200">
-                  <p className="text-xs font-medium text-stone-600">
-                    {detail.designFileUrl
-                      ? 'Tải lên bản thiết kế mới thay thế hoặc cập nhật ghi chú kỹ thuật:'
-                      : 'Tải lên file bản thiết kế (ảnh 2D/3D hoặc PDF) và gửi cho Sales:'}
-                  </p>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 items-start">
-                    <div>
-                      <label className="block text-xs font-medium text-stone-700 mb-1">
-                        Chọn file thiết kế (PDF, PNG, JPG - Tối đa 20MB)
-                      </label>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,.png,.jpg,.jpeg,.webp"
-                        onChange={handleFileChange}
-                        className="w-full text-xs text-stone-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
-                      />
-                      {filePreview && (
-                        <div className="mt-2">
-                          <p className="text-[11px] text-stone-400 mb-1">Ảnh xem trước:</p>
-                          <img
-                            src={filePreview}
-                            alt="Preview"
-                            className="max-h-28 rounded border border-stone-200 object-contain"
-                          />
-                        </div>
-                      )}
-                      {selectedFile && !filePreview && (
-                        <p className="mt-1 text-xs text-stone-600 flex items-center gap-1">
-                          <ExternalLink className="h-3.5 w-3.5 text-stone-500" />
-                          {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-stone-700 mb-1">
-                        Ghi chú kỹ thuật / thiết kế cho Sales
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={designNote}
-                        onChange={(e) => setDesignNote(e.target.value)}
-                        placeholder="Vd: Bản vẽ chi tiết kích thước 1m8 x 2m, khung sồi tự nhiên, mặt đá marble..."
-                        className="w-full rounded-lg border border-stone-300 p-2 text-xs text-stone-900 outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-1">
-                    <button
-                      type="submit"
-                      disabled={submittingDesign}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-amber-900 active:scale-95 disabled:opacity-50 transition"
-                    >
-                      {submittingDesign ? (
-                        <RotateCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                      {submittingDesign ? 'Đang gửi sang Sales...' : 'Gửi bản thiết kế sang Sales'}
-                    </button>
-                  </div>
-                </form>
               </div>
 
               {/* Thông tin khách hàng */}
@@ -441,10 +497,10 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                 </div>
               </div>
 
-              {/* Thông tin yêu cầu đặt làm */}
+              {/* Thông tin chung yêu cầu đặt làm */}
               <div className="rounded-xl border border-stone-200 p-4 space-y-3">
                 <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-                  <Calendar className="h-4 w-4 text-amber-700" /> Thông tin yêu cầu đặt làm
+                  <Calendar className="h-4 w-4 text-amber-700" /> Thông tin chung yêu cầu đặt làm
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div className="sm:col-span-2">
@@ -487,14 +543,6 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                   )}
                 </div>
 
-                {detail.description && (
-                  <div>
-                    <p className="text-xs text-stone-400 mb-1">Mô tả của khách hàng</p>
-                    <p className="text-sm text-stone-800 bg-stone-50 rounded-lg p-3 border border-stone-200">
-                      {detail.description}
-                    </p>
-                  </div>
-                )}
                 {detail.staffNote && (
                   <div>
                     <p className="text-xs text-stone-400 mb-1">Ghi chú của Sales</p>
@@ -513,82 +561,91 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                 )}
               </div>
 
-              {/* Ảnh tham khảo của khách gửi kèm */}
-              {detail.images && detail.images.length > 0 && (
-                <div className="rounded-xl border border-stone-200 p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-                    <ImageIcon className="h-4 w-4 text-amber-700" />
-                    Ảnh tham khảo khách gửi kèm ({detail.images.length})
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                    {detail.images.map((img, i) => (
-                      <a
-                        key={i}
-                        href={img.imageUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group relative block overflow-hidden rounded-lg border border-stone-200 bg-stone-100 aspect-square"
-                      >
-                        <img
-                          src={img.imageUrl}
-                          alt={`Ảnh tham khảo ${i + 1}`}
-                          className="h-full w-full object-cover transition group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
-                          <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Danh sách món đặt làm */}
-              {detail.items && detail.items.length > 0 && (
-                <div className="rounded-xl border border-stone-200 overflow-hidden shadow-xs">
-                  <div className="bg-stone-50 px-4 py-3 border-b border-stone-200">
-                    <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-                      <Package className="h-4 w-4 text-amber-700" />
-                      Quy cách món đặt làm ({detail.items.length})
+              {/* KHỐI TRỌNG TÂM: BẢN THIẾT KẾ CHO TỪNG SẢN PHẨM */}
+              <div className="rounded-xl border-2 border-amber-300 bg-amber-50/40 p-5 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                      <FileUp className="h-5 w-5 text-amber-700" />
+                      Hồ sơ thiết kế gửi cho bộ phận Sales
                     </h3>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      Gửi ảnh bản vẽ thiết kế và mô tả kỹ thuật riêng cho từng sản phẩm
+                    </p>
                   </div>
-                  <table className="min-w-full divide-y divide-stone-200 text-sm">
-                    <thead className="bg-stone-50/60 text-xs text-stone-600 font-semibold">
-                      <tr>
-                        <th className="py-2.5 pl-4 pr-3 text-left">Tên món</th>
-                        <th className="px-3 py-2.5 text-center">Kích thước (D x R x C)</th>
-                        <th className="px-3 py-2.5 text-right">SL</th>
-                        <th className="py-2.5 pl-3 pr-4 text-right">Đơn giá dự kiến</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100 bg-white">
-                      {detail.items.map((item, idx) => (
-                        <tr key={idx} className="transition hover:bg-stone-50/70">
-                          <td className="py-2.5 pl-4 pr-3 font-medium text-stone-900">
-                            <div>{item.itemName}</div>
-                            {item.description && (
-                              <div className="text-xs text-stone-400 mt-0.5">
-                                {item.description}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5 text-center text-xs text-stone-600">
-                            {item.lengthCm && item.widthCm && item.heightCm
-                              ? `${item.lengthCm} × ${item.widthCm} × ${item.heightCm} cm`
-                              : 'Theo thiết kế'}
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-stone-700 font-medium">
-                            {item.quantity}
-                          </td>
-                          <td className="py-2.5 pl-3 pr-4 text-right font-medium text-amber-800">
-                            {item.unitPrice != null ? formatCurrency(item.unitPrice) : 'Chờ báo giá'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <DesignStatusBadge count={totalDesignImages} />
                 </div>
-              )}
+
+                {/* Danh sách từng món để gửi bản thiết kế */}
+                <div className="space-y-4">
+                  {detail.items && detail.items.length > 0 ? (
+                    detail.items.map((item, idx) => (
+                      <ItemDesignCard
+                        key={item.requestItemId || idx}
+                        item={item}
+                        index={idx}
+                        requestId={requestId}
+                        onUpdated={(newData) => {
+                          if (newData) setDetail(newData);
+                          if (onUpdated) onUpdated();
+                        }}
+                      />
+                    ))
+                  ) : (
+                    <div className="rounded-lg bg-white p-4 text-center text-xs text-stone-500 border border-stone-200">
+                      Yêu cầu này chưa có danh sách sản phẩm chi tiết.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Ảnh tham khảo & Ghi chú do khách hàng gửi sang */}
+              <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
+                  <ImageIcon className="h-4 w-4 text-amber-700" /> Ảnh tham khảo & Ghi chú do khách hàng gửi
+                </h3>
+
+                {detail.description && (
+                  <div>
+                    <p className="text-xs text-stone-400 mb-1">Mô tả / Yêu cầu ban đầu của khách hàng:</p>
+                    <p className="text-sm text-stone-800 bg-white rounded-lg p-3 border border-stone-200 whitespace-pre-line">
+                      {detail.description}
+                    </p>
+                  </div>
+                )}
+
+                {detail.images && detail.images.length > 0 ? (
+                  <div>
+                    <p className="text-xs font-semibold text-stone-700 mb-1.5">
+                      Ảnh tham khảo / hiện trạng do khách hàng đính kèm ({detail.images.length} ảnh):
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {detail.images.map((img, idx) => (
+                        <a
+                          key={img.imageId || idx}
+                          href={img.imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group relative block overflow-hidden rounded-lg border border-stone-200 bg-white aspect-square shadow-2xs"
+                        >
+                          <img
+                            src={img.imageUrl}
+                            alt={`Ảnh tham khảo của khách ${idx + 1}`}
+                            className="h-full w-full object-cover transition group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
+                            <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-stone-400 italic">
+                    Khách hàng không đính kèm ảnh tham khảo chung.
+                  </p>
+                )}
+              </div>
 
               {/* Hợp đồng liên kết */}
               {detail.contract && (
@@ -610,7 +667,7 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
               {/* Thông báo phân quyền */}
               <div className="rounded-xl bg-stone-50 border border-stone-200 p-3.5 flex items-center gap-2 text-xs text-stone-600">
                 <AlertCircle className="h-4 w-4 shrink-0 text-amber-700" />
-                Chủ xưởng gửi bản thiết kế và ghi chú kỹ thuật sang cho Sales. Việc chốt hợp đồng và báo giá do nhân viên Sales thực hiện.
+                Chủ xưởng gửi ảnh bản thiết kế và mô tả kỹ thuật cho từng sản phẩm sang cho Sales. Việc chốt hợp đồng và báo giá do nhân viên Sales thực hiện.
               </div>
             </>
           )}
@@ -708,8 +765,13 @@ export function ManageCustomerRequestsPage() {
     const total = pagination.totalItems || requests.length;
     const pending = requests.filter((r) => r.status === 'PENDING').length;
     const processing = requests.filter((r) => r.status === 'PROCESSING').length;
-    const withDesign = requests.filter((r) => !!r.designFileUrl).length;
-    return { total, pending, processing, withDesign };
+    // Kiểm tra xem đơn đã có ảnh thiết kế (cấp request hoặc cấp từng món)
+    const withImages = requests.filter(
+      (r) =>
+        (r.images && r.images.length > 0) ||
+        (r.items && r.items.some((it) => it.images && it.images.length > 0))
+    ).length;
+    return { total, pending, processing, withImages };
   }, [pagination.totalItems, requests]);
 
   return (
@@ -718,10 +780,10 @@ export function ManageCustomerRequestsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-            Quản Lý Yêu Cầu Khách Hàng 
+            Quản Lý Yêu Cầu Khách Hàng
           </h1>
           <p className="mt-1 text-sm text-stone-500">
-            Xem và theo dõi các yêu cầu đặt làm theo mẫu của khách hàng, tải lên bản thiết kế và gửi sang cho bộ phận Sales.
+            Xem và theo dõi các yêu cầu đặt làm theo mẫu của khách hàng, tải lên ảnh bản thiết kế và gửi sang cho bộ phận Sales.
           </p>
         </div>
 
@@ -782,16 +844,16 @@ export function ManageCustomerRequestsPage() {
           </div>
         </div>
 
-        {/* Đã gửi bản thiết kế */}
+        {/* Đã có ảnh thiết kế */}
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm transition hover:shadow">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-emerald-800">Đã có bản thiết kế</span>
+            <span className="text-sm font-medium text-emerald-800">Đã có ảnh thiết kế</span>
             <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700">
               <CheckCircle2 className="h-5 w-5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-900">{stats.withDesign}</span>
+            <span className="text-2xl font-bold text-emerald-900">{stats.withImages}</span>
             <span className="text-xs text-emerald-600">sẵn sàng báo giá</span>
           </div>
         </div>
@@ -929,7 +991,12 @@ export function ManageCustomerRequestsPage() {
                         {formatDate(req.createdAt || req.createdate)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3.5">
-                        <DesignStatusBadge hasDesign={!!req.designFileUrl} />
+                        <DesignStatusBadge
+                          count={
+                            (req.images?.length || 0) +
+                            (req.items?.reduce((sum, it) => sum + (it.images?.length || 0), 0) || 0)
+                          }
+                        />
                       </td>
                       <td className="whitespace-nowrap px-3 py-3.5">
                         <StatusBadge status={req.status} />

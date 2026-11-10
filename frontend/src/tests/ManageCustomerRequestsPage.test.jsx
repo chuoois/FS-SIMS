@@ -31,7 +31,7 @@ const mockRequests = [
     customerPhone: '0901234567',
     title: 'Yêu cầu làm bàn ăn gỗ sồi 6 ghế',
     status: 'PENDING',
-    designFileUrl: null,
+    images: [],
     createdate: '2024-01-15T08:00:00.000Z',
   },
   {
@@ -42,7 +42,9 @@ const mockRequests = [
     customerPhone: '0909876543',
     title: 'Yêu cầu đặt tủ áo cánh lùa gỗ công nghiệp',
     status: 'CONVERTED',
-    designFileUrl: 'https://res.cloudinary.com/demo/image/upload/sample.png',
+    images: [
+      { imageId: 10, imageUrl: 'https://res.cloudinary.com/demo/image/upload/sample.png' },
+    ],
     createdate: '2024-01-16T10:00:00.000Z',
   },
 ];
@@ -65,8 +67,6 @@ const mockDetail = {
   deliveryAddress: '123 Đường ABC, TP.HCM',
   title: 'Yêu cầu làm bàn ăn gỗ sồi 6 ghế',
   description: 'Ghi chú của khách: Kích thước 1m8 x 0.9m',
-  designNote: 'Bản vẽ 2D hoàn thiện',
-  designFileUrl: null,
   items: [
     { itemName: 'Bàn ăn 6 ghế', quantity: 1, unitPrice: null, lengthCm: 180, widthCm: 90, heightCm: 75 },
   ],
@@ -126,12 +126,12 @@ describe('ManageCustomerRequestsPage', () => {
     expect(screen.getAllByText('Đã chuyển HĐ').length).toBeGreaterThan(0);
   });
 
-  it('hiển thị trạng thái bản thiết kế', async () => {
+  it('hiển thị trạng thái bản thiết kế theo số ảnh trong order_request_image', async () => {
     render(<ManageCustomerRequestsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Chưa gửi thiết kế')).toBeInTheDocument();
+      expect(screen.getByText('Chưa có ảnh')).toBeInTheDocument();
     });
-    expect(screen.getAllByText('Đã có bản thiết kế').length).toBeGreaterThan(0);
+    expect(screen.getByText('Đã có 1 ảnh')).toBeInTheDocument();
   });
 
   it('hiển thị empty state khi không có yêu cầu', async () => {
@@ -186,7 +186,7 @@ describe('ManageCustomerRequestsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Chi tiết yêu cầu đặt làm')).toBeInTheDocument();
     });
-    expect(screen.getByText('Bản thiết kế gửi cho bộ phận Sales')).toBeInTheDocument();
+    expect(screen.getByText('Hồ sơ thiết kế gửi cho bộ phận Sales')).toBeInTheDocument();
   });
 
   it('cho phép gửi bản thiết kế và ghi chú sang cho Sales', async () => {
@@ -195,8 +195,11 @@ describe('ManageCustomerRequestsPage', () => {
       message: 'Cập nhật bản thiết kế thành công.',
       data: {
         requestId: 1,
-        designNote: 'Bản vẽ CAD kích thước chuẩn',
-        designFileUrl: 'https://cloudinary.com/sample.pdf',
+        description: 'Bản vẽ CAD kích thước chuẩn',
+        images: [
+          { imageId: 10, imageUrl: 'https://example.com/sample.jpg' },
+          { imageId: 11, imageUrl: 'https://cloudinary.com/new.png' },
+        ],
       },
     });
 
@@ -223,6 +226,89 @@ describe('ManageCustomerRequestsPage', () => {
     const sendBtn = screen.getByText('Gửi bản thiết kế sang Sales');
     await act(async () => {
       fireEvent.click(sendBtn);
+    });
+
+    await waitFor(() => {
+      expect(updateRequestDesign).toHaveBeenCalledWith(
+        1,
+        expect.any(FormData)
+      );
+    });
+  });
+
+  it('cho phép gửi bản thiết kế và mô tả riêng cho từng sản phẩm trong đơn', async () => {
+    const detailWithItems = {
+      ...mockDetail,
+      items: [
+        {
+          requestItemId: 101,
+          itemName: 'Bàn ăn 6 ghế gỗ sồi',
+          quantity: 1,
+          unitPrice: 12000000,
+          lengthCm: 180,
+          widthCm: 90,
+          heightCm: 75,
+          description: 'Mẫu chân vuông vát cạnh',
+          images: [],
+        },
+        {
+          requestItemId: 102,
+          itemName: 'Ghế đơn bọc da microfiber',
+          quantity: 6,
+          unitPrice: 1500000,
+          lengthCm: 50,
+          widthCm: 50,
+          heightCm: 90,
+          description: '',
+          images: [{ imageId: 99, imageUrl: 'https://example.com/chair.jpg' }],
+        },
+      ],
+    };
+
+    getRequestById.mockResolvedValue({ data: detailWithItems });
+    updateRequestDesign.mockResolvedValue({
+      message: 'Cập nhật bản thiết kế thành công.',
+      data: {
+        ...detailWithItems,
+        items: [
+          {
+            ...detailWithItems.items[0],
+            description: 'Gỗ sồi Nga, mộng chốt âm',
+            images: [{ imageId: 100, imageUrl: 'https://example.com/table-cad.png' }],
+          },
+          detailWithItems.items[1],
+        ],
+      },
+    });
+
+    render(<ManageCustomerRequestsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
+    });
+
+    const viewButtons = screen.getAllByRole('button', { name: /Xem chi tiết/i });
+    await act(async () => {
+      fireEvent.click(viewButtons[0]);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Bàn ăn 6 ghế gỗ sồi')).toBeInTheDocument();
+      expect(screen.getByText('Ghế đơn bọc da microfiber')).toBeInTheDocument();
+    });
+
+    // Món 2 đã có 1 ảnh
+    expect(screen.getByText('Đã có 1 ảnh thiết kế')).toBeInTheDocument();
+
+    // Nhập mô tả cho món 1
+    const textareas = screen.getAllByPlaceholderText(/Bản vẽ chi tiết kích thước/i);
+    await act(async () => {
+      fireEvent.change(textareas[0], { target: { value: 'Gỗ sồi Nga, mộng chốt âm' } });
+    });
+
+    const sendButtons = screen.getAllByText('Gửi bản thiết kế sang Sales');
+    await act(async () => {
+      fireEvent.click(sendButtons[0]);
     });
 
     await waitFor(() => {

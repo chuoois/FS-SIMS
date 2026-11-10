@@ -542,8 +542,9 @@ async function convertRequestToContract(req, res) {
 
 /**
  * 14. PATCH /api/sale-orders/requests/:id/design
- * Owner gửi bản thiết kế (file + ghi chú) cho yêu cầu CUSTOM
- * File upload đã được xử lý qua uploadDesignMiddleware trước khi vào đây
+ * Owner gửi ảnh bản thiết kế và mô tả kỹ thuật cho yêu cầu CUSTOM:
+ * - Ảnh lưu vào bảng order_request_image (quan hệ 1-N)
+ * - Mô tả/ghi chú lưu trực tiếp vào trường description có sẵn của bảng order_request
  */
 async function updateDesignFile(req, res) {
   try {
@@ -553,23 +554,24 @@ async function updateDesignFile(req, res) {
       return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
     }
 
-    const { design_note } = req.body;
+    const { description, design_note, request_item_id, requestItemId } = req.body;
+    const desc = description !== undefined ? description : design_note;
+    const targetItemId = request_item_id || requestItemId || null;
     // req.file được set bởi uploadDesignMiddleware (nếu có upload)
-    const designFileUrl = req.file?.path || req.file?.secure_url || null;
+    const imageUrl = req.file?.path || req.file?.secure_url || null;
 
-    const updated = await updateDesignFileModel(requestId, {
-      designNote: design_note !== undefined ? design_note : undefined,
-      designFileUrl: designFileUrl !== null ? designFileUrl : undefined,
+    const result = await updateDesignFileModel(requestId, {
+      requestItemId: targetItemId ? parseInt(targetItemId, 10) : null,
+      description: desc !== undefined ? desc : undefined,
+      imageUrl: imageUrl !== null ? imageUrl : undefined,
       updatedBy: req.user?.email || 'OWNER',
     });
 
+    const responseData = result ? (toRequestDTO(result) || result) : null;
+
     return res.status(200).json({
       message: 'Cập nhật bản thiết kế thành công.',
-      data: {
-        requestId: updated.request_id,
-        designNote: updated.design_note,
-        designFileUrl: updated.design_file_url,
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error('[saleOrderController.updateDesignFile]', error);
@@ -608,8 +610,6 @@ function toRequestDTO(raw) {
     approvedAt: r.approved_at,
     staffNote: r.staff_note,
     rejectReason: r.reject_reason,
-    designNote: r.design_note,
-    designFileUrl: r.design_file_url,
     assignedTo: r.assigned_to,
     assigneeName: r.assignee?.full_name || null,
     customerFullName: r.customer?.full_name || r.contact_name,
@@ -630,12 +630,19 @@ function toRequestDTO(raw) {
       lengthCm: it.length_cm,
       widthCm: it.width_cm,
       heightCm: it.height_cm,
+      images: (it.images || []).map((img) => ({
+        imageId: img.request_image_id,
+        imageUrl: img.image_url,
+        sortOrder: img.sort_order,
+      })),
     })),
-    images: (r.images || []).map((img) => ({
-      imageId: img.request_image_id,
-      imageUrl: img.image_url,
-      sortOrder: img.sort_order,
-    })),
+    images: (r.images || [])
+      .filter((img) => img.request_item_id == null && !img.requestItemId)
+      .map((img) => ({
+        imageId: img.request_image_id || img.imageId,
+        imageUrl: img.image_url || img.imageUrl,
+        sortOrder: img.sort_order || img.sortOrder,
+      })),
   };
 }
 
