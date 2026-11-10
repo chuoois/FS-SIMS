@@ -690,7 +690,7 @@ export const CreateOrderPage = () => {
                   </label>
                   {totalAmount > 10000000 ? (
                     <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
-                      Mặc định cọc 30% (Đơn > 10 triệu)
+                      Mặc định cọc 30% (Đơn {'>'} 10 triệu)
                     </span>
                   ) : (
                     <span className="rounded bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500">
@@ -702,7 +702,7 @@ export const CreateOrderPage = () => {
                   <DollarSign className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
                   <input
                     type="number"
-                    min={totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0}
+                    min={0}
                     max={totalAmount}
                     value={customerInfo.depositAmount}
                     onChange={(e) =>

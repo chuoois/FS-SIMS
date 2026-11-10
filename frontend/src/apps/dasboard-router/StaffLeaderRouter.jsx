@@ -1,6 +1,7 @@
 import { StaffLeaderLayout } from "../../components/layouts/dashboard-layout/DashboardLayout";
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
+import { LeaderOrdersPage } from "../../pages/staff-pages/LeaderOrdersPage";
 
 export const StaffLeaderRouter = {
   path: "/staff-leader",
@@ -11,22 +12,15 @@ export const StaffLeaderRouter = {
       children: [
         {
           index: true,
-          element: (
-            <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-stone-900">Tổng quan Quản lý Xưởng & Sản xuất</h2>
-              <p className="mt-2 text-sm text-stone-600">
-                Khu vực điều phối tiến độ gia công, xuất nhập nguyên vật liệu và quản lý thợ xưởng.
-              </p>
-            </div>
-          ),
+          element: <LeaderOrdersPage />,
+        },
+        {
+          path: "orders",
+          element: <LeaderOrdersPage />,
         },
         {
           path: "production",
-          element: (
-            <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-stone-900">Tiến độ sản xuất</h2>
-            </div>
-          ),
+          element: <LeaderOrdersPage />,
         },
       ],
     },

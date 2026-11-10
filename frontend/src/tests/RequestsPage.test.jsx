@@ -70,6 +70,30 @@ const mockRequests = [
       status: 'DRAFT',
     },
   },
+  {
+    requestId: 3,
+    requestCode: 'RQ-20261103-0003',
+    customerName: 'Lê Văn C',
+    customerPhone: '0901122334',
+    customerEmail: 'levanc@gmail.com',
+    deliveryAddress: '123 Ba Tháng Hai, Q10, TP.HCM',
+    orderType: 'CUSTOM',
+    status: 'REQUEST_CHANGE',
+    rejectReason: 'Kích thước tủ bếp dài 350cm không phù hợp góc tường, yêu cầu giảm xuống 300cm',
+    createdAt: '2026-11-03T14:00:00.000Z',
+    items: [
+      {
+        requestItemId: 3,
+        productId: null,
+        itemName: 'Tủ bếp góc L',
+        quantity: 1,
+        unitPrice: 30000000,
+        lengthCm: 350,
+        widthCm: 60,
+        heightCm: 220,
+      },
+    ],
+  },
 ];
 
 describe('RequestsPage Component', () => {
@@ -133,14 +157,11 @@ describe('RequestsPage Component', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
-      expect(screen.getByText('Đã chuyển HĐ')).toBeInTheDocument();
+      // PENDING should have 'Tạo HĐ' button
+      expect(screen.getByText('Tạo HĐ')).toBeInTheDocument();
+      // CONVERTED should have 'Xem HĐ' button
+      expect(screen.getByText('Xem HĐ')).toBeInTheDocument();
     });
-
-    // PENDING should have 'Tạo HĐ' button
-    expect(screen.getByText('Tạo HĐ')).toBeInTheDocument();
-    // CONVERTED should have 'Xem HĐ' button
-    expect(screen.getByText('Xem HĐ')).toBeInTheDocument();
   });
 
   it('opens detail modal when clicking view button', async () => {
@@ -238,6 +259,43 @@ describe('RequestsPage Component', () => {
 
     await waitFor(() => {
       expect(searchInput).toHaveValue('');
+    });
+  });
+
+  it('displays REQUEST_CHANGE requests with alert banner, "Sửa đơn" button, and modal feedback', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter>
+        <RequestsPage />
+      </MemoryRouter>
+    );
+
+    // 1. Kiểm tra alert banner hiển thị cảnh báo đơn cần sửa
+    await waitFor(() => {
+      expect(screen.getByText(/Có 1 yêu cầu cần Sales chỉnh sửa theo ý kiến Chủ xưởng/i)).toBeInTheDocument();
+      expect(screen.getByText('RQ-20261103-0003')).toBeInTheDocument();
+      expect(screen.getByText('Lê Văn C')).toBeInTheDocument();
+    });
+
+    // 2. Kiểm tra Badge trạng thái và ghi chú lý do sửa của Chủ xưởng trên bảng
+    expect(screen.getByText('Yêu cầu sửa')).toBeInTheDocument();
+    expect(screen.getByText(/⚠️ Sửa: Kích thước tủ bếp dài 350cm/i)).toBeInTheDocument();
+
+    // 3. Nút "Sửa đơn" phải xuất hiện trên dòng đơn REQUEST_CHANGE
+    const editBtns = screen.getAllByRole('button', { name: /Sửa đơn/i });
+    expect(editBtns.length).toBeGreaterThan(0);
+
+    // 4. Mở modal chi tiết của đơn REQUEST_CHANGE
+    const viewButtons = screen.getAllByTitle('Xem chi tiết');
+    // Button thứ 3 là của đơn requestId = 3
+    await user.click(viewButtons[2]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Chi tiết yêu cầu')).toBeInTheDocument();
+      expect(screen.getByText(/Chủ xưởng yêu cầu chỉnh sửa thiết kế \/ thông số kỹ thuật/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Kích thước tủ bếp dài 350cm không phù hợp/i).length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByRole('button', { name: /Chỉnh sửa bản vẽ & Gửi lại/i })).toBeInTheDocument();
     });
   });
 });

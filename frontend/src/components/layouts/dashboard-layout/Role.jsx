@@ -16,6 +16,7 @@ import {
   UserCog,
   Users,
   Wallet,
+  PenTool,
 } from 'lucide-react';
 
 /* Cấu hình menu theo từng vai trò: path '' là trang index (tổng quan) */
@@ -41,6 +42,7 @@ export const roles = {
     base: '/sale',
     items: [
       { label: 'Tạo đơn hàng (POS)', path: 'create-order', icon: Receipt },
+      { label: 'Tạo đơn theo yêu cầu', path: 'requests/create', icon: PenTool },
       { label: 'Đơn hàng', path: 'orders', icon: Package },
       { label: 'Hợp đồng', path: 'contracts', icon: FileText },
       { label: 'Yêu cầu của khách', path: 'requests', icon: ClipboardList },
@@ -54,8 +56,8 @@ export const roles = {
     base: '/staff-leader',
     items: [
       { label: 'Tổng quan', path: '', icon: LayoutDashboard },
-      { label: 'Công việc', path: '#', icon: ClipboardList },
-      { label: 'Tiến độ sản xuất', path: '#', icon: Hammer },
+      { label: 'Đơn hàng sản xuất', path: 'orders', icon: Package },
+      { label: 'Tiến độ sản xuất', path: 'production', icon: Hammer },
       { label: 'Nhân viên trong nhóm', path: '#', icon: Users },
       { label: 'Chấm công', path: '#', icon: Clock },
       { label: 'Báo cáo nhóm', path: '#', icon: BarChart3 },
@@ -68,6 +70,6 @@ export const resolveItems = (role) =>
   role.items.map((i, index) => ({
     ...i,
     to: i.path === '#' ? '#' : i.path ? `${role.base}/${i.path}` : role.base,
-    end: !i.path,
+    end: i.end !== undefined ? i.end : true,
     key: `${role.base}-${i.label}-${index}`,
   }));

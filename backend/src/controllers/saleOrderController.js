@@ -22,6 +22,8 @@ const {
   createOrderFromContract: createOrderFromContractModel,
   findOrderById: findOrderByIdModel,
   getOrdersWithPagination: getOrdersModel,
+  confirmDelivery: confirmDeliveryModel,
+  completeDelivery: completeDeliveryModel,
 } = require('../models/CustomerOrderModel');
 
 const {
@@ -29,6 +31,9 @@ const {
   findRequestById: findRequestByIdModel,
   convertRequestToContract: convertRequestToContractModel,
   updateDesignFile: updateDesignFileModel,
+  getCustomersForSales,
+  createSalesOrderRequest,
+  updateSalesOrderRequest,
 } = require('../models/SaleRequestModel');
 
 const {
@@ -40,6 +45,7 @@ const {
   validateCreateOfflineContractInput,
   validateSignContractInput,
   validateCreateOrderFromContractInput,
+  validateCreateSalesRequestInput,
   toContractDTO,
   toOrderDTO,
 } = require('../utils/saleOrderValidator');
@@ -603,6 +609,9 @@ function toRequestDTO(raw) {
     customerName: r.contact_name,
     customerPhone: r.contact_phone,
     customerEmail: r.contact_email,
+    contactName: r.contact_name,
+    contactPhone: r.contact_phone,
+    contactEmail: r.contact_email,
     deliveryAddress: r.delivery_address,
     title: r.title,
     description: r.description,
@@ -629,57 +638,86 @@ function toRequestDTO(raw) {
       requestItemId: it.request_item_id,
       productId: it.product_id,
       itemName: it.item_name,
+      categoryId: it.category_id,
+      roomId: it.room_id,
+      materialId: it.material_id,
+      colorId: it.color_id,
       quantity: it.quantity,
       unitPrice: it.unit_price ? Number(it.unit_price) : null,
       description: it.description,
+      technicalNotes: it.description,
       lengthCm: it.length_cm,
       widthCm: it.width_cm,
       heightCm: it.height_cm,
-      images: (it.images || []).map((img) => ({
-        imageId: img.request_image_id,
-        imageUrl: img.image_url,
-        sortOrder: img.sort_order,
-      })),
+      images: (r.images || [])
+        .filter((img) => img.request_item_id && Number(img.request_item_id) === Number(it.request_item_id))
+        .map((img) => ({
+          imageId: img.request_image_id,
+          imageUrl: img.image_url,
+          requestItemId: img.request_item_id,
+          sortOrder: img.sort_order,
+        })),
     })),
-    images: (r.images || [])
-      .filter((img) => img.request_item_id == null && !img.requestItemId)
-      .map((img) => ({
-        imageId: img.request_image_id || img.imageId,
-        imageUrl: img.image_url || img.imageUrl,
-        sortOrder: img.sort_order || img.sortOrder,
-      })),
+    images: (r.images || []).map((img) => ({
+      imageId: img.request_image_id,
+      imageUrl: img.image_url,
+      requestItemId: img.request_item_id,
+      sortOrder: img.sort_order,
+    })),
   };
 }
 
 /**
  * GET /api/sale-orders/customers
- * Lấy danh sách khách hàng có phân trang, tìm kiếm và lọc
+ * Lấy danh sách khách hàng dành cho Sales:
+ * - Nếu có phân trang (page) hoặc lọc trạng thái (status): trả về danh sách có phân trang và thống kê
+ * - Nếu không có page: trả về danh sách phục vụ dropdown/autocomplete
  */
-async function getCustomers(req, res) {
+async function getSaleCustomers(req, res) {
   try {
     const { page, limit, search, search_by, status } = req.query;
-    const result = await getCustomersModel({ page, limit, search, search_by, status });
+
+    // Phân trang & Quản lý khách hàng
+    if (page !== undefined || status !== undefined) {
+      const result = await getCustomersModel({ page, limit, search, search_by, status });
+      return res.status(200).json({
+        message: 'Lấy danh sách khách hàng thành công',
+        data: result.customers,
+        pagination: {
+          totalItems: result.totalItems,
+          totalPages: result.totalPages,
+          currentPage: result.currentPage,
+          itemsPerPage: result.itemsPerPage,
+        },
+      });
+    }
+
+    // Dropdown / Autocomplete cho tạo đơn
+    const customers = await getCustomersForSales({ search });
     return res.status(200).json({
       message: 'Lấy danh sách khách hàng thành công',
-      data: result.customers,
-      pagination: {
-        totalItems: result.totalItems,
-        totalPages: result.totalPages,
-        currentPage: result.currentPage,
-        itemsPerPage: result.itemsPerPage,
-      },
+      data: (customers || []).map((c) => ({
+        customerAccountId: c.user_account_id,
+        fullName: c.full_name,
+        phoneNumber: c.phone_number,
+        email: c.email,
+        address: c.address,
+      })),
     });
   } catch (error) {
-    console.error('[saleOrderController.getCustomers]', error);
-    return res.status(500).json({ message: 'Lỗi máy chủ khi lấy danh sách khách hàng', error: error.message });
+    console.error('[saleOrderController.getSaleCustomers]', error);
+    return res.status(500).json({
+      message: 'Lỗi máy chủ khi lấy danh sách khách hàng',
+      error: error.message,
+    });
   }
 }
 
 /**
  * GET /api/sale-orders/customers/:id
- * Lấy chi tiết 1 khách hàng kèm lịch sử
+ * Lấy chi tiết 1 khách hàng kèm lịch sử dành cho Sales
  */
-async function getCustomerById(req, res) {
+async function getSaleCustomerById(req, res) {
   try {
     const { id } = req.params;
     const customer = await findCustomerByIdModel(id);
@@ -688,8 +726,131 @@ async function getCustomerById(req, res) {
     }
     return res.status(200).json({ message: 'Lấy thông tin khách hàng thành công', data: customer });
   } catch (error) {
-    console.error('[saleOrderController.getCustomerById]', error);
+    console.error('[saleOrderController.getSaleCustomerById]', error);
     return res.status(500).json({ message: 'Lỗi máy chủ khi lấy thông tin khách hàng', error: error.message });
+  }
+}
+
+/**
+ * POST /api/sale-orders/requests
+ * Sales tạo đơn đặt hàng may đo & thiết kế (Order Request)
+ */
+async function createSalesRequest(req, res) {
+  try {
+    const validation = validateCreateSalesRequestInput(req.body);
+    if (!validation.isValid) {
+      return res.status(400).json({ message: validation.error });
+    }
+
+    const createdBy = req.user?.email || req.user?.full_name || 'Sales';
+    const request = await createSalesOrderRequest({
+      ...validation.data,
+      createdBy,
+    });
+
+    return res.status(201).json({
+      message: 'Tạo đơn yêu cầu thiết kế may đo thành công',
+      data: toRequestDTO(request),
+    });
+  } catch (error) {
+    console.error('[saleOrderController.createSalesRequest]', error);
+    return res.status(500).json({
+      message: 'Lỗi máy chủ khi tạo đơn yêu cầu thiết kế',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * PUT /api/sale-orders/requests/:id
+ * Sales cập nhật đơn đặt hàng thiết kế (khi Owner yêu cầu sửa)
+ */
+async function updateSalesRequest(req, res) {
+  try {
+    const { id } = req.params;
+    const requestId = parseInt(id, 10);
+    if (!requestId || isNaN(requestId) || requestId <= 0) {
+      return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
+    }
+
+    const updatedBy = req.user?.email || req.user?.full_name || 'Sales';
+    const request = await updateSalesOrderRequest(requestId, {
+      ...req.body,
+      updatedBy,
+    });
+
+    return res.status(200).json({
+      message: 'Cập nhật và gửi lại đơn yêu cầu thiết kế thành công',
+      data: toRequestDTO(request),
+    });
+  } catch (error) {
+    console.error('[saleOrderController.updateSalesRequest]', error);
+    const statusCode = error.message.includes('Không thể chỉnh sửa') || error.message.includes('không hợp lệ') ? 400 : 500;
+    return res.status(statusCode).json({
+      message: error.message || 'Lỗi khi cập nhật yêu cầu thiết kế',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/sale-orders/orders/:id/deliver
+ * Sales xác nhận bắt đầu giao hàng (sau khi Owner nghiệm thu đạt)
+ */
+async function deliverOrder(req, res) {
+  try {
+    const { id } = req.params;
+    const orderId = parseInt(id, 10);
+    if (!orderId || isNaN(orderId) || orderId <= 0) {
+      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
+    }
+
+    const updatedBy = req.user?.email || req.user?.full_name || 'Sales';
+    const order = await confirmDeliveryModel(orderId, {
+      deliveryAddress: req.body.deliveryAddress,
+      deliveryDate: req.body.deliveryDate,
+      note: req.body.note,
+      updatedBy,
+    });
+
+    return res.status(200).json({
+      message: 'Kích hoạt giao hàng thành công',
+      data: toOrderDTO(order),
+    });
+  } catch (error) {
+    console.error('[saleOrderController.deliverOrder]', error);
+    return res.status(400).json({
+      message: error.message || 'Lỗi khi kích hoạt giao hàng',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/sale-orders/orders/:id/complete
+ * Sales xác nhận giao hàng thành công -> Hoàn tất đơn COMPLETED
+ */
+async function completeOrder(req, res) {
+  try {
+    const { id } = req.params;
+    const orderId = parseInt(id, 10);
+    if (!orderId || isNaN(orderId) || orderId <= 0) {
+      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
+    }
+
+    const updatedBy = req.user?.email || req.user?.full_name || 'Sales';
+    const order = await completeDeliveryModel(orderId, { updatedBy });
+
+    return res.status(200).json({
+      message: 'Hoàn tất đơn hàng thành công (COMPLETED)',
+      data: toOrderDTO(order),
+    });
+  } catch (error) {
+    console.error('[saleOrderController.completeOrder]', error);
+    return res.status(400).json({
+      message: error.message || 'Lỗi khi hoàn tất đơn hàng',
+      error: error.message,
+    });
   }
 }
 
@@ -707,8 +868,13 @@ module.exports = {
   getRequests,
   getRequestById,
   convertRequestToContract,
+  createSalesRequest,
+  updateSalesRequest,
+  deliverOrder,
+  completeOrder,
   updateDesignFile,
-  getCustomers,
-  getCustomerById,
+  getSaleCustomers,
+  getSaleCustomerById,
+  getCustomers: getSaleCustomers,
+  getCustomerById: getSaleCustomerById,
 };
-

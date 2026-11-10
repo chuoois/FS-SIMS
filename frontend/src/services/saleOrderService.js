@@ -110,27 +110,96 @@ export async function convertRequestToContract(requestId, payload = {}) {
 }
 
 /**
- * 14. Chủ xưởng gửi bản thiết kế (file + ghi chú) sang cho Sales
+ * 14. Lấy danh sách khách hàng phục vụ dropdown/autocomplete và trang quản lý cho Sales
  */
-export async function updateRequestDesign(requestId, formData) {
-  const response = await api.patch(`/sale-orders/requests/${requestId}/design`, formData, {
+export async function getSaleCustomers(params = {}) {
+  const response = await api.get('/sale-orders/customers', { params });
+  return response.data;
+}
+export const getCustomers = getSaleCustomers;
+
+/**
+ * 14b. Lấy chi tiết 1 khách hàng kèm lịch sử cho Sales
+ */
+export async function getSaleCustomerById(customerId) {
+  const response = await api.get(`/sale-orders/customers/${customerId}`);
+  return response.data;
+}
+export const getCustomerById = getSaleCustomerById;
+
+/**
+ * 15. Sales tạo đơn yêu cầu thiết kế / may đo riêng biệt (Order Request)
+ */
+export async function createSalesOrderRequest(payload) {
+  const response = await api.post('/sale-orders/requests', payload);
+  return response.data;
+}
+
+/**
+ * 16. Sales cập nhật lại đơn yêu cầu (khi Owner yêu cầu sửa thiết kế)
+ */
+export async function updateSalesOrderRequest(requestId, payload) {
+  const response = await api.put(`/sale-orders/requests/${requestId}`, payload);
+  return response.data;
+}
+
+/**
+ * 17. Sales kích hoạt giao hàng (khi Owner nghiệm thu đạt READY_TO_DELIVER)
+ */
+export async function confirmOrderDelivery(orderId, payload = {}) {
+  const response = await api.post(`/sale-orders/orders/${orderId}/deliver`, payload);
+  return response.data;
+}
+
+/**
+ * 18. Sales xác nhận đã giao hàng thành công -> Hoàn tất đơn COMPLETED
+ */
+export async function completeOrderDelivery(orderId, payload = {}) {
+  const response = await api.post(`/sale-orders/orders/${orderId}/complete`, payload);
+  return response.data;
+}
+
+/**
+ * 19. Tải lên danh sách hình ảnh thiết kế / may đo (Cloudinary)
+ */
+export async function uploadRequestImages(files) {
+  const formData = new FormData();
+  if (Array.isArray(files)) {
+    files.forEach((file) => formData.append('images', file));
+  } else if (files instanceof FileList) {
+    Array.from(files).forEach((file) => formData.append('images', file));
+  } else if (files) {
+    formData.append('images', files);
+  }
+  const response = await api.post('/sale-orders/upload-images', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;
 }
 
 /**
- * 15. Lấy danh sách khách hàng (dành cho Sale)
+ * 20. Chủ xưởng gửi bản thiết kế (file + ghi chú) sang cho Sales
  */
-export async function getCustomers(params = {}) {
-  const response = await api.get('/sale-orders/customers', { params });
+export async function updateRequestDesign(requestId, formData) {
+  const response = await api.patch(
+    `/sale-orders/requests/${requestId}/design`,
+    formData
+  );
   return response.data;
 }
 
 /**
- * 16. Lấy chi tiết 1 khách hàng kèm lịch sử
+ * 21. Thêm mới chất liệu (loại gỗ) trực tiếp từ form tạo/sửa yêu cầu
  */
-export async function getCustomerById(customerId) {
-  const response = await api.get(`/sale-orders/customers/${customerId}`);
+export async function createRequestMaterial(data) {
+  const response = await api.post('/sale-orders/materials', data);
+  return response.data;
+}
+
+/**
+ * 22. Thêm mới màu sắc (màu sơn) trực tiếp từ form tạo/sửa yêu cầu
+ */
+export async function createRequestColor(data) {
+  const response = await api.post('/sale-orders/colors', data);
   return response.data;
 }

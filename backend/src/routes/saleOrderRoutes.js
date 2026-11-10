@@ -19,11 +19,17 @@ const {
   getRequests,
   getRequestById,
   convertRequestToContract,
+  createSalesRequest,
+  updateSalesRequest,
+  deliverOrder,
+  completeOrder,
   updateDesignFile,
-  getCustomers,
-  getCustomerById,
+  getSaleCustomers,
+  getSaleCustomerById,
 } = require('../controllers/saleOrderController');
+const { createProductMaterial, createProductColor } = require('../controllers/productManagerController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
+const upload = require('../middlewares/uploadMiddleware');
 const uploadDesign = require('../middlewares/uploadDesignMiddleware');
 
 const router = express.Router();
@@ -31,10 +37,32 @@ const router = express.Router();
 // Bắt buộc đăng nhập và chỉ cho phép role SALES hoặc OWNER
 router.use(authenticate, requireRole('SALES', 'OWNER'));
 
+// ── Upload hình ảnh thiết kế / may đo (Cloudinary) ────────
+router.post('/upload-images', (req, res) => {
+  upload.array('images', 10)(req, res, (err) => {
+    if (err) {
+      console.error('[saleOrderRoutes.upload-images]', err);
+      return res.status(400).json({ message: err.message || 'Lỗi khi tải ảnh lên máy chủ' });
+    }
+    const urls = (req.files || []).map((f) => f.path || f.url || f.secure_url).filter(Boolean);
+    return res.status(200).json({
+      message: 'Tải lên hình ảnh thiết kế thành công',
+      urls,
+      images: urls,
+    });
+  });
+});
+
 // ── Kho sản phẩm dành cho POS ─────────────────────────────
 router.get('/products', getWarehouseProducts);
 router.get('/products/:id', getProductDetail);
 router.get('/metadata', getProductMetadata);
+router.post('/materials', createProductMaterial);
+router.post('/colors', createProductColor);
+
+// ── Quản lý & tra cứu Khách hàng (Customers) ──────────────
+router.get('/customers', getSaleCustomers);
+router.get('/customers/:id', getSaleCustomerById);
 
 // ── Luồng Hợp đồng (Contract) ──────────────────────────────
 router.post('/contracts', createOfflineContract);
@@ -46,16 +74,15 @@ router.get('/contracts/:id', getContractById);
 router.post('/orders/from-contract/:contractId', createOrderFromContract);
 router.get('/orders', getOrders);
 router.get('/orders/:id', getOrderById);
+router.post('/orders/:id/deliver', deliverOrder);
+router.post('/orders/:id/complete', completeOrder);
 
-// -- Luong Yeu cau cua khach hang (Customer Requests) ----
+// ── Luồng Yêu cầu của khách hàng (Customer Requests) ──────
 router.get('/requests', getRequests);
 router.get('/requests/:id', getRequestById);
+router.post('/requests', createSalesRequest);
+router.put('/requests/:id', updateSalesRequest);
 router.post('/requests/:id/convert-to-contract', convertRequestToContract);
 router.patch('/requests/:id/design', requireRole('OWNER'), uploadDesign.single('design_file'), updateDesignFile);
 
-// -- Quan ly Khach hang (Customers) ----------------------
-router.get('/customers', getCustomers);
-router.get('/customers/:id', getCustomerById);
-
 module.exports = router;
-

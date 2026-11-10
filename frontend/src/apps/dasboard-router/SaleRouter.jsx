@@ -2,6 +2,7 @@ import { SaleLayout } from "../../components/layouts/dashboard-layout/DashboardL
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
 import { CreateOrderPage } from "../../pages/sale-pages/CreateOrderPage";
+import { CreateOrderRequestPage } from "../../pages/sale-pages/CreateOrderRequestPage";
 import { OrdersPage } from "../../pages/sale-pages/OrdersPage";
 import { ContractsPage } from "../../pages/sale-pages/ContractsPage";
 import { RequestsPage } from "../../pages/sale-pages/RequestsPage";
@@ -25,6 +26,14 @@ export const SaleRouter = {
         {
           path: "orders/create",
           element: <CreateOrderPage />,
+        },
+        {
+          path: "requests/create",
+          element: <CreateOrderRequestPage />,
+        },
+        {
+          path: "create-request",
+          element: <CreateOrderRequestPage />,
         },
         {
           path: "orders",

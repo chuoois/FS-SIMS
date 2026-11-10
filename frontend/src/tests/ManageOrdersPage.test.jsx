@@ -105,6 +105,32 @@ describe('ManageOrdersPage Component', () => {
       message: 'Cập nhật trạng thái thành công',
       order: { ...mockOrders[0], status: 'IN_PRODUCTION', statusLabel: 'Đang xử lý' },
     });
+    orderManagementService.getStaffLeaders.mockResolvedValue({
+      data: [
+        {
+          userAccountId: 3,
+          fullName: 'Lê Văn Tổ Trưởng',
+          email: 'leader@fssims.local',
+          phoneNumber: '0900000003',
+        },
+      ],
+      leaders: [
+        {
+          userAccountId: 3,
+          fullName: 'Lê Văn Tổ Trưởng',
+          email: 'leader@fssims.local',
+          phoneNumber: '0900000003',
+        },
+      ],
+    });
+    orderManagementService.assignLeaderToOrder.mockResolvedValue({
+      message: 'Phân công Tổ trưởng thành công',
+      order: {
+        ...mockOrders[0],
+        assignedTo: 3,
+        staffName: 'Lê Văn Tổ Trưởng',
+      },
+    });
   });
 
   // ─── 1. Render cơ bản ────────────────────────────────────────────
@@ -185,6 +211,9 @@ describe('ManageOrdersPage Component', () => {
 
   it('đơn hàng COMPLETED không hiển thị nút chuyển trạng thái', async () => {
     render(<ManageOrdersPage />);
+    await waitFor(() => {
+      expect(screen.getByText('ORD-20261101-0003')).toBeDefined();
+    });
     await waitFor(() => screen.getByText(/quản lý đơn hàng/i));
 
     // Đơn COMPLETED không có nút chuyển trạng thái nào
@@ -298,6 +327,35 @@ describe('ManageOrdersPage Component', () => {
 
     await waitFor(() => {
       expect(orderManagementService.getOrders).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ─── 11. Giao việc cho Tổ trưởng ──────────────────────────────────
+  it('cho phép Owner mở modal và giao việc cho Tổ trưởng xưởng', async () => {
+    const user = userEvent.setup();
+    render(<ManageOrdersPage />);
+
+    await waitFor(() => screen.getByText('ORD-20261101-0001'));
+
+    const assignButtons = screen.getAllByRole('button', { name: /Giao việc|Đổi giao việc/i });
+    expect(assignButtons.length).toBeGreaterThan(0);
+    await user.click(assignButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Phân công Tổ trưởng sản xuất #ORD-20261101-0001/i)).toBeInTheDocument();
+      expect(screen.getByText(/Lê Văn Tổ Trưởng/i)).toBeInTheDocument();
+    });
+
+    const submitBtn = screen.getByRole('button', { name: /Xác nhận giao việc/i });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(orderManagementService.assignLeaderToOrder).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          leaderId: 3,
+        })
+      );
     });
   });
 });

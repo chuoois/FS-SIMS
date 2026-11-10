@@ -10,7 +10,23 @@ const {
   findOrderById,
   cancelOrder: cancelOrderModel,
   updateOrderStatus: updateOrderStatusModel,
+  assignLeaderToCustomerOrder,
+  leaderAcceptOrder,
+  leaderUpdateProgress,
+  leaderSubmitInspection,
+  ownerInspectOrder,
+  getOrdersForLeader,
 } = require('../models/CustomerOrderModel');
+
+const {
+  getRequestsWithPagination,
+  findRequestById,
+  reviewOrderRequest,
+} = require('../models/SaleRequestModel');
+
+const { UserAccount } = require('../models/userAccount.model');
+const { UserRole } = require('../models/userRole.model');
+const { toRequestDTO } = require('../utils/saleOrderValidator');
 
 const {
   validateUpdateStatusInput,
@@ -24,12 +40,14 @@ const {
  */
 async function getOrders(req, res) {
   try {
-    const { search, status, order_type, page = 1, limit = 10 } = req.query;
+    const { search, search_by, status, order_type, page = 1, limit = 10, sort = 'NEWEST' } = req.query;
 
     const result = await getOrdersWithPagination({
       search: typeof search === 'string' ? search.trim() : '',
+      search_by: typeof search_by === 'string' ? search_by.trim() : 'ALL',
       status: typeof status === 'string' ? status.trim().toUpperCase() : 'ALL',
       order_type: typeof order_type === 'string' ? order_type.trim().toUpperCase() : 'ALL',
+      sort,
       page: Math.max(1, parseInt(page, 10) || 1),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
     });
@@ -171,10 +189,350 @@ async function updateOrderStatus(req, res) {
   }
 }
 
+
+/**
+ * GET /api/order-management/owner/requests
+ * Owner xem danh sách các Order Request cần thẩm định
+ */
+async function getOwnerRequests(req, res) {
+  try {
+    const { page = 1, limit = 10, status, search, order_type } = req.query;
+    const result = await getRequestsWithPagination({
+      page,
+      limit,
+      status,
+      search,
+      order_type,
+    });
+
+    return res.status(200).json({
+      message: 'Lấy danh sách yêu cầu thiết kế thành công',
+      data: (result.requests || []).map(toRequestDTO),
+      pagination: {
+        totalItems: result.totalItems,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        itemsPerPage: result.itemsPerPage,
+      },
+    });
+  } catch (error) {
+    console.error('[orderManagementController.getOwnerRequests]', error);
+    return res.status(500).json({
+      message: 'Lỗi máy chủ khi lấy danh sách yêu cầu',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * GET /api/order-management/owner/requests/:id
+ * Owner xem chi tiết một Order Request
+ */
+async function getOwnerRequestDetail(req, res) {
+  try {
+    const { id } = req.params;
+    const requestId = parseInt(id, 10);
+    if (!requestId || isNaN(requestId) || requestId <= 0) {
+      return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
+    }
+
+    const request = await findRequestById(requestId);
+    if (!request) {
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu thiết kế.' });
+    }
+
+    return res.status(200).json({
+      message: 'Lấy chi tiết yêu cầu thiết kế thành công',
+      data: toRequestDTO(request),
+    });
+  } catch (error) {
+    console.error('[orderManagementController.getOwnerRequestDetail]', error);
+    return res.status(500).json({
+      message: 'Lỗi máy chủ khi lấy chi tiết yêu cầu',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/order-management/owner/requests/:id/review
+ * Owner thẩm định: REQUEST_CHANGE, REJECT, APPROVE, FINALIZE_DESIGN
+ */
+async function reviewRequest(req, res) {
+  try {
+    const { id } = req.params;
+    const requestId = parseInt(id, 10);
+    if (!requestId || isNaN(requestId) || requestId <= 0) {
+      return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
+    }
+
+    const { action, reason, note } = req.body;
+    const reviewedBy = req.user?.email || req.user?.full_name || 'Owner';
+
+    const request = await reviewOrderRequest(requestId, action, {
+      reason,
+      note,
+      reviewedBy,
+    });
+
+    return res.status(200).json({
+      message: 'Thẩm định và cập nhật trạng thái yêu cầu thiết kế thành công',
+      data: toRequestDTO(request),
+    });
+  } catch (error) {
+    console.error('[orderManagementController.reviewRequest]', error);
+    return res.status(400).json({
+      message: error.message || 'Lỗi khi thẩm định yêu cầu thiết kế',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * GET /api/order-management/leaders
+ * Lấy danh sách nhân viên có vai trò Tổ trưởng xưởng (Role LEADERSTAFF)
+ */
+async function getStaffLeaders(req, res) {
+  try {
+    const internalUsers = await UserAccount.findAll({
+      where: {
+        role_id: [1, 2, 3],
+        status: ['ACTIVE', 'active', 'Active'],
+      },
+      include: [
+        {
+          model: UserRole,
+          as: 'role',
+          attributes: ['role_id', 'role_code', 'role_name'],
+        },
+      ],
+      attributes: ['user_account_id', 'full_name', 'email', 'phone_number', 'role_id'],
+      order: [['role_id', 'DESC'], ['full_name', 'ASC']],
+    });
+
+    const dtoList = (internalUsers || []).map((l) => {
+      const roleCode = l.role?.role_code || (l.role_id === 3 ? 'LEADERSTAFF' : l.role_id === 2 ? 'SALES' : 'OWNER');
+      const roleName = l.role?.role_name || (l.role_id === 3 ? 'Tổ trưởng sản xuất' : l.role_id === 2 ? 'Nhân viên kinh doanh / Kỹ thuật' : 'Chủ xưởng');
+      return {
+        userAccountId: l.user_account_id,
+        user_account_id: l.user_account_id,
+        id: l.user_account_id,
+        fullName: l.full_name,
+        full_name: l.full_name,
+        email: l.email,
+        phoneNumber: l.phone_number,
+        phone_number: l.phone_number,
+        roleId: l.role_id,
+        role_id: l.role_id,
+        roleCode,
+        role_code: roleCode,
+        roleName,
+        role_name: roleName,
+      };
+    });
+
+    const leaders = dtoList.filter((u) => u.roleCode === 'LEADERSTAFF' || u.roleId === 3);
+    const staff = dtoList.filter((u) => (u.roleCode === 'SALES' || u.roleId === 2) && u.roleCode !== 'LEADERSTAFF');
+
+    return res.status(200).json({
+      message: 'Lấy danh sách nhân sự thành công',
+      data: dtoList,
+      leaders: leaders.length > 0 ? leaders : dtoList,
+      staff: staff.length > 0 ? staff : dtoList,
+      allStaff: dtoList,
+    });
+  } catch (error) {
+    console.error('[orderManagementController.getStaffLeaders]', error);
+    return res.status(500).json({
+      message: 'Lỗi máy chủ khi lấy danh sách nhân sự',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/order-management/orders/:id/assign-leader
+ * Owner phân công Tổ trưởng phụ trách đơn
+ */
+async function assignLeader(req, res) {
+  try {
+    const { id } = req.params;
+    const orderId = parseInt(id, 10);
+    const { leaderId, assigned_to, staffId, note } = req.body;
+    const targetLeaderId = leaderId || assigned_to;
+
+    if (!orderId || isNaN(orderId) || orderId <= 0) {
+      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
+    }
+    if (!targetLeaderId) {
+      return res.status(400).json({ message: 'Vui lòng chọn Tổ trưởng phụ trách.' });
+    }
+
+    const assignedBy = req.user?.email || req.user?.full_name || 'Owner';
+    const order = await assignLeaderToCustomerOrder(orderId, targetLeaderId, { assignedBy, staffId, note });
+
+    return res.status(200).json({
+      message: 'Phân công nhân sự sản xuất thành công',
+      order: toOrderManagementDTO(order),
+    });
+  } catch (error) {
+    console.error('[orderManagementController.assignLeader]', error);
+    return res.status(400).json({
+      message: error.message || 'Lỗi khi phân công Tổ trưởng',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/order-management/orders/:id/inspect
+ * Owner nghiệm thu sản phẩm (Đạt hoặc Không đạt)
+ */
+async function inspectOrder(req, res) {
+  try {
+    const { id } = req.params;
+    const orderId = parseInt(id, 10);
+    const { passed, rejectReason, result, reason } = req.body;
+    const isPassed = passed !== undefined ? Boolean(passed) : result === 'PASSED';
+    const finalReason = rejectReason || reason;
+
+    if (!orderId || isNaN(orderId) || orderId <= 0) {
+      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
+    }
+
+    const inspectedBy = req.user?.email || req.user?.full_name || 'Owner';
+    const order = await ownerInspectOrder(orderId, { passed: isPassed, rejectReason: finalReason, inspectedBy });
+
+    return res.status(200).json({
+      message: isPassed ? 'Nghiệm thu đạt yêu cầu' : 'Đã từ chối nghiệm thu, chuyển lại cho Tổ trưởng xử lý',
+      order: toOrderManagementDTO(order),
+    });
+  } catch (error) {
+    console.error('[orderManagementController.inspectOrder]', error);
+    return res.status(400).json({
+      message: error.message || 'Lỗi khi nghiệm thu đơn hàng',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * GET /api/order-management/leader/orders
+ * Tổ trưởng xem danh sách đơn hàng được phân công cho mình
+ */
+async function getLeaderOrders(req, res) {
+  try {
+    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
+    const { search, status, page = 1, limit = 10 } = req.query;
+
+    const result = await getOrdersForLeader(leaderId, { search, status, page, limit });
+
+    return res.status(200).json({
+      message: 'Lấy danh sách đơn hàng sản xuất thành công',
+      orders: (result.orders || []).map(toOrderManagementDTO),
+      pagination: {
+        totalItems: result.totalItems,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        itemsPerPage: result.itemsPerPage,
+      },
+    });
+  } catch (error) {
+    console.error('[orderManagementController.getLeaderOrders]', error);
+    return res.status(500).json({
+      message: 'Lỗi máy chủ khi lấy danh sách đơn của Tổ trưởng',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/order-management/leader/orders/:id/accept
+ * Tổ trưởng xác nhận tiếp nhận đơn hàng vào sản xuất
+ */
+async function leaderAccept(req, res) {
+  try {
+    const { id } = req.params;
+    const orderId = parseInt(id, 10);
+    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
+
+    const order = await leaderAcceptOrder(orderId, leaderId);
+    return res.status(200).json({
+      message: 'Tiếp nhận đơn hàng vào sản xuất thành công',
+      order: toOrderManagementDTO(order),
+    });
+  } catch (error) {
+    console.error('[orderManagementController.leaderAccept]', error);
+    return res.status(400).json({
+      message: error.message || 'Lỗi khi tiếp nhận đơn hàng',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/order-management/leader/orders/:id/progress
+ * Tổ trưởng cập nhật tiến độ / ghi chú phát sinh
+ */
+async function leaderProgress(req, res) {
+  try {
+    const { id } = req.params;
+    const orderId = parseInt(id, 10);
+    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
+    const { note } = req.body;
+
+    const order = await leaderUpdateProgress(orderId, leaderId, { note });
+    return res.status(200).json({
+      message: 'Cập nhật tiến độ thành công',
+      order: toOrderManagementDTO(order),
+    });
+  } catch (error) {
+    console.error('[orderManagementController.leaderProgress]', error);
+    return res.status(400).json({
+      message: error.message || 'Lỗi khi cập nhật tiến độ',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * POST /api/order-management/leader/orders/:id/submit-inspection
+ * Tổ trưởng hoàn thành và gửi yêu cầu nghiệm thu lên Owner
+ */
+async function leaderSubmit(req, res) {
+  try {
+    const { id } = req.params;
+    const orderId = parseInt(id, 10);
+    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
+    const { note, images } = req.body;
+
+    const order = await leaderSubmitInspection(orderId, leaderId, { note, images });
+    return res.status(200).json({
+      message: 'Đã gửi yêu cầu nghiệm thu lên Chủ xưởng thành công',
+      order: toOrderManagementDTO(order),
+    });
+  } catch (error) {
+    console.error('[orderManagementController.leaderSubmit]', error);
+    return res.status(400).json({
+      message: error.message || 'Lỗi khi gửi nghiệm thu',
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   getOrders,
   getOrderDetail,
   cancelOrder,
   updateOrderStatus,
+  getOwnerRequests,
+  getOwnerRequestDetail,
+  reviewRequest,
+  getStaffLeaders,
+  assignLeader,
+  inspectOrder,
+  getLeaderOrders,
+  leaderAccept,
+  leaderProgress,
+  leaderSubmit,
 };
-
