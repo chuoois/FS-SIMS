@@ -20,6 +20,8 @@ const {
   getRequestById,
   convertRequestToContract,
   updateDesignFile,
+  getCustomers,
+  getCustomerById,
 } = require('../controllers/saleOrderController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 const uploadDesign = require('../middlewares/uploadDesignMiddleware');
@@ -50,6 +52,10 @@ router.get('/requests', getRequests);
 router.get('/requests/:id', getRequestById);
 router.post('/requests/:id/convert-to-contract', convertRequestToContract);
 router.patch('/requests/:id/design', requireRole('OWNER'), uploadDesign.single('design_file'), updateDesignFile);
+
+// -- Quan ly Khach hang (Customers) ----------------------
+router.get('/customers', getCustomers);
+router.get('/customers/:id', getCustomerById);
 
 module.exports = router;
 

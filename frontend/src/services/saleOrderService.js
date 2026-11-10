@@ -118,3 +118,19 @@ export async function updateRequestDesign(requestId, formData) {
   });
   return response.data;
 }
+
+/**
+ * 15. Lấy danh sách khách hàng (dành cho Sale)
+ */
+export async function getCustomers(params = {}) {
+  const response = await api.get('/sale-orders/customers', { params });
+  return response.data;
+}
+
+/**
+ * 16. Lấy chi tiết 1 khách hàng kèm lịch sử
+ */
+export async function getCustomerById(customerId) {
+  const response = await api.get(`/sale-orders/customers/${customerId}`);
+  return response.data;
+}

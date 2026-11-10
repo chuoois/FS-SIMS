@@ -32,6 +32,11 @@ const {
 } = require('../models/SaleRequestModel');
 
 const {
+  getCustomersWithPagination: getCustomersModel,
+  findCustomerById: findCustomerByIdModel,
+} = require('../models/SaleCustomerModel');
+
+const {
   validateCreateOfflineContractInput,
   validateSignContractInput,
   validateCreateOrderFromContractInput,
@@ -646,6 +651,48 @@ function toRequestDTO(raw) {
   };
 }
 
+/**
+ * GET /api/sale-orders/customers
+ * Lấy danh sách khách hàng có phân trang, tìm kiếm và lọc
+ */
+async function getCustomers(req, res) {
+  try {
+    const { page, limit, search, search_by, status } = req.query;
+    const result = await getCustomersModel({ page, limit, search, search_by, status });
+    return res.status(200).json({
+      message: 'Lấy danh sách khách hàng thành công',
+      data: result.customers,
+      pagination: {
+        totalItems: result.totalItems,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        itemsPerPage: result.itemsPerPage,
+      },
+    });
+  } catch (error) {
+    console.error('[saleOrderController.getCustomers]', error);
+    return res.status(500).json({ message: 'Lỗi máy chủ khi lấy danh sách khách hàng', error: error.message });
+  }
+}
+
+/**
+ * GET /api/sale-orders/customers/:id
+ * Lấy chi tiết 1 khách hàng kèm lịch sử
+ */
+async function getCustomerById(req, res) {
+  try {
+    const { id } = req.params;
+    const customer = await findCustomerByIdModel(id);
+    if (!customer) {
+      return res.status(404).json({ message: 'Không tìm thấy khách hàng' });
+    }
+    return res.status(200).json({ message: 'Lấy thông tin khách hàng thành công', data: customer });
+  } catch (error) {
+    console.error('[saleOrderController.getCustomerById]', error);
+    return res.status(500).json({ message: 'Lỗi máy chủ khi lấy thông tin khách hàng', error: error.message });
+  }
+}
+
 module.exports = {
   getWarehouseProducts,
   getProductDetail,
@@ -661,5 +708,7 @@ module.exports = {
   getRequestById,
   convertRequestToContract,
   updateDesignFile,
+  getCustomers,
+  getCustomerById,
 };
 
