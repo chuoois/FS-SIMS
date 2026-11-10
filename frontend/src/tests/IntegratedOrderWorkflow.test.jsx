@@ -76,12 +76,12 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
     // Tiêu đề
     expect(screen.getByText(/Tạo đơn theo yêu cầu/i)).toBeInTheDocument();
     expect(screen.getByText(/1. Thông tin khách hàng/i)).toBeInTheDocument();
-    expect(screen.getByText(/2. Chi tiết sản phẩm & Thông số kỹ thuật/i)).toBeInTheDocument();
-    expect(screen.getByText(/3. Hình ảnh thiết kế & Bản vẽ 3D\/2D/i)).toBeInTheDocument();
+    expect(screen.getByText(/2\. Thông số kỹ thuật/i)).toBeInTheDocument();
+    expect(screen.getByText(/3\. Hình ảnh thiết kế/i)).toBeInTheDocument();
 
     // Các trường kích thước kỹ thuật
     expect(screen.getByText(/Chiều dài \(cm\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/Chiều rộng \/ Sâu \(cm\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Chiều rộng \(cm\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Chiều cao \(cm\)/i)).toBeInTheDocument();
   });
 

@@ -9,7 +9,7 @@
 // 3. Mỗi sản phẩm có danh sách ảnh riêng biệt: thêm/xóa/xem độc lập, tự động ánh xạ khi lưu/sửa
 // =========================================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileText,
@@ -22,13 +22,11 @@ import {
   CheckCircle2,
   AlertTriangle,
   RotateCw,
-  ArrowLeft,
   Layers,
   Upload,
   X,
   Send,
   Maximize2,
-  Clock,
   Ruler,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -51,41 +49,11 @@ const formatVND = (amount) => {
   }).format(amount || 0);
 };
 
-const formatDateTime = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    return `${timeStr} - ${dateStr}`;
-  } catch {
-    return dateString;
-  }
-};
-
 export const CreateOrderRequestPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('editId');
-
-  // ── Đồng hồ thời gian thực cho ngày tạo đơn ──
-  const [currentTime, setCurrentTime] = useState(() => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = now.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    return `${timeStr} • ${dateStr}`;
-  });
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-      const dateStr = now.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      setCurrentTime(`${timeStr} • ${dateStr}`);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
+  const [refreshing, setRefreshing] = useState(false);
 
   // ── 1. Metadata từ API hệ thống (Danh mục, phòng, vật liệu, màu sắc) ──
   const [metadata, setMetadata] = useState({
@@ -137,136 +105,178 @@ export const CreateOrderRequestPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [loadingEditData, setLoadingEditData] = useState(false);
   const [editRejectReason, setEditRejectReason] = useState(null);
-  const [editCreatedAt, setEditCreatedAt] = useState(null);
 
   // ── Tải metadata chuẩn từ API ──
-  useEffect(() => {
-    async function fetchMetadata() {
-      try {
-        setLoadingMetadata(true);
-        const res = await getProductMetadata();
-        if (res.data) {
-          const rawCats = res.data.categories || [];
-          const rawRooms = res.data.rooms || [];
-          const rawMats = res.data.materials || [];
-          const rawColors = res.data.colors || [];
+  const fetchMetadata = useCallback(async () => {
+    try {
+      setLoadingMetadata(true);
+      const res = await getProductMetadata();
+      if (res.data) {
+        const rawCats = res.data.categories || [];
+        const rawRooms = res.data.rooms || [];
+        const rawMats = res.data.materials || [];
+        const rawColors = res.data.colors || [];
 
-          setMetadata({
-            categories: rawCats.map((c, idx) => ({
-              categoryId: c.categoryId ?? c.category_id ?? `cat-${idx}`,
-              categoryName: c.categoryName ?? c.category_name ?? '',
-              categoryCode: c.categoryCode ?? c.category_code ?? '',
-            })),
-            rooms: rawRooms.map((r, idx) => ({
-              roomId: r.roomId ?? r.room_id ?? `room-${idx}`,
-              roomName: r.roomName ?? r.room_name ?? '',
-              roomCode: r.roomCode ?? r.room_code ?? '',
-            })),
-            materials: rawMats.map((m, idx) => ({
-              materialId: m.materialId ?? m.material_id ?? `mat-${idx}`,
-              materialName: m.materialName ?? m.material_name ?? '',
-              materialCode: m.materialCode ?? m.material_code ?? '',
-            })),
-            colors: rawColors.map((col, idx) => ({
-              colorId: col.colorId ?? col.color_id ?? `col-${idx}`,
-              colorName: col.colorName ?? col.color_name ?? '',
-              colorCode: col.colorCode ?? col.color_code ?? '',
-              hexValue: col.hexValue ?? col.hex_value ?? '',
-            })),
-          });
-        }
-      } catch (err) {
-        console.error('Lỗi khi tải metadata:', err);
-        toast.error('Không thể tải danh mục sản phẩm từ hệ thống.');
-      } finally {
-        setLoadingMetadata(false);
+        setMetadata({
+          categories: rawCats.map((c, idx) => ({
+            categoryId: c.categoryId ?? c.category_id ?? `cat-${idx}`,
+            categoryName: c.categoryName ?? c.category_name ?? '',
+            categoryCode: c.categoryCode ?? c.category_code ?? '',
+          })),
+          rooms: rawRooms.map((r, idx) => ({
+            roomId: r.roomId ?? r.room_id ?? `room-${idx}`,
+            roomName: r.roomName ?? r.room_name ?? '',
+            roomCode: r.roomCode ?? r.room_code ?? '',
+          })),
+          materials: rawMats.map((m, idx) => ({
+            materialId: m.materialId ?? m.material_id ?? `mat-${idx}`,
+            materialName: m.materialName ?? m.material_name ?? '',
+            materialCode: m.materialCode ?? m.material_code ?? '',
+          })),
+          colors: rawColors.map((col, idx) => ({
+            colorId: col.colorId ?? col.color_id ?? `col-${idx}`,
+            colorName: col.colorName ?? col.color_name ?? '',
+            colorCode: col.colorCode ?? col.color_code ?? '',
+            hexValue: col.hexValue ?? col.hex_value ?? '',
+          })),
+        });
       }
+    } catch (err) {
+      console.error('Lỗi khi tải metadata:', err);
+      toast.error('Không thể tải danh mục sản phẩm từ hệ thống.');
+    } finally {
+      setLoadingMetadata(false);
     }
-    fetchMetadata();
   }, []);
 
-  // ── Tải dữ liệu cũ nếu là chế độ chỉnh sửa (editId) ──
   useEffect(() => {
+    fetchMetadata();
+  }, [fetchMetadata]);
+
+  // ── Tải dữ liệu cũ nếu là chế độ chỉnh sửa (editId) ──
+  const loadEditData = useCallback(async () => {
     if (!editId) return;
+    try {
+      setLoadingEditData(true);
+      const res = await getRequestById(editId);
+      const req = res.data;
+      if (!req) return;
 
-    async function loadEditData() {
-      try {
-        setLoadingEditData(true);
-        const res = await getRequestById(editId);
-        const req = res.data;
-        if (!req) return;
+      setEditRejectReason(req.rejectReason || null);
 
-        setEditRejectReason(req.rejectReason || null);
-        setEditCreatedAt(req.createdAt || null);
+      const contactName = req.contactName || req.customerName || '';
+      setCustomerInfo({
+        customerAccountId: req.customerAccountId || null,
+        title: req.title || '',
+        contactName: contactName,
+        contactPhone: req.contactPhone || req.customerPhone || '',
+        contactEmail: req.contactEmail || req.customerEmail || '',
+        deliveryAddress: req.deliveryAddress || '',
+        expectedDate: req.expectedDate ? req.expectedDate.split('T')[0] : '',
+        orderType: req.orderType || 'CUSTOM',
+      });
 
-        const contactName = req.contactName || req.customerName || '';
-        setCustomerInfo({
-          customerAccountId: req.customerAccountId || null,
-          title: req.title || '',
-          contactName: contactName,
-          contactPhone: req.contactPhone || req.customerPhone || '',
-          contactEmail: req.contactEmail || req.customerEmail || '',
-          deliveryAddress: req.deliveryAddress || '',
-          expectedDate: req.expectedDate ? req.expectedDate.split('T')[0] : '',
-          orderType: req.orderType || 'CUSTOM',
-        });
+      const allImages = req.images || [];
 
-        const allImages = req.images || [];
+      if (req.items && req.items.length > 0) {
+        setItems(
+          req.items.map((it, idx) => {
+            let itemImgs = [];
+            if (it.images && Array.isArray(it.images) && it.images.length > 0) {
+              itemImgs = it.images;
+            } else if (it.requestItemId) {
+              itemImgs = allImages.filter(
+                (img) => img.requestItemId && Number(img.requestItemId) === Number(it.requestItemId)
+              );
+            }
 
-        if (req.items && req.items.length > 0) {
-          setItems(
-            req.items.map((it, idx) => {
-              let itemImgs = [];
-              if (it.images && Array.isArray(it.images) && it.images.length > 0) {
-                itemImgs = it.images;
-              } else if (it.requestItemId) {
-                itemImgs = allImages.filter(
-                  (img) => img.requestItemId && Number(img.requestItemId) === Number(it.requestItemId)
-                );
+            // Gán ảnh cũ chưa có ID vào món đầu tiên để đảm bảo không mất ảnh
+            if (idx === 0) {
+              const unassignedImgs = allImages.filter((img) => !img.requestItemId);
+              if (unassignedImgs.length > 0) {
+                itemImgs = [...itemImgs, ...unassignedImgs];
               }
+            }
 
-              // Gán ảnh cũ chưa có ID vào món đầu tiên để đảm bảo không mất ảnh
-              if (idx === 0) {
-                const unassignedImgs = allImages.filter((img) => !img.requestItemId);
-                if (unassignedImgs.length > 0) {
-                  itemImgs = [...itemImgs, ...unassignedImgs];
-                }
-              }
-
-              return {
-                id: it.requestItemId || it.request_item_id || Date.now() + idx,
+            return {
+              id: it.requestItemId || it.request_item_id || Date.now() + idx,
+              requestItemId: it.requestItemId || it.request_item_id || null,
+              itemName: it.itemName || it.item_name || '',
+              categoryId: it.categoryId ?? it.category_id ?? '',
+              roomId: it.roomId ?? it.room_id ?? '',
+              materialId: it.materialId ?? it.material_id ?? '',
+              colorId: it.colorId ?? it.color_id ?? '',
+              lengthCm: it.lengthCm ?? it.length_cm ?? '',
+              widthCm: it.widthCm ?? it.width_cm ?? '',
+              heightCm: it.heightCm ?? it.height_cm ?? '',
+              quantity: it.quantity || 1,
+              unitPrice: it.unitPrice ?? it.unit_price ?? '',
+              technicalNotes: it.technicalNotes || it.description || '',
+              images: itemImgs.map((img, imgIdx) => ({
+                id: img.imageId || img.requestImageId || Date.now() + imgIdx + Math.random(),
+                imageUrl: typeof img === 'string' ? img : img.imageUrl,
                 requestItemId: it.requestItemId || it.request_item_id || null,
-                itemName: it.itemName || it.item_name || '',
-                categoryId: it.categoryId ?? it.category_id ?? '',
-                roomId: it.roomId ?? it.room_id ?? '',
-                materialId: it.materialId ?? it.material_id ?? '',
-                colorId: it.colorId ?? it.color_id ?? '',
-                lengthCm: it.lengthCm ?? it.length_cm ?? '',
-                widthCm: it.widthCm ?? it.width_cm ?? '',
-                heightCm: it.heightCm ?? it.height_cm ?? '',
-                quantity: it.quantity || 1,
-                unitPrice: it.unitPrice ?? it.unit_price ?? '',
-                technicalNotes: it.technicalNotes || it.description || '',
-                images: itemImgs.map((img, imgIdx) => ({
-                  id: img.imageId || img.requestImageId || Date.now() + imgIdx + Math.random(),
-                  imageUrl: typeof img === 'string' ? img : img.imageUrl,
-                  requestItemId: it.requestItemId || it.request_item_id || null,
-                })),
-                uploading: false,
-              };
-            })
-          );
-        }
-      } catch (err) {
-        console.error('Lỗi tải yêu cầu cũ:', err);
-        toast.error('Không thể tải thông tin yêu cầu cần chỉnh sửa.');
-      } finally {
-        setLoadingEditData(false);
+              })),
+              uploading: false,
+            };
+          })
+        );
       }
+    } catch (err) {
+      console.error('Lỗi tải yêu cầu cũ:', err);
+      toast.error('Không thể tải thông tin yêu cầu cần chỉnh sửa.');
+    } finally {
+      setLoadingEditData(false);
     }
-
-    loadEditData();
   }, [editId]);
+
+  useEffect(() => {
+    loadEditData();
+  }, [loadEditData]);
+
+  // ── Làm mới trực tiếp không cần alert xác nhận ──
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchMetadata();
+      if (editId) {
+        await loadEditData();
+      } else {
+        setCustomerInfo({
+          customerAccountId: null,
+          title: '',
+          contactName: '',
+          contactPhone: '',
+          contactEmail: '',
+          deliveryAddress: '',
+          expectedDate: '',
+          orderType: 'CUSTOM',
+        });
+        setItems([
+          {
+            id: Date.now(),
+            requestItemId: null,
+            itemName: '',
+            categoryId: '',
+            roomId: '',
+            materialId: '',
+            colorId: '',
+            lengthCm: '',
+            widthCm: '',
+            heightCm: '',
+            quantity: 1,
+            unitPrice: '',
+            technicalNotes: '',
+            images: [],
+            uploading: false,
+          },
+        ]);
+      }
+      toast.success('Đã làm mới biểu mẫu.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // ── Xử lý thêm mới Chất liệu (Loại gỗ) trực tiếp từ Combobox ──
   const handleCreateMaterial = async (name, extra = {}) => {
@@ -528,37 +538,22 @@ export const CreateOrderRequestPage = () => {
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Đồng hồ thời gian lập đơn */}
-          <div className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-50 px-3.5 py-2 text-xs text-stone-700">
-            <Clock className="h-4 w-4 text-stone-400" />
-            <span className="text-stone-500">{editId && editCreatedAt ? 'Thời gian tạo:' : 'Thời gian lập:'}</span>
-            <span className="font-semibold text-stone-900 font-mono">
-              {editId && editCreatedAt ? formatDateTime(editCreatedAt) : currentTime}
-            </span>
-          </div>
-
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => navigate('/sale/requests')}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
-            title="Quay lại danh sách yêu cầu"
+            className="inline-flex items-center rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
           >
-            <ArrowLeft className="h-4 w-4" />
             Danh sách yêu cầu
           </button>
 
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm('Bạn có chắc muốn làm mới toàn bộ biểu mẫu?')) {
-                window.location.href = '/sale/requests/create';
-              }
-            }}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
-            title="Làm mới biểu mẫu"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:opacity-60"
           >
-            <RotateCw className="h-4 w-4" />
+            <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Làm mới
           </button>
         </div>
@@ -1092,9 +1087,6 @@ export const CreateOrderRequestPage = () => {
                 <div className="flex items-center justify-between mb-3 border-b border-stone-200/60 pb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider text-stone-600">
                     Thông tin khách hàng
-                  </span>
-                  <span className="text-xs font-mono text-stone-500">
-                    {currentTime}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5">
