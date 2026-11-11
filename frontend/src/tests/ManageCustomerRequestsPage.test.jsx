@@ -13,13 +13,19 @@ vi.mock('../services/saleOrderService', () => ({
   getRequests: vi.fn(),
   getRequestById: vi.fn(),
   updateRequestDesign: vi.fn(),
+  deleteRequestDesignImage: vi.fn(),
 }));
 
 vi.mock('react-hot-toast', () => ({
   default: { error: vi.fn(), success: vi.fn() },
 }));
 
-import { getRequests, getRequestById, updateRequestDesign } from '../services/saleOrderService';
+import {
+  getRequests,
+  getRequestById,
+  updateRequestDesign,
+  deleteRequestDesignImage,
+} from '../services/saleOrderService';
 
 // ── Dữ liệu mẫu (Tất cả là CUSTOM theo yêu cầu) ──
 const mockRequests = [
@@ -430,6 +436,275 @@ describe('ManageCustomerRequestsPage', () => {
     render(<ManageCustomerRequestsPage />);
     await waitFor(() => {
       expect(screen.getByText('Lỗi kết nối máy chủ')).toBeInTheDocument();
+    });
+  });
+
+  it('không bị lỗi DOM insertBefore khi trình duyệt/extension bọc node chữ trong nút gửi thiết kế', async () => {
+    let resolveSubmit;
+    updateRequestDesign.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSubmit = resolve;
+        })
+    );
+    getRequestById.mockResolvedValue({ data: mockDetail });
+
+    render(<ManageCustomerRequestsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/i })[0]);
+    });
+
+    const labelSpan = await screen.findByText('Gửi bản thiết kế sang Sales');
+    const fontEl = document.createElement('font');
+    fontEl.textContent = labelSpan.textContent;
+    labelSpan.textContent = '';
+    labelSpan.appendChild(fontEl);
+
+    const textarea = screen.getByPlaceholderText(/Bản vẽ chi tiết kích thước/i);
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'Kiểm tra ổn định DOM' } });
+    });
+
+    const submitBtn = labelSpan.closest('button');
+    await act(async () => {
+      fireEvent.click(submitBtn);
+    });
+
+    expect(submitBtn).toBeDisabled();
+
+    await act(async () => {
+      resolveSubmit({
+        message: 'OK',
+        data: { ...mockDetail, description: 'Kiểm tra ổn định DOM' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(submitBtn).not.toBeDisabled();
+    });
+  });
+
+  it('giữ hiển thị bản vẽ vừa gửi, hiển thị xác nhận trong form và khóa double-submit', async () => {
+    const originalCreateObjectURL = globalThis.URL.createObjectURL;
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-owner-cad');
+
+    const itemDetail = {
+      ...mockDetail,
+      items: [
+        {
+          requestItemId: 34,
+          itemName: 'Tủ rượu gỗ gõ đỏ',
+          quantity: 1,
+          unitPrice: 15000000,
+          images: [],
+        },
+      ],
+    };
+
+    const updatedDetail = {
+      ...itemDetail,
+      items: [
+        {
+          requestItemId: 34,
+          itemName: 'Tủ rượu gỗ gõ đỏ',
+          quantity: 1,
+          unitPrice: 15000000,
+          images: [
+            {
+              imageId: 99,
+              requestImageId: 99,
+              imageUrl: 'https://cdn.example.com/design_files/owner-cad-99.png',
+              imageType: 'OWNER_DESIGN',
+              isOwnerDesign: true,
+              createdBy: 'owner@fssims.com',
+            },
+          ],
+        },
+      ],
+    };
+
+    let resolveUpload;
+    updateRequestDesign.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+        })
+    );
+    getRequestById.mockResolvedValue({ data: itemDetail });
+
+    render(<ManageCustomerRequestsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/i })[0]);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Tủ rượu gỗ gõ đỏ')).toBeInTheDocument();
+    });
+
+    const fileInput = document.querySelector('input[type="file"]');
+    const file = new File(['mock-binary'], 'tu-ruou-cad.png', { type: 'image/png' });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+    });
+
+    const form = fileInput.closest('form');
+    await act(async () => {
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+    });
+
+    expect(updateRequestDesign).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveUpload({ message: 'OK', data: updatedDetail });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Đã gửi sang Sales & giữ lại ảnh bản vẽ:/i)
+      ).toBeInTheDocument();
+      expect(screen.getByText('1 bản vẽ xưởng')).toBeInTheDocument();
+      expect(screen.getByAltText('Bản vẽ xưởng 1')).toHaveAttribute(
+        'src',
+        'https://cdn.example.com/design_files/owner-cad-99.png'
+      );
+      expect(screen.getByAltText('Ảnh bản vẽ đã lưu 1')).toHaveAttribute(
+        'src',
+        'https://cdn.example.com/design_files/owner-cad-99.png'
+      );
+    });
+
+    globalThis.URL.createObjectURL = originalCreateObjectURL;
+  });
+
+  it('vẫn giữ và hiển thị ảnh bản vẽ đã gửi ngay trong form tải lên khi mở lại modal chi tiết', async () => {
+    const persistedDetail = {
+      ...mockDetail,
+      items: [
+        {
+          requestItemId: 36,
+          itemName: 'Tủ quần áo 3 cánh',
+          quantity: 1,
+          images: [
+            {
+              imageId: 27,
+              requestImageId: 27,
+              imageUrl: 'https://cdn.example.com/design_files/saved-reopen-27.jpg',
+              imageType: 'OWNER_DESIGN',
+              isOwnerDesign: true,
+              createdBy: 'owner@fssims.local',
+            },
+          ],
+        },
+      ],
+    };
+
+    getRequestById.mockResolvedValue({ data: persistedDetail });
+    render(<ManageCustomerRequestsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/i })[0]);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Ảnh bản vẽ đã gửi & đang giữ \(1\):/i)).toBeInTheDocument();
+      expect(screen.getByAltText('Ảnh bản vẽ đã lưu 1')).toHaveAttribute(
+        'src',
+        'https://cdn.example.com/design_files/saved-reopen-27.jpg'
+      );
+      expect(screen.getByText('Mới nhất')).toBeInTheDocument();
+    });
+  });
+
+  it('cho phép Chủ xưởng xóa bản vẽ gửi nhầm/trùng mà không xóa ảnh mẫu khách', async () => {
+    const detailWithOwnerImg = {
+      ...mockDetail,
+      items: [
+        {
+          requestItemId: 34,
+          itemName: 'Tủ rượu gỗ gõ đỏ',
+          quantity: 1,
+          images: [
+            {
+              imageId: 10,
+              requestImageId: 10,
+              imageUrl: 'https://example.com/customer-ref.jpg',
+              imageType: 'CUSTOMER_REF',
+              isOwnerDesign: false,
+            },
+            {
+              imageId: 11,
+              requestImageId: 11,
+              imageUrl: 'https://cdn.example.com/design_files/owner-dup.png',
+              imageType: 'OWNER_DESIGN',
+              isOwnerDesign: true,
+            },
+          ],
+        },
+      ],
+    };
+
+    const detailAfterDelete = {
+      ...mockDetail,
+      items: [
+        {
+          requestItemId: 34,
+          itemName: 'Tủ rượu gỗ gõ đỏ',
+          quantity: 1,
+          images: [
+            {
+              imageId: 10,
+              requestImageId: 10,
+              imageUrl: 'https://example.com/customer-ref.jpg',
+              imageType: 'CUSTOMER_REF',
+              isOwnerDesign: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    getRequestById.mockResolvedValue({ data: detailWithOwnerImg });
+    deleteRequestDesignImage.mockResolvedValue({
+      message: 'Đã xóa bản vẽ thiết kế thành công.',
+      data: detailAfterDelete,
+    });
+
+    render(<ManageCustomerRequestsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /Xem chi tiết/i })[0]);
+    });
+
+    const deleteBtn = await screen.findByRole('button', { name: /Xóa bản vẽ xưởng 1/i });
+    expect(screen.queryByRole('button', { name: /Xóa khách gửi 1/i })).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+
+    await waitFor(() => {
+      expect(deleteRequestDesignImage).toHaveBeenCalledWith(1, 11);
+      expect(screen.queryByAltText('Bản vẽ xưởng 1')).toBeNull();
+      expect(screen.getByAltText('Khách gửi 1')).toBeInTheDocument();
     });
   });
 });

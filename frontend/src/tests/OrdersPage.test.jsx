@@ -255,5 +255,78 @@ describe('OrdersPage - Quản lý đơn hàng (Search & Filter)', () => {
       expect(screen.getByText('Bàn ăn cao cấp gỗ sồi')).toBeInTheDocument();
     });
   });
+
+  it('Hiển thị chi tiết đơn hàng đặt làm với thông số kỹ thuật và bản vẽ thiết kế từ Chủ xưởng', async () => {
+    const user = userEvent.setup();
+    const customOrderDetail = {
+      orderId: 2,
+      orderCode: 'ORD-20261102-0002',
+      contractCode: 'HD-20261102-0002',
+      requestCode: 'RQ-20261102-0002',
+      requestTitle: 'Đóng tủ quần áo phòng ngủ',
+      contactName: 'Trần Thị B',
+      contactPhone: '0987654321',
+      deliveryAddress: '456 Nguyễn Huệ, Q1, TP.HCM',
+      totalAmount: 8000000,
+      depositAmount: 2400000,
+      paidAmount: 2400000,
+      remainingAmount: 5600000,
+      status: 'IN_PRODUCTION',
+      orderType: 'CUSTOM',
+      staffName: 'Lê Văn Tổ Trưởng',
+      note: '[Phân công SX]: Tổ trưởng: Lê Văn Tổ Trưởng',
+      images: [],
+      items: [
+        {
+          orderItemId: 102,
+          productName: 'Tủ quần áo gỗ gõ đỏ 4 cánh',
+          lengthCm: 220,
+          widthCm: 60,
+          heightCm: 240,
+          materialName: 'Gỗ gõ đỏ',
+          colorName: 'Sơn PU bóng mờ',
+          description: 'Chia 2 buồng treo + 3 ngăn kéo',
+          quantity: 1,
+          unitPrice: 8000000,
+          totalPrice: 8000000,
+          images: [
+            {
+              imageId: 1,
+              imageUrl: 'https://res.cloudinary.com/demo/image/upload/app_uploads/customer.jpg',
+              imageType: 'CUSTOMER_REF',
+              isOwnerDesign: false,
+            },
+            {
+              imageId: 2,
+              imageUrl: 'https://res.cloudinary.com/demo/image/upload/design_files/owner-workshop.jpg',
+              imageType: 'OWNER_DESIGN',
+              isOwnerDesign: true,
+            },
+          ],
+        },
+      ],
+    };
+
+    saleOrderService.getOrderById.mockResolvedValueOnce({ data: customOrderDetail });
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('ORD-20261102-0002')).toBeInTheDocument();
+    });
+
+    const viewButtons = screen.getAllByRole('button', { name: /Xem/i });
+    await user.click(viewButtons[1]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Chi tiết đơn hàng #ORD-20261102-0002/i)).toBeInTheDocument();
+      expect(screen.getByText('RQ-20261102-0002')).toBeInTheDocument();
+      expect(screen.getByText('220 × 60 × 240 cm')).toBeInTheDocument();
+      expect(screen.getByText('Gỗ gõ đỏ')).toBeInTheDocument();
+      expect(screen.getByText('Chia 2 buồng treo + 3 ngăn kéo')).toBeInTheDocument();
+      expect(screen.getByText('Ảnh mẫu khách gửi')).toBeInTheDocument();
+      expect(screen.getByText('Bản vẽ thiết kế của Chủ xưởng')).toBeInTheDocument();
+      expect(screen.getByText('Đã có 1 bản vẽ xưởng')).toBeInTheDocument();
+    });
+  });
 });
 

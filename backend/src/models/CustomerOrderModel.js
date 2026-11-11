@@ -9,6 +9,9 @@ const { ProductRoom } = require('./ProductRoomModel');
 const { ProductMaterial } = require('./ProductMaterialModel');
 const { ProductColor } = require('./ProductColorModel');
 const { UserAccount } = require('./userAccount.model');
+const { OrderRequest } = require('./OrderRequestModel');
+const { OrderRequestItem } = require('./OrderRequestItemModel');
+const { OrderRequestImage } = require('./OrderRequestImageModel');
 
 const CustomerOrder = sequelize.define('CustomerOrder', {
   order_id: { type: DataTypes.BIGINT, allowNull: false, primaryKey: true, autoIncrement: true },
@@ -83,6 +86,26 @@ if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.color) {
 if (!CustomerOrder.associations || !CustomerOrder.associations.leader) {
   if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') {
     CustomerOrder.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'leader' });
+  }
+}
+if (!CustomerOrderItem.associations || !CustomerOrderItem.associations.contractItem) {
+  if (typeof ContractItem === 'function' && typeof CustomerOrderItem.belongsTo === 'function') {
+    CustomerOrderItem.belongsTo(ContractItem, { foreignKey: 'contract_item_id', as: 'contractItem' });
+  }
+}
+if (!OrderRequest.associations || !OrderRequest.associations.items) {
+  if (typeof OrderRequest === 'function' && typeof OrderRequest.hasMany === 'function' && typeof OrderRequestItem === 'function') {
+    OrderRequest.hasMany(OrderRequestItem, { foreignKey: 'request_id', as: 'items' });
+  }
+}
+if (!OrderRequestItem.associations || !OrderRequestItem.associations.images) {
+  if (typeof OrderRequestItem === 'function' && typeof OrderRequestItem.hasMany === 'function' && typeof OrderRequestImage === 'function') {
+    OrderRequestItem.hasMany(OrderRequestImage, { foreignKey: 'request_item_id', as: 'images' });
+  }
+}
+if (!OrderRequest.associations || !OrderRequest.associations.images) {
+  if (typeof OrderRequest === 'function' && typeof OrderRequest.hasMany === 'function' && typeof OrderRequestImage === 'function') {
+    OrderRequest.hasMany(OrderRequestImage, { foreignKey: 'request_id', as: 'images' });
   }
 }
 
@@ -227,7 +250,31 @@ async function createOrderFromContract(contractId, { assignedTo, createBy } = {}
  * Tìm đơn hàng theo ID
  */
 async function findOrderById(orderId) {
-  return CustomerOrder.findByPk(orderId, {
+  const itemInclude = [];
+  if (CustomerOrderItem.associations?.product) {
+    itemInclude.push({
+      model: Product,
+      as: 'product',
+      attributes: ['product_id', 'product_code', 'product_name', 'price', 'image_url'],
+    });
+  }
+  if (CustomerOrderItem.associations?.category) {
+    itemInclude.push({ model: ProductCategory, as: 'category', attributes: ['category_id', 'category_name'] });
+  }
+  if (CustomerOrderItem.associations?.room) {
+    itemInclude.push({ model: ProductRoom, as: 'room', attributes: ['room_id', 'room_name'] });
+  }
+  if (CustomerOrderItem.associations?.material) {
+    itemInclude.push({ model: ProductMaterial, as: 'material', attributes: ['material_id', 'material_name'] });
+  }
+  if (CustomerOrderItem.associations?.color) {
+    itemInclude.push({ model: ProductColor, as: 'color', attributes: ['color_id', 'color_name', 'hex_value'] });
+  }
+  if (CustomerOrderItem.associations?.contractItem) {
+    itemInclude.push({ model: ContractItem, as: 'contractItem', attributes: ['contract_item_id', 'request_item_id'] });
+  }
+
+  const order = await CustomerOrder.findByPk(orderId, {
     include: [
       {
         model: Contract,
@@ -236,13 +283,7 @@ async function findOrderById(orderId) {
       {
         model: CustomerOrderItem,
         as: 'items',
-        include: [
-          {
-            model: Product,
-            as: 'product',
-            attributes: ['product_id', 'product_code', 'product_name', 'price', 'image_url'],
-          },
-        ],
+        include: itemInclude,
       },
       {
         model: UserAccount,
@@ -251,6 +292,52 @@ async function findOrderById(orderId) {
       },
     ],
   });
+
+  if (
+    order &&
+    order.contract &&
+    order.contract.request_id &&
+    typeof OrderRequest === 'function' &&
+    typeof OrderRequest.findByPk === 'function'
+  ) {
+    try {
+      const reqInclude = [];
+      if (OrderRequest.associations?.items) {
+        const reqItemInclude = OrderRequestItem.associations?.images
+          ? [{ model: OrderRequestImage, as: 'images', required: false }]
+          : [];
+        reqInclude.push({
+          model: OrderRequestItem,
+          as: 'items',
+          required: false,
+          include: reqItemInclude,
+        });
+      }
+      if (OrderRequest.associations?.images) {
+        reqInclude.push({
+          model: OrderRequestImage,
+          as: 'images',
+          where: { request_item_id: null },
+          required: false,
+        });
+      }
+
+      const requestDetail = await OrderRequest.findByPk(order.contract.request_id, {
+        include: reqInclude,
+      });
+      if (requestDetail) {
+        if (typeof order.setDataValue === 'function') {
+          order.setDataValue('requestDetail', requestDetail);
+        } else {
+          order.requestDetail = requestDetail;
+        }
+      }
+    } catch (err) {
+      console.warn('[CustomerOrderModel.findOrderById] Không thể tải kèm hồ sơ thiết kế gốc:', err.message);
+    }
+  }
+
+  return order;
 }
 
 /**

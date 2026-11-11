@@ -257,9 +257,111 @@ function toContractDTO(raw) {
 /**
  * Chuyển đổi dữ liệu CustomerOrder sang DTO
  */
+function classifyRequestImage(img, fallbackItemId = null) {
+  if (!img) return null;
+  const url = typeof img === 'string' ? img : (img.image_url || img.imageUrl || null);
+  const createdBy = typeof img === 'object' ? (img.createby || img.createBy || img.createdBy || null) : null;
+  const isOwner = Boolean(
+    (createdBy && String(createdBy).toUpperCase().includes('OWNER')) ||
+    (typeof url === 'string' && url.includes('design_files')) ||
+    (typeof img === 'object' && (img.imageType === 'OWNER_DESIGN' || img.isOwnerDesign))
+  );
+  const id = typeof img === 'object' ? (img.request_image_id || img.requestImageId || img.imageId || null) : null;
+
+  return {
+    imageId: id,
+    requestImageId: id,
+    imageUrl: url,
+    requestItemId:
+      typeof img === 'object'
+        ? (img.request_item_id ?? img.requestItemId ?? fallbackItemId)
+        : fallbackItemId,
+    sortOrder: typeof img === 'object' ? (img.sort_order ?? img.sortOrder ?? 0) : 0,
+    createdBy,
+    imageType: isOwner ? 'OWNER_DESIGN' : 'CUSTOMER_REF',
+    isOwnerDesign: isOwner,
+  };
+}
+
+function findMatchingRequestItem(orderItem, requestItems = [], totalOrderItems = 0) {
+  if (!Array.isArray(requestItems) || requestItems.length === 0) return null;
+  const linkedRequestItemId =
+    orderItem.contractItem?.request_item_id ?? orderItem.contractItem?.requestItemId ?? null;
+  if (linkedRequestItemId) {
+    const byId = requestItems.find(
+      (ri) => Number(ri.request_item_id ?? ri.requestItemId) === Number(linkedRequestItemId)
+    );
+    if (byId) return byId;
+  }
+  if (orderItem.product_id) {
+    const byProd = requestItems.find(
+      (ri) => ri.product_id && Number(ri.product_id) === Number(orderItem.product_id)
+    );
+    if (byProd) return byProd;
+  }
+  const orderName = String(orderItem.item_name || orderItem.product?.product_name || '')
+    .trim()
+    .toLowerCase();
+  if (orderName) {
+    const byName = requestItems.find(
+      (ri) => String(ri.item_name || ri.itemName || '').trim().toLowerCase() === orderName
+    );
+    if (byName) return byName;
+  }
+  if (totalOrderItems === 1 && requestItems.length === 1) {
+    return requestItems[0];
+  }
+  return null;
+}
+
+function extractOrderDesignContext(order) {
+  const rawReqDetail = order.requestDetail || order.contract?.request || null;
+  const requestDetail = rawReqDetail
+    ? (typeof rawReqDetail.toJSON === 'function' ? rawReqDetail.toJSON() : rawReqDetail)
+    : null;
+  const requestItems = requestDetail?.items || [];
+  const images = (requestDetail?.images || order.images || [])
+    .map((img) => classifyRequestImage(img, null))
+    .filter((img) => img && img.imageUrl);
+
+  return {
+    requestDetail,
+    requestItems,
+    requestId: order.contract?.request_id || requestDetail?.request_id || null,
+    requestCode: requestDetail?.request_code || null,
+    requestTitle: requestDetail?.title || null,
+    requestDescription: requestDetail?.description || null,
+    images,
+  };
+}
+
+function mapOrderItemDesignFields(it, requestItems = [], totalOrderItems = 0) {
+  const matchedReqItem = findMatchingRequestItem(it, requestItems, totalOrderItems);
+  const reqItemId = matchedReqItem?.request_item_id || matchedReqItem?.requestItemId || null;
+  const mappedImages = (matchedReqItem?.images || it.images || [])
+    .map((img) => classifyRequestImage(img, reqItemId))
+    .filter((img) => img && img.imageUrl);
+
+  return {
+    imageUrl: it.product?.image_url || mappedImages[0]?.imageUrl || null,
+    categoryName: it.category?.category_name || null,
+    roomName: it.room?.room_name || null,
+    materialName: it.material?.material_name || null,
+    colorName: it.color?.color_name || null,
+    colorHex: it.color?.hex_value || null,
+    description: it.description || matchedReqItem?.description || null,
+    lengthCm: it.length_cm ?? matchedReqItem?.length_cm ?? null,
+    widthCm: it.width_cm ?? matchedReqItem?.width_cm ?? null,
+    heightCm: it.height_cm ?? matchedReqItem?.height_cm ?? null,
+    images: mappedImages,
+  };
+}
+
 function toOrderDTO(raw) {
   if (!raw) return null;
   const order = raw.toJSON ? raw.toJSON() : raw;
+  const designContext = extractOrderDesignContext(order);
+  const rawOrderItems = order.items || [];
 
   return {
     orderId: order.order_id,
@@ -267,6 +369,12 @@ function toOrderDTO(raw) {
     orderType: order.order_type,
     contractId: order.contract_id,
     contractCode: order.contract?.contract_code || null,
+    contractSignedDate: order.contract?.signed_date || null,
+    contractDeliveryDate: order.contract?.delivery_date || null,
+    requestId: designContext.requestId,
+    requestCode: designContext.requestCode,
+    requestTitle: designContext.requestTitle,
+    requestDescription: designContext.requestDescription,
     customerAccountId: order.customer_account_id,
     contactName: order.contact_name,
     contactPhone: order.contact_phone,
@@ -285,20 +393,17 @@ function toOrderDTO(raw) {
     note: order.note,
     createdAt: order.createdate,
     updatedAt: order.modifiedate,
-    items: (order.items || []).map((it) => ({
+    images: designContext.images,
+    items: rawOrderItems.map((it) => ({
       orderItemId: it.order_item_id,
       contractItemId: it.contract_item_id,
       productId: it.product_id,
       productCode: it.product?.product_code || null,
       productName: it.item_name || it.product?.product_name || null,
-      imageUrl: it.product?.image_url || null,
       quantity: it.quantity,
       unitPrice: it.unit_price,
       totalPrice: it.quantity * it.unit_price,
-      description: it.description,
-      lengthCm: it.length_cm,
-      widthCm: it.width_cm,
-      heightCm: it.height_cm,
+      ...mapOrderItemDesignFields(it, designContext.requestItems, rawOrderItems.length),
     })),
   };
 }
@@ -411,6 +516,10 @@ module.exports = {
   validateSignContractInput,
   validateCreateOrderFromContractInput,
   validateCreateSalesRequestInput,
+  classifyRequestImage,
+  findMatchingRequestItem,
+  extractOrderDesignContext,
+  mapOrderItemDesignFields,
   toContractDTO,
   toOrderDTO,
   toRequestDTO,

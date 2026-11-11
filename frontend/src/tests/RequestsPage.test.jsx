@@ -298,4 +298,82 @@ describe('RequestsPage Component', () => {
       expect(screen.getByRole('button', { name: /Chỉnh sửa bản vẽ & Gửi lại/i })).toBeInTheDocument();
     });
   });
+
+  it('displays per-item workshop design files sent from Owner separately from customer reference images', async () => {
+    const user = userEvent.setup();
+    const requestWithOwnerDesign = {
+      requestId: 21,
+      requestCode: 'RQ-20261110-0001',
+      customerName: 'Việt Khách Hàng',
+      customerPhone: '0987654321',
+      deliveryAddress: '10 Hai Bà Trưng, Q1',
+      orderType: 'CUSTOM',
+      status: 'PENDING',
+      createdAt: '2026-11-10T17:44:52.000Z',
+      items: [
+        {
+          requestItemId: 34,
+          itemName: 'Tủ áo cánh lùa',
+          lengthCm: 200,
+          widthCm: 60,
+          heightCm: 220,
+          quantity: 1,
+          unitPrice: 12000000,
+          description: 'Gỗ sồi tự nhiên, sơn PU mờ',
+          images: [
+            {
+              imageId: 17,
+              requestItemId: 34,
+              imageUrl: 'https://res.cloudinary.com/demo/image/upload/app_uploads/ref.jpg',
+              imageType: 'CUSTOMER_REF',
+              isOwnerDesign: false,
+              createdBy: 'sales@fssims.local',
+            },
+            {
+              imageId: 19,
+              requestItemId: 34,
+              imageUrl: 'https://res.cloudinary.com/demo/image/upload/design_files/owner-cad.jpg',
+              imageType: 'OWNER_DESIGN',
+              isOwnerDesign: true,
+              createdBy: 'owner@fssims.local',
+            },
+          ],
+        },
+      ],
+      images: [],
+    };
+
+    saleOrderService.getRequests.mockResolvedValueOnce({
+      data: [requestWithOwnerDesign],
+      pagination: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+    });
+    saleOrderService.getRequestById.mockResolvedValueOnce({
+      data: requestWithOwnerDesign,
+    });
+
+    render(
+      <MemoryRouter>
+        <RequestsPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('RQ-20261110-0001')).toBeInTheDocument();
+      expect(screen.getByText('1 bản vẽ xưởng')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTitle('Xem chi tiết'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Chủ xưởng đã gửi 1 bản vẽ')).toBeInTheDocument();
+      expect(screen.getByText('Ảnh mẫu khách gửi')).toBeInTheDocument();
+      expect(screen.getByText('Bản vẽ thiết kế từ Chủ xưởng')).toBeInTheDocument();
+      expect(screen.getByText('Gỗ sồi tự nhiên, sơn PU mờ')).toBeInTheDocument();
+    });
+
+    const imgs = screen.getAllByRole('img');
+    const srcs = imgs.map((el) => el.getAttribute('src'));
+    expect(srcs).toContain('https://res.cloudinary.com/demo/image/upload/app_uploads/ref.jpg');
+    expect(srcs).toContain('https://res.cloudinary.com/demo/image/upload/design_files/owner-cad.jpg');
+  });
 });

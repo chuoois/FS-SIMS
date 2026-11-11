@@ -4,6 +4,11 @@
 // Thuộc utils/ -> Dễ unit test, hàm thuần không phụ thuộc DB/network
 // =========================================================
 
+const {
+  extractOrderDesignContext,
+  mapOrderItemDesignFields,
+} = require('./saleOrderValidator');
+
 const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED', 'CANCELLED'];
 
 const STATUS_LABELS = {
@@ -74,6 +79,8 @@ function toOrderManagementDTO(raw) {
   if (!raw) return null;
   const order = raw.toJSON ? raw.toJSON() : raw;
   const nextStatus = getNextOrderStatus(order.status);
+  const designContext = extractOrderDesignContext(order);
+  const rawOrderItems = order.items || [];
   let inspectionImages = [];
   let inspectionNote = null;
   if (order.note) {
@@ -94,6 +101,10 @@ function toOrderManagementDTO(raw) {
     orderTypeLabel: ORDER_TYPE_LABELS[order.order_type] || order.order_type,
     contractId: order.contract_id,
     contractCode: order.contract?.contract_code || null,
+    requestId: designContext.requestId,
+    requestCode: designContext.requestCode,
+    requestTitle: designContext.requestTitle,
+    requestDescription: designContext.requestDescription,
     customerAccountId: order.customer_account_id,
     contactName: order.contact_name,
     contactPhone: order.contact_phone,
@@ -120,20 +131,17 @@ function toOrderManagementDTO(raw) {
     note: order.note,
     createdAt: order.createdate,
     updatedAt: order.modifiedate,
-    items: (order.items || []).map((it) => ({
+    images: designContext.images,
+    items: rawOrderItems.map((it) => ({
       orderItemId: it.order_item_id,
       contractItemId: it.contract_item_id,
       productId: it.product_id,
       productCode: it.product?.product_code || null,
       productName: it.item_name || it.product?.product_name || null,
-      imageUrl: it.product?.image_url || null,
       quantity: it.quantity,
       unitPrice: Number(it.unit_price) || 0,
       totalPrice: it.quantity * (Number(it.unit_price) || 0),
-      description: it.description,
-      lengthCm: it.length_cm,
-      widthCm: it.width_cm,
-      heightCm: it.height_cm,
+      ...mapOrderItemDesignFields(it, designContext.requestItems, rawOrderItems.length),
     })),
   };
 }

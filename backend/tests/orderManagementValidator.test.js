@@ -149,6 +149,85 @@ describe('orderManagementValidator', () => {
       expect(dto.nextStatus).toBeNull();
       expect(dto.nextStatusLabel).toBeNull();
     });
+
+    test('giữ nguyên requestCode, chất liệu, màu sắc và ảnh bản vẽ xưởng của đơn hàng CUSTOM', () => {
+      const mockRaw = {
+        order_id: 9,
+        order_code: 'ORD-20261111-0001',
+        order_type: 'CUSTOM',
+        contract_id: 7,
+        contract: { contract_code: 'HD-20261111-0001', request_id: 21 },
+        requestDetail: {
+          request_id: 21,
+          request_code: 'RQ-20261111-0001',
+          title: 'Đặt bộ sofa gỗ óc chó',
+          images: [
+            {
+              request_image_id: 1,
+              request_item_id: null,
+              image_url: 'https://cdn.example.com/general-customer.jpg',
+              createby: 'SALE',
+            },
+          ],
+          items: [
+            {
+              request_item_id: 34,
+              item_name: 'Ghế sofa chữ L',
+              description: 'Gỗ óc chó ghép mộng chuẩn',
+              length_cm: 240,
+              width_cm: 95,
+              height_cm: 80,
+              images: [
+                {
+                  request_image_id: 17,
+                  request_item_id: 34,
+                  image_url: 'https://cdn.example.com/customer-ref.jpg',
+                  createby: 'SALE',
+                },
+                {
+                  request_image_id: 19,
+                  request_item_id: 34,
+                  image_url: 'https://cdn.example.com/design_files/owner-cad.jpg',
+                  createby: 'owner@fssims.com',
+                },
+              ],
+            },
+          ],
+        },
+        status: 'CONFIRMED',
+        total_amount: 25000000,
+        paid_amount: 10000000,
+        items: [
+          {
+            order_item_id: 50,
+            contract_item_id: 40,
+            contractItem: { request_item_id: 34 },
+            item_name: 'Ghế sofa chữ L',
+            quantity: 1,
+            unit_price: 25000000,
+            material: { material_name: 'Gỗ Óc Chó' },
+            color: { color_name: 'Nâu trầm', hex_value: '#5C4033' },
+          },
+        ],
+      };
+
+      const dto = toOrderManagementDTO(mockRaw);
+      expect(dto.requestId).toBe(21);
+      expect(dto.requestCode).toBe('RQ-20261111-0001');
+      expect(dto.images).toHaveLength(1);
+      expect(dto.images[0].imageType).toBe('CUSTOMER_REF');
+      expect(dto.items[0].materialName).toBe('Gỗ Óc Chó');
+      expect(dto.items[0].colorName).toBe('Nâu trầm');
+      expect(dto.items[0].colorHex).toBe('#5C4033');
+      expect(dto.items[0].lengthCm).toBe(240);
+      expect(dto.items[0].images).toHaveLength(2);
+      expect(dto.items[0].images.find((img) => img.isOwnerDesign)?.imageUrl).toBe(
+        'https://cdn.example.com/design_files/owner-cad.jpg'
+      );
+      expect(dto.items[0].images.find((img) => !img.isOwnerDesign)?.imageUrl).toBe(
+        'https://cdn.example.com/customer-ref.jpg'
+      );
+    });
   });
 });
 

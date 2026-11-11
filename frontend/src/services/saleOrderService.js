@@ -171,9 +171,7 @@ export async function uploadRequestImages(files) {
   } else if (files) {
     formData.append('images', files);
   }
-  const response = await api.post('/sale-orders/upload-images', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await api.post('/sale-orders/upload-images', formData);
   return response.data;
 }
 
@@ -184,6 +182,16 @@ export async function updateRequestDesign(requestId, formData) {
   const response = await api.patch(
     `/sale-orders/requests/${requestId}/design`,
     formData
+  );
+  return response.data;
+}
+
+/**
+ * 20b. Chủ xưởng xóa 1 ảnh bản vẽ thiết kế đã gửi nhầm/trùng
+ */
+export async function deleteRequestDesignImage(requestId, imageId) {
+  const response = await api.delete(
+    `/sale-orders/requests/${requestId}/design/${imageId}`
   );
   return response.data;
 }

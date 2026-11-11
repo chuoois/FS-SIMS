@@ -239,4 +239,65 @@ describe('saleOrderValidator - DTO converters', () => {
     expect(dto.images).toHaveLength(1);
     expect(dto.images[0].imageUrl).toBe('https://cloudinary.com/hien-trang-bep.jpg');
   });
+
+  test('toOrderDTO ánh xạ đúng thiết kế & thông số kỹ thuật từ request gốc liên kết', () => {
+    const raw = {
+      order_id: 88,
+      order_code: 'ORD-20261112-0088',
+      order_type: 'CUSTOM',
+      contract_id: 20,
+      contract: { contract_code: 'HD-20261112-0020', request_id: 21 },
+      requestDetail: {
+        request_id: 21,
+        request_code: 'RQ-20261110-0001',
+        title: 'Đóng tủ áo',
+        images: [],
+        items: [
+          {
+            request_item_id: 34,
+            item_name: 'Tủ áo cánh lùa',
+            length_cm: 200,
+            width_cm: 60,
+            height_cm: 220,
+            description: 'Khung gỗ sồi',
+            images: [
+              {
+                request_image_id: 19,
+                request_item_id: 34,
+                image_url: 'https://res.cloudinary.com/demo/image/upload/design_files/owner.jpg',
+                createby: 'owner@fssims.local',
+              },
+            ],
+          },
+        ],
+      },
+      contact_name: 'Khách A',
+      contact_phone: '0912345678',
+      total_amount: 12000000,
+      deposit_amount: 3600000,
+      paid_amount: 3600000,
+      status: 'CONFIRMED',
+      items: [
+        {
+          order_item_id: 100,
+          contract_item_id: 200,
+          contractItem: { contract_item_id: 200, request_item_id: 34 },
+          material: { material_name: 'Gỗ sồi Nga' },
+          color: { color_name: 'Sơn PU', hex_value: '#8B4513' },
+          item_name: 'Tủ áo cánh lùa',
+          quantity: 1,
+          unit_price: 12000000,
+        },
+      ],
+    };
+
+    const dto = toOrderDTO(raw);
+    expect(dto.requestCode).toBe('RQ-20261110-0001');
+    expect(dto.items[0].materialName).toBe('Gỗ sồi Nga');
+    expect(dto.items[0].lengthCm).toBe(200);
+    expect(dto.items[0].description).toBe('Khung gỗ sồi');
+    expect(dto.items[0].images).toHaveLength(1);
+    expect(dto.items[0].images[0].isOwnerDesign).toBe(true);
+    expect(dto.items[0].images[0].imageType).toBe('OWNER_DESIGN');
+  });
 });

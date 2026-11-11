@@ -33,6 +33,8 @@ import {
   Image as ImageIcon,
   Maximize2,
   Boxes,
+  FileUp,
+  ExternalLink,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -148,6 +150,76 @@ function RequestStatusBadge({ status }) {
 }
 
 // ─── Modal 1: Chi tiết yêu cầu (Chuẩn Modal ManageProductsPage) ───
+const isOwnerDesignImg = (img) =>
+  Boolean(
+    img &&
+      typeof img === 'object' &&
+      (img.imageType === 'OWNER_DESIGN' ||
+        img.isOwnerDesign ||
+        (typeof img.createdBy === 'string' && img.createdBy.toUpperCase().includes('OWNER')) ||
+        (typeof img.imageUrl === 'string' && img.imageUrl.includes('design_files')))
+  );
+
+const isPdfUrl = (url = '') =>
+  typeof url === 'string' &&
+  (url.toLowerCase().includes('.pdf') || url.includes('/raw/upload/'));
+
+const normalizeImg = (img) =>
+  typeof img === 'string'
+    ? { imageUrl: img, isOwnerDesign: img.includes('design_files') }
+    : { ...img, imageUrl: img?.imageUrl || img?.image_url || '' };
+
+function RequestImageGrid({ images, badgeText, badgeClass, borderClass, emptyText, emptyClass, onPreview }) {
+  if (!images || images.length === 0) {
+    return <div className={emptyClass}>{emptyText}</div>;
+  }
+  return (
+    <div className="grid grid-cols-3 gap-2 mt-2">
+      {images.map((img, idx) => {
+        const isPdf = isPdfUrl(img.imageUrl);
+        return isPdf ? (
+          <a
+            key={img.imageId || img.requestImageId || idx}
+            href={img.imageUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={`group relative flex flex-col items-center justify-center rounded-lg border bg-white aspect-square p-2 text-center shadow-2xs transition ${borderClass}`}
+          >
+            <FileText className="h-6 w-6 text-rose-600" />
+            <span className="mt-1 text-[10px] font-semibold text-stone-700">Mở file PDF</span>
+            <span className={`absolute top-1 left-1 rounded px-1.5 py-0.5 text-[9px] font-semibold text-white ${badgeClass}`}>
+              {badgeText}
+            </span>
+          </a>
+        ) : (
+          <div
+            key={img.imageId || img.requestImageId || idx}
+            className={`group relative overflow-hidden rounded-lg border bg-white aspect-square shadow-2xs transition ${borderClass}`}
+          >
+            <img
+              src={img.imageUrl}
+              alt={`${badgeText} ${idx + 1}`}
+              className="h-full w-full cursor-pointer object-cover transition group-hover:scale-105"
+              onClick={() => onPreview(img.imageUrl)}
+            />
+            <span className={`absolute top-1 left-1 rounded px-1.5 py-0.5 text-[9px] font-semibold text-white ${badgeClass}`}>
+              {badgeText}
+            </span>
+            <button
+              type="button"
+              onClick={() => onPreview(img.imageUrl)}
+              className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 group-hover:opacity-100 text-white text-[11px] font-medium gap-1 transition"
+              title="Phóng to"
+            >
+              <Maximize2 className="h-3.5 w-3.5" /> Xem lớn
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function RequestDetailModal({ requestId, onClose, onEdit }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -294,83 +366,187 @@ function RequestDetailModal({ requestId, onClose, onEdit }) {
                 )}
               </div>
 
-              {/* Danh sách sản phẩm kỹ thuật */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-stone-600">
-                    Danh sách sản phẩm & Thông số kỹ thuật ({detail.items?.length || 0} món)
+              {/* Danh sách sản phẩm & Hồ sơ thiết kế từng món */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-stone-600 flex items-center gap-1.5">
+                    <Layers className="h-4 w-4 text-amber-700" />
+                    Danh sách sản phẩm & Hồ sơ thiết kế ({detail.items?.length || 0} món)
                   </span>
+                  {(() => {
+                    const ownerCnt =
+                      (detail.items || []).reduce(
+                        (s, it) => s + (it.images || []).map(normalizeImg).filter(isOwnerDesignImg).length,
+                        0
+                      ) + (detail.images || []).map(normalizeImg).filter(isOwnerDesignImg).length;
+                    return ownerCnt > 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Chủ xưởng đã gửi {ownerCnt} bản vẽ
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
-                <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-stone-200 bg-stone-50/75 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                      <tr>
-                        <th className="px-3.5 py-2.5">Sản phẩm</th>
-                        <th className="px-3.5 py-2.5">Kích thước (Dài × Rộng × Cao cm)</th>
-                        <th className="px-3.5 py-2.5 text-center">SL</th>
-                        <th className="px-3.5 py-2.5 text-right">Đơn giá ước tính</th>
-                        <th className="px-3.5 py-2.5 text-right">Thành tiền</th>
-                        <th className="px-3.5 py-2.5">Ghi chú kỹ thuật</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-200">
-                      {(detail.items || []).map((it, idx) => {
-                        const dim = [it.lengthCm, it.widthCm, it.heightCm].filter(Boolean).join(' × ');
-                        const unitPrice = Number(it.unitPrice ?? it.unit_price) || 0;
-                        const qty = Number(it.quantity) || 1;
-                        return (
-                          <tr key={it.requestItemId || idx} className="hover:bg-stone-50/60">
-                            <td className="px-3.5 py-2.5 font-semibold text-stone-900">{it.itemName}</td>
-                            <td className="px-3.5 py-2.5 font-mono font-bold text-amber-900">
-                              {dim ? `${dim} cm` : '—'}
-                            </td>
-                            <td className="px-3.5 py-2.5 text-center font-bold">{qty}</td>
-                            <td className="px-3.5 py-2.5 text-right">{formatVND(unitPrice)}</td>
-                            <td className="px-3.5 py-2.5 text-right font-bold text-stone-900">
-                              {formatVND(unitPrice * qty)}
-                            </td>
-                            <td className="px-3.5 py-2.5 text-stone-500 italic max-w-xs truncate">
-                              {it.description || it.technicalNotes || '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+
+                <div className="space-y-3">
+                  {(detail.items || []).map((it, idx) => {
+                    const dim = [it.lengthCm, it.widthCm, it.heightCm].filter(Boolean).join(' × ');
+                    const unitPrice = Number(it.unitPrice ?? it.unit_price) || 0;
+                    const qty = Number(it.quantity) || 1;
+                    const techNote = it.description || it.technicalNotes;
+                    const normalizedItemImgs = (it.images || []).map(normalizeImg).filter((x) => x.imageUrl);
+                    const directCustomerImgs = normalizedItemImgs.filter((x) => !isOwnerDesignImg(x));
+                    const generalCustomerImgs = (detail.images || [])
+                      .map(normalizeImg)
+                      .filter((x) => x.imageUrl && !isOwnerDesignImg(x));
+                    const customerImgs = directCustomerImgs.length > 0 ? directCustomerImgs : generalCustomerImgs;
+                    const ownerImgs = normalizedItemImgs.filter(isOwnerDesignImg);
+                    const hasAnyDesignBlock = detail.orderType === 'CUSTOM' || customerImgs.length > 0 || ownerImgs.length > 0;
+
+                    return (
+                      <div key={it.requestItemId || idx} className="rounded-xl border border-stone-200 bg-white p-4 shadow-2xs space-y-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-stone-100 pb-2.5">
+                          <div className="flex items-start gap-2.5">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-100 text-xs font-bold text-amber-800">
+                              #{idx + 1}
+                            </span>
+                            <div>
+                              <h4 className="text-sm font-bold text-stone-900">{it.itemName}</h4>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
+                                <span>
+                                  Kích thước:{' '}
+                                  <strong className="font-mono text-amber-900">
+                                    {dim ? `${dim} cm` : 'Theo thiết kế'}
+                                  </strong>
+                                </span>
+                                <span>•</span>
+                                <span>SL: <strong className="text-stone-800">{qty}</strong></span>
+                                <span>•</span>
+                                <span>Đơn giá: <strong className="text-stone-800">{unitPrice ? formatVND(unitPrice) : 'Chờ báo giá'}</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-[11px] text-stone-400 block">Thành tiền</span>
+                            <span className="text-sm font-bold text-stone-900">{unitPrice ? formatVND(unitPrice * qty) : '—'}</span>
+                          </div>
+                        </div>
+
+                        {techNote && (
+                          <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5 text-xs text-stone-700">
+                            <span className="font-semibold text-stone-800 block mb-0.5">Mô tả & Thông số kỹ thuật:</span>
+                            <p className="whitespace-pre-line">{techNote}</p>
+                          </div>
+                        )}
+
+                        {hasAnyDesignBlock && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3">
+                              <div className="flex items-center justify-between border-b border-sky-100 pb-1.5">
+                                <span className="text-[11px] font-bold uppercase text-sky-900 flex items-center gap-1">
+                                  <ImageIcon className="h-3.5 w-3.5 text-sky-700" />
+                                  Ảnh mẫu khách gửi
+                                </span>
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+                                  {customerImgs.length} ảnh
+                                </span>
+                              </div>
+                              <RequestImageGrid
+                                images={customerImgs}
+                                badgeText={directCustomerImgs.length === 0 && customerImgs.length > 0 ? 'Ảnh chung' : 'Khách gửi'}
+                                badgeClass="bg-sky-700/90"
+                                borderClass="border-sky-200 hover:border-sky-400"
+                                emptyText="Chưa có ảnh mẫu tham khảo."
+                                emptyClass="mt-2 rounded-lg border border-dashed border-sky-200 bg-sky-50/50 p-3 text-center text-[11px] text-sky-600"
+                                onPreview={setPreviewImg}
+                              />
+                            </div>
+
+                            <div className="rounded-xl border border-amber-300 bg-amber-50/40 p-3">
+                              <div className="flex items-center justify-between border-b border-amber-200/70 pb-1.5">
+                                <span className="text-[11px] font-bold uppercase text-amber-950 flex items-center gap-1">
+                                  <FileUp className="h-3.5 w-3.5 text-amber-800" />
+                                  Bản vẽ thiết kế từ Chủ xưởng
+                                </span>
+                                <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                                  {ownerImgs.length} bản vẽ
+                                </span>
+                              </div>
+                              <RequestImageGrid
+                                images={ownerImgs}
+                                badgeText="Bản vẽ xưởng"
+                                badgeClass="bg-amber-800/90"
+                                borderClass="border-amber-300 hover:border-amber-500"
+                                emptyText="Chủ xưởng chưa gửi bản vẽ thiết kế cho món này."
+                                emptyClass="mt-2 rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-3 text-center text-[11px] text-amber-700"
+                                onPreview={setPreviewImg}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Hình ảnh thiết kế đính kèm */}
-              {detail.images && detail.images.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-stone-600">
-                    Bản vẽ & Hình ảnh thiết kế ({detail.images.length} ảnh)
-                  </span>
-                  <div className="flex flex-wrap gap-2.5">
-                    {detail.images.map((img, idx) => {
-                      const url = typeof img === 'string' ? img : img.imageUrl;
-                      return (
-                        <div key={idx} className="relative group rounded-lg overflow-hidden border border-stone-200 shadow-2xs">
-                          <img
-                            src={url}
-                            alt="Bản vẽ"
-                            className="h-20 w-20 object-cover cursor-pointer transition group-hover:scale-105"
-                            onClick={() => setPreviewImg(url)}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setPreviewImg(url)}
-                            className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 group-hover:opacity-100 transition shadow"
-                            title="Phóng to"
+              {/* Bản vẽ / Hình ảnh chung cấp yêu cầu (nếu có bản vẽ xưởng cấp chung hoặc ảnh chung chưa gắn item) */}
+              {(() => {
+                const generalOwnerImgs = (detail.images || []).map(normalizeImg).filter((x) => x.imageUrl && isOwnerDesignImg(x));
+                const generalOtherImgs = (detail.images || []).map(normalizeImg).filter((x) => x.imageUrl && !isOwnerDesignImg(x));
+                if (generalOwnerImgs.length === 0 && (detail.items?.length > 0 || generalOtherImgs.length === 0)) {
+                  return null;
+                }
+                const allGeneral = [...generalOwnerImgs, ...generalOtherImgs];
+                return (
+                  <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/60 p-3.5">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-stone-600 flex items-center gap-1.5">
+                      <ImageIcon className="h-4 w-4 text-amber-700" />
+                      Bản vẽ & Hình ảnh đính kèm chung ({allGeneral.length} tệp)
+                    </span>
+                    <div className="flex flex-wrap gap-2.5">
+                      {allGeneral.map((img, idx) => {
+                        const isOwner = isOwnerDesignImg(img);
+                        return isPdfUrl(img.imageUrl) ? (
+                          <a
+                            key={idx}
+                            href={img.imageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-800 hover:bg-stone-50"
                           >
-                            <Maximize2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
+                            <FileText className="h-4 w-4 text-rose-600" />
+                            <span>{isOwner ? 'Bản vẽ PDF xưởng' : 'Tài liệu PDF'} #{idx + 1}</span>
+                            <ExternalLink className="h-3.5 w-3.5 text-stone-400" />
+                          </a>
+                        ) : (
+                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-stone-200 shadow-2xs">
+                            <img
+                              src={img.imageUrl}
+                              alt="Bản vẽ"
+                              className="h-20 w-20 object-cover cursor-pointer transition group-hover:scale-105"
+                              onClick={() => setPreviewImg(img.imageUrl)}
+                            />
+                            {isOwner && (
+                              <span className="absolute bottom-1 left-1 rounded bg-amber-800/90 px-1 py-0.5 text-[9px] font-semibold text-white">
+                                Bản vẽ xưởng
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImg(img.imageUrl)}
+                              className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 group-hover:opacity-100 transition shadow"
+                              title="Phóng to"
+                            >
+                              <Maximize2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </>
           )}
         </div>
@@ -701,7 +877,9 @@ function ConvertToContractModal({ request, onClose, onSuccess }) {
               disabled={submitting || !!depositError}
               className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-6 py-2 text-sm font-semibold text-white shadow hover:bg-stone-800 disabled:opacity-50"
             >
-              {submitting && <RotateCw className="h-4 w-4 animate-spin" />}
+              <span hidden={!submitting} className={submitting ? 'inline-flex' : 'hidden'} aria-hidden="true">
+                <RotateCw className="h-4 w-4 animate-spin" />
+              </span>
               <span>Tạo Hợp đồng</span>
             </button>
           </div>
@@ -1046,12 +1224,39 @@ export function RequestsPage() {
                         </span>
                       </td>
 
-                      {/* Số sản phẩm */}
+                      {/* Số sản phẩm & Bản vẽ */}
                       <td className="px-4 py-3 text-center text-xs">
-                        <span className="inline-flex items-center gap-1 font-semibold text-stone-800 bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
-                          <Package className="h-3 w-3 text-stone-500" />
-                          {itemsCount} sản phẩm
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1 font-semibold text-stone-800 bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
+                            <Package className="h-3 w-3 text-stone-500" />
+                            {itemsCount} sản phẩm
+                          </span>
+                          {(() => {
+                            const allImgs = [
+                              ...(r.images || []),
+                              ...(r.items || []).flatMap((it) => it.images || []),
+                            ]
+                              .map(normalizeImg)
+                              .filter((x) => x.imageUrl);
+                            const ownerCnt = allImgs.filter(isOwnerDesignImg).length;
+                            if (ownerCnt > 0) {
+                              return (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  {ownerCnt} bản vẽ xưởng
+                                </span>
+                              );
+                            }
+                            if (allImgs.length > 0) {
+                              return (
+                                <span className="text-[10px] font-medium text-sky-700">
+                                  {allImgs.length} ảnh mẫu
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
                       </td>
 
                       {/* Thời gian tạo */}

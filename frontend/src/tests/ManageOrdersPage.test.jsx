@@ -342,4 +342,63 @@ describe('ManageOrdersPage Component', () => {
     expect(assignButtons[0]).toHaveTextContent('Giao việc');
     await user.click(assignButtons[0]);
   });
+
+  // ─── 12. Giữ lại & hiển thị bản vẽ thiết kế trong Chi tiết đơn hàng CUSTOM ─
+  it('hiển thị bản vẽ thiết kế của Chủ xưởng và ảnh mẫu khách trong Chi tiết đơn hàng theo yêu cầu', async () => {
+    const user = userEvent.setup();
+    const customOrderDetail = {
+      ...mockOrders[0],
+      contractCode: 'HD-20261111-0001',
+      requestCode: 'RQ-20261111-0001',
+      images: [],
+      items: [
+        {
+          orderItemId: 101,
+          productName: 'Bàn ăn gỗ sồi thiết kế riêng',
+          quantity: 1,
+          unitPrice: 15000000,
+          totalPrice: 15000000,
+          lengthCm: 200,
+          widthCm: 95,
+          heightCm: 75,
+          materialName: 'Gỗ Sồi Nga',
+          colorName: 'Tự nhiên',
+          colorHex: '#C69C6D',
+          description: 'Vát cạnh 45 độ, phủ sơn mờ 2K',
+          images: [
+            {
+              imageId: 17,
+              imageUrl: 'https://cdn.example.com/customer-table.jpg',
+              imageType: 'CUSTOMER_REF',
+              isOwnerDesign: false,
+            },
+            {
+              imageId: 19,
+              imageUrl: 'https://cdn.example.com/design_files/owner-table-cad.png',
+              imageType: 'OWNER_DESIGN',
+              isOwnerDesign: true,
+            },
+          ],
+        },
+      ],
+    };
+    orderManagementService.getOrderDetail.mockResolvedValueOnce({ order: customOrderDetail });
+
+    render(<ManageOrdersPage />);
+    await waitFor(() => screen.getAllByText('Chi tiết'));
+
+    await user.click(screen.getAllByText('Chi tiết')[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Yêu cầu: RQ-20261111-0001/)).toBeInTheDocument();
+      expect(screen.getByText('Đã lưu 1 bản vẽ xưởng')).toBeInTheDocument();
+      expect(screen.getByText('Gỗ Sồi Nga')).toBeInTheDocument();
+      expect(screen.getByText('Ảnh mẫu khách gửi')).toBeInTheDocument();
+      expect(screen.getByText('Bản vẽ thiết kế của Chủ xưởng')).toBeInTheDocument();
+      expect(screen.getByAltText('Bản vẽ xưởng 1')).toHaveAttribute(
+        'src',
+        'https://cdn.example.com/design_files/owner-table-cad.png'
+      );
+    });
+  });
 });

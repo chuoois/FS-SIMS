@@ -747,6 +747,7 @@ module.exports = {
   updateSalesOrderRequest,
   reviewOrderRequest,
   updateDesignFile,
+  deleteDesignImage,
 };
 
 /**
@@ -836,5 +837,49 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
   await request.save();
 
   // Trả về request đầy đủ chi tiết sau khi cập nhật
+  return findRequestById(requestId);
+}
+
+/**
+ * Xóa 1 ảnh bản vẽ thiết kế khỏi yêu cầu CUSTOM (chỉ OWNER được phép xóa)
+ * - Chỉ cho phép xóa ảnh thuộc loại OWNER_DESIGN để tránh xóa nhầm ảnh mẫu của khách
+ */
+async function deleteDesignImage(requestId, imageId, deletedBy) {
+  const { classifyRequestImage } = require('../utils/saleOrderValidator');
+  const request = await OrderRequest.findByPk(requestId);
+  if (!request) {
+    const err = new Error('Không tìm thấy yêu cầu.');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (request.order_type !== 'CUSTOM') {
+    const err = new Error('Chỉ có thể chỉnh sửa bản thiết kế cho đơn đặt theo yêu cầu (CUSTOM).');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const targetImage = await OrderRequestImage.findOne({
+    where: {
+      request_image_id: imageId,
+      request_id: requestId,
+    },
+  });
+  if (!targetImage) {
+    const err = new Error('Không tìm thấy ảnh bản thiết kế cần xóa.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const classified = classifyRequestImage(targetImage);
+  if (!classified || !classified.isOwnerDesign) {
+    const err = new Error('Không thể xóa ảnh mẫu tham khảo của khách hàng.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  await targetImage.destroy();
+  request.modifieby = deletedBy || null;
+  await request.save();
+
   return findRequestById(requestId);
 }

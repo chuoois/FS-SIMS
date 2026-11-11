@@ -39,7 +39,13 @@ import {
   getRequests,
   getRequestById,
   updateRequestDesign,
+  deleteRequestDesignImage,
 } from '../../services/saleOrderService';
+import {
+  DesignGallery,
+  isOwnerDesignImage,
+  isPdfDesignUrl,
+} from '../../components/common/DesignGallery';
 import { TablePagination } from '../../components/common/TablePagination';
 
 // ─── Hằng số ──────────────────────────────────────────────
@@ -136,16 +142,16 @@ function StatusBadge({ status }) {
 function DesignStatusBadge({ count = 0 }) {
   if (count > 0) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+      <span key="has-design" className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        Đã có {count} ảnh
+        <span>Đã có {count} ảnh</span>
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600 border border-stone-200">
+    <span key="no-design" className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600 border border-stone-200">
       <Clock className="h-3.5 w-3.5 text-stone-400" />
-      Chưa có ảnh
+      <span>Chưa có ảnh</span>
     </span>
   );
 }
@@ -156,12 +162,44 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showForm, setShowForm] = useState(true);
+  const [deletingImageId, setDeletingImageId] = useState(null);
+  const [justSent, setJustSent] = useState(false);
+  const [lastSavedFallback, setLastSavedFallback] = useState(null);
+  const [submitError, setSubmitError] = useState('');
   const fileInputRef = useRef(null);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     setDescription(item.description || '');
   }, [item.description]);
+
+  const itemImages = (item.images || [])
+    .map((img) => (typeof img === 'string' ? { imageUrl: img } : img))
+    .filter((img) => img?.imageUrl);
+
+  const directCustomerImages = itemImages.filter((img) => !isOwnerDesignImage(img));
+  const ownerImages = itemImages.filter((img) => isOwnerDesignImage(img));
+  const displaySavedImages =
+    ownerImages.length > 0
+      ? ownerImages
+      : lastSavedFallback
+      ? [lastSavedFallback]
+      : [];
+  const latestSavedImage = displaySavedImages[displaySavedImages.length - 1] || null;
+
+  // Nếu sản phẩm không có ảnh mẫu riêng, lấy ảnh tham khảo chung của yêu cầu (nếu có)
+  const customerImages =
+    directCustomerImages.length > 0
+      ? directCustomerImages
+      : (generalImages || [])
+          .map((img) => (typeof img === 'string' ? { imageUrl: img } : img))
+          .filter((img) => img?.imageUrl && !isOwnerDesignImage(img));
+
+  const handleClearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -172,6 +210,8 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
       return;
     }
 
+    setSubmitError('');
+    setJustSent(false);
     setSelectedFile(file);
     if (file.type.startsWith('image/')) {
       const url = URL.createObjectURL(file);
@@ -183,11 +223,14 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
 
   const handleSendItemDesign = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current || submitting) return;
     if (!selectedFile && !description.trim()) {
       toast.error('Vui lòng chọn ảnh bản vẽ thiết kế hoặc nhập mô tả kỹ thuật.');
       return;
     }
 
+    submitLockRef.current = true;
+    setSubmitError('');
     setSubmitting(true);
     try {
       const formData = new FormData();
@@ -202,41 +245,60 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
       const res = await updateRequestDesign(requestId, formData);
       toast.success(`Đã gửi bản thiết kế cho "${item.itemName}" sang Sales thành công!`);
 
-      setSelectedFile(null);
-      setFilePreview(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      const updatedItem = res?.data?.items?.find((it) =>
+        item.requestItemId
+          ? Number(it.requestItemId) === Number(item.requestItemId)
+          : it.itemName === item.itemName
+      );
+      const updatedOwnerImgs = (updatedItem?.images || []).filter(isOwnerDesignImage);
+      const newestSaved = updatedOwnerImgs[updatedOwnerImgs.length - 1] || null;
+
+      if (selectedFile && updatedOwnerImgs.length === 0 && (newestSaved?.imageUrl || filePreview)) {
+        setLastSavedFallback({
+          imageId: newestSaved?.imageId || 'local-saved',
+          imageUrl: newestSaved?.imageUrl || filePreview,
+          isOwnerDesign: true,
+        });
+      } else {
+        setLastSavedFallback(null);
+      }
+
+      setJustSent(true);
+      handleClearSelectedFile();
 
       if (onUpdated) onUpdated(res.data);
     } catch (err) {
       const msg = err?.response?.data?.message || 'Lỗi khi gửi bản thiết kế cho sản phẩm này.';
+      setSubmitError(msg);
       toast.error(msg);
     } finally {
+      submitLockRef.current = false;
       setSubmitting(false);
     }
   };
 
-  const itemImages = (item.images || [])
-    .map((img) => (typeof img === 'string' ? { imageUrl: img } : img))
-    .filter((img) => img?.imageUrl);
+  const handleDeleteOwnerImage = async (img) => {
+    const imgId = img?.imageId || img?.requestImageId;
+    if (!imgId || deletingImageId) return;
 
-  const isOwnerImg = (img) =>
-    Boolean(
-      img.imageType === 'OWNER_DESIGN' ||
-      img.isOwnerDesign ||
-      (typeof img.createdBy === 'string' && img.createdBy.toUpperCase().includes('OWNER')) ||
-      (typeof img.imageUrl === 'string' && img.imageUrl.includes('design_files'))
-    );
-
-  const directCustomerImages = itemImages.filter((img) => !isOwnerImg(img));
-  const ownerImages = itemImages.filter((img) => isOwnerImg(img));
-
-  // Nếu sản phẩm không có ảnh mẫu riêng, lấy ảnh tham khảo chung của yêu cầu (nếu có)
-  const customerImages =
-    directCustomerImages.length > 0
-      ? directCustomerImages
-      : (generalImages || [])
-          .map((img) => (typeof img === 'string' ? { imageUrl: img } : img))
-          .filter((img) => img?.imageUrl && !isOwnerImg(img));
+    setDeletingImageId(imgId);
+    setSubmitError('');
+    try {
+      const res = await deleteRequestDesignImage(requestId, imgId);
+      toast.success('Đã xóa bản vẽ thiết kế khỏi hồ sơ.');
+      setLastSavedFallback(null);
+      if (ownerImages.length <= 1) {
+        setJustSent(false);
+      }
+      if (onUpdated) onUpdated(res.data);
+    } catch (err) {
+      const msg = err?.response?.data?.message || 'Lỗi khi xóa bản vẽ thiết kế.';
+      setSubmitError(msg);
+      toast.error(msg);
+    } finally {
+      setDeletingImageId(null);
+    }
+  };
 
   const isUsingGeneral = directCustomerImages.length === 0 && customerImages.length > 0;
 
@@ -276,14 +338,14 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
 
         <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
           {itemImages.length > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+            <span key="item-has-images" className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Đã có {itemImages.length} ảnh thiết kế
+              <span>Đã có {itemImages.length} ảnh thiết kế</span>
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500 border border-stone-200">
+            <span key="item-no-images" className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500 border border-stone-200">
               <Clock className="h-3.5 w-3.5 text-stone-400" />
-              Chưa có ảnh
+              <span>Chưa có ảnh</span>
             </span>
           )}
           {customerImages.length > 0 && (
@@ -326,35 +388,14 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
               </span>
             </div>
 
-            {customerImages.length > 0 ? (
-              <div className="grid grid-cols-3 gap-2 mt-2.5">
-                {customerImages.map((img, imgIdx) => (
-                  <a
-                    key={img.imageId || imgIdx}
-                    href={img.imageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group relative block overflow-hidden rounded-lg border border-sky-200 bg-white aspect-square shadow-2xs hover:border-sky-400 transition"
-                  >
-                    <img
-                      src={img.imageUrl}
-                      alt={`Ảnh mẫu khách gửi ${imgIdx + 1}`}
-                      className="h-full w-full object-cover transition group-hover:scale-105"
-                    />
-                    <span className="absolute top-1 left-1 rounded bg-sky-700/90 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white shadow-xs">
-                      {isUsingGeneral ? 'Khách gửi (Ảnh chung)' : 'Khách gửi'}
-                    </span>
-                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
-                      <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
-                    </div>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-sky-200 bg-sky-50/60 p-4 text-center text-xs text-sky-600 mt-2.5">
-                Khách không đính kèm ảnh mẫu tham khảo.
-              </div>
-            )}
+            <DesignGallery
+              images={customerImages}
+              badgeText={isUsingGeneral ? 'Khách gửi (Ảnh chung)' : 'Khách gửi'}
+              badgeClassName="bg-sky-700/90"
+              borderClassName="border-sky-200 hover:border-sky-400"
+              emptyText="Khách không đính kèm ảnh mẫu tham khảo."
+              emptyClassName="rounded-lg border border-dashed border-sky-200 bg-sky-50/60 p-4 text-center text-xs text-sky-600 mt-2.5"
+            />
           </div>
           <p className="text-[11px] text-sky-600/90 italic mt-2">
             💡 Dùng làm tư liệu tham khảo yêu cầu thực tế của khách hàng.
@@ -378,38 +419,19 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
               </span>
             </div>
 
-            {ownerImages.length > 0 ? (
-              <div className="grid grid-cols-3 gap-2 mt-2.5">
-                {ownerImages.map((img, imgIdx) => (
-                  <a
-                    key={img.imageId || imgIdx}
-                    href={img.imageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group relative block overflow-hidden rounded-lg border border-amber-300 bg-white aspect-square shadow-2xs hover:border-amber-500 transition"
-                  >
-                    <img
-                      src={img.imageUrl}
-                      alt={`Bản vẽ thiết kế xưởng ${imgIdx + 1}`}
-                      className="h-full w-full object-cover transition group-hover:scale-105"
-                    />
-                    <span className="absolute top-1 left-1 rounded bg-amber-800/90 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white shadow-xs">
-                      Bản vẽ xưởng
-                    </span>
-                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
-                      <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
-                    </div>
-                  </a>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-4 text-center text-xs text-amber-700 mt-2.5">
-                Chưa có bản vẽ xưởng nào cho món này. Hãy tải ảnh bản vẽ ở biểu mẫu phía dưới.
-              </div>
-            )}
+            <DesignGallery
+              images={ownerImages}
+              badgeText="Bản vẽ xưởng"
+              badgeClassName="bg-amber-800/90"
+              borderClassName="border-amber-300 hover:border-amber-500"
+              emptyText="Chưa có bản vẽ xưởng nào cho món này. Hãy tải ảnh bản vẽ ở biểu mẫu phía dưới."
+              emptyClassName="rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-4 text-center text-xs text-amber-700 mt-2.5"
+              onDelete={handleDeleteOwnerImage}
+              deletingImageId={deletingImageId}
+            />
           </div>
           <p className="text-[11px] text-amber-700/90 italic mt-2">
-            📐 Bản vẽ kỹ thuật xưởng sẽ được gửi sang Sales để trao đổi & chốt hợp đồng.
+            📐 Bản vẽ đã gửi được lưu giữ tại đây để Chủ xưởng & Sales cùng theo dõi.
           </p>
         </div>
       </div>
@@ -434,20 +456,95 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
               className="w-full text-xs text-stone-500 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
             />
             {filePreview && (
-              <div className="mt-2">
-                <p className="text-[11px] text-stone-400 mb-1">Ảnh xem trước:</p>
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/60 p-2 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-medium text-amber-800">Ảnh mới chuẩn bị gửi:</p>
+                  <button
+                    type="button"
+                    onClick={handleClearSelectedFile}
+                    className="text-[11px] font-medium text-stone-500 hover:text-stone-800 underline"
+                  >
+                    Bỏ chọn
+                  </button>
+                </div>
                 <img
                   src={filePreview}
                   alt="Preview"
-                  className="max-h-24 rounded border border-stone-200 object-contain"
+                  className="max-h-24 rounded border border-amber-200 bg-white object-contain"
                 />
               </div>
             )}
             {selectedFile && !filePreview && (
-              <p className="mt-1 text-xs text-stone-600 flex items-center gap-1">
-                <ExternalLink className="h-3.5 w-3.5 text-stone-500" />
-                {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
-              </p>
+              <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-stone-600">
+                <span className="flex items-center gap-1 truncate">
+                  <ExternalLink className="h-3.5 w-3.5 text-stone-500 shrink-0" />
+                  {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearSelectedFile}
+                  className="text-[11px] font-medium text-stone-500 hover:text-stone-800 underline shrink-0"
+                >
+                  Bỏ chọn
+                </button>
+              </div>
+            )}
+            {displaySavedImages.length > 0 && (
+              <div className="mt-2.5 rounded-lg border border-emerald-200 bg-emerald-50/75 p-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    {justSent
+                      ? 'Đã gửi sang Sales & giữ lại ảnh bản vẽ:'
+                      : `Ảnh bản vẽ đã gửi & đang giữ (${displaySavedImages.length}):`}
+                  </span>
+                  {latestSavedImage?.imageUrl && (
+                    <a
+                      href={latestSavedImage.imageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-medium text-emerald-700 hover:underline inline-flex items-center gap-0.5 shrink-0"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Mở lớn
+                    </a>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {displaySavedImages.map((img, imgIdx) => {
+                    const imgId = img.imageId || img.requestImageId || imgIdx;
+                    const isPdf = isPdfDesignUrl(img.imageUrl);
+                    const isLatest = imgIdx === displaySavedImages.length - 1;
+                    return (
+                      <div
+                        key={imgId}
+                        className={`rounded-lg border bg-white p-1 ${
+                          isLatest ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-stone-200'
+                        }`}
+                      >
+                        <a href={img.imageUrl} target="_blank" rel="noreferrer" className="block">
+                          {isPdf ? (
+                            <div className="flex h-20 w-20 flex-col items-center justify-center rounded bg-stone-50 text-[10px] font-semibold text-stone-700">
+                              <ExternalLink className="h-4 w-4 text-rose-600 mb-1" />
+                              PDF #{imgIdx + 1}
+                            </div>
+                          ) : (
+                            <img
+                              src={img.imageUrl}
+                              alt={`Ảnh bản vẽ đã lưu ${imgIdx + 1}`}
+                              className="h-20 w-20 rounded object-cover"
+                            />
+                          )}
+                        </a>
+                        {isLatest && (
+                          <span className="mt-1 block text-center text-[10px] font-semibold text-emerald-700">
+                            Mới nhất
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
 
@@ -465,18 +562,31 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
           </div>
         </div>
 
+        {submitError && (
+          <div className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>{submitError}</span>
+          </div>
+        )}
+
         <div className="flex justify-end pt-1">
           <button
             type="submit"
             disabled={submitting}
             className="inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-3.5 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-900 active:scale-95 disabled:opacity-50 transition"
           >
-            {submitting ? (
+            <span hidden={!submitting} className={submitting ? 'inline-flex' : 'hidden'} aria-hidden="true">
               <RotateCw className="h-3.5 w-3.5 animate-spin" />
-            ) : (
+            </span>
+            <span hidden={submitting} className={submitting ? 'hidden' : 'inline-flex'} aria-hidden="true">
               <Send className="h-3.5 w-3.5" />
-            )}
-            {submitting ? 'Đang gửi...' : 'Gửi bản thiết kế sang Sales'}
+            </span>
+            <span hidden={!submitting} className={submitting ? 'inline' : 'hidden'}>
+              Đang gửi...
+            </span>
+            <span hidden={submitting} className={submitting ? 'hidden' : 'inline'}>
+              Gửi bản thiết kế sang Sales
+            </span>
           </button>
         </div>
       </form>

@@ -35,9 +35,12 @@ import {
   Package,
   FileText,
   Hammer,
+  Image as ImageIcon,
+  FileUp,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import { DesignGallery, isOwnerDesignImage } from '../../components/common/DesignGallery';
 import {
   getOrders,
   getOrderDetail,
@@ -179,10 +182,19 @@ const StatusBadge = ({ status }) => {
 
 // ─── Modal Chi tiết đơn hàng ──────────────────────────────
 function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId }) {
+  const [previewImg, setPreviewImg] = useState(null);
   if (!order) return null;
   const nextConfig = NEXT_STATUS_CONFIG[order.status];
   const NextIcon = nextConfig?.icon || CheckCircle2;
   const isAdvancing = advanceLoadingId === order.orderId;
+
+  const totalOwnerDesigns =
+    (order.items || []).reduce(
+      (sum, it) => sum + (it.images || []).filter(isOwnerDesignImage).length,
+      0
+    ) + (order.images || []).filter(isOwnerDesignImage).length;
+  const generalCustomerImgs = (order.images || []).filter((img) => !isOwnerDesignImage(img));
+  const generalOwnerImgs = (order.images || []).filter(isOwnerDesignImage);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
@@ -197,9 +209,10 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
               <h2 className="text-lg font-bold text-stone-900">
                 Chi tiết đơn hàng — {order.orderCode}
               </h2>
-              <div className="flex items-center gap-2 text-xs text-stone-500 mt-0.5">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 mt-0.5">
                 <span>Loại: {ORDER_TYPE_LABELS[order.orderType] || order.orderType}</span>
                 {order.contractCode && <span>• Hợp đồng: {order.contractCode}</span>}
+                {order.requestCode && <span>• Yêu cầu: {order.requestCode}</span>}
               </div>
             </div>
           </div>
@@ -328,54 +341,202 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
             </div>
           </div>
 
-          {/* Danh sách sản phẩm trong đơn */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
+          {/* Danh sách sản phẩm & Hồ sơ thiết kế trong đơn */}
+          <div
+            className={`rounded-xl p-4 space-y-4 ${
+              order.orderType === 'CUSTOM'
+                ? 'border-2 border-amber-300 bg-amber-50/40'
+                : 'border border-stone-200 bg-stone-50/40'
+            }`}
+          >
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-sm font-bold text-stone-800 flex items-center gap-1.5">
                 <Package className="h-4 w-4 text-amber-700" />
                 Sản phẩm trong đơn ({(order.items || []).length})
               </h3>
+              {totalOwnerDesigns > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Đã lưu {totalOwnerDesigns} bản vẽ xưởng
+                </span>
+              )}
             </div>
 
             {(order.items || []).length === 0 ? (
-              <div className="py-6 text-center text-xs text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-200">
+              <div className="py-6 text-center text-xs text-stone-400 bg-white rounded-xl border border-dashed border-stone-200">
                 Không có sản phẩm nào trong đơn hàng này.
               </div>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-stone-200">
-                <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
-                  <thead className="bg-stone-50 text-xs font-semibold text-stone-600 uppercase tracking-wider">
-                    <tr>
-                      <th className="px-4 py-3">Sản phẩm</th>
-                      <th className="px-3 py-3 text-center">SL</th>
-                      <th className="px-3 py-3 text-right">Đơn giá</th>
-                      <th className="px-4 py-3 text-right">Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-200 bg-white">
-                    {order.items.map((item, idx) => (
-                      <tr key={item.orderItemId || idx} className="hover:bg-stone-50/60 transition">
-                        <td className="px-4 py-3">
-                          <p className="font-semibold text-stone-800">{item.productName}</p>
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-stone-400 mt-0.5">
-                            {item.productCode && <span>Mã: {item.productCode}</span>}
-                            {(item.lengthCm || item.widthCm || item.heightCm) && (
-                              <span>
-                                Kích thước: {item.lengthCm || '—'} × {item.widthCm || '—'} × {item.heightCm || '—'} cm
-                              </span>
-                            )}
+              <div className="space-y-3.5">
+                {order.items.map((item, idx) => {
+                  const dim = [item.lengthCm, item.widthCm, item.heightCm].filter(Boolean).join(' × ');
+                  const itemImages = Array.isArray(item.images) ? item.images : [];
+                  const directCustomerImgs = itemImages.filter((img) => !isOwnerDesignImage(img));
+                  const customerImgs = directCustomerImgs.length > 0 ? directCustomerImgs : generalCustomerImgs;
+                  const ownerImgs = itemImages.filter(isOwnerDesignImage);
+                  const isCustomItem = order.orderType === 'CUSTOM' || itemImages.length > 0;
+
+                  return (
+                    <div key={item.orderItemId || idx} className="rounded-xl border border-stone-200 bg-white p-4 shadow-2xs space-y-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-2.5 border-b border-stone-100">
+                        <div className="flex items-start gap-2.5">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 font-bold text-xs text-amber-800">
+                            #{idx + 1}
                           </div>
-                          {item.description && (
-                            <p className="text-xs text-stone-500 mt-1 italic">{item.description}</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-center font-medium text-stone-800">{item.quantity}</td>
-                        <td className="px-3 py-3 text-right text-stone-600">{formatCurrency(item.unitPrice)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-amber-900">{formatCurrency(item.totalPrice)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <div>
+                            <p className="font-semibold text-stone-900">
+                              {item.productName}
+                              {item.productCode && (
+                                <span className="ml-1.5 text-xs font-mono font-normal text-stone-500">
+                                  ({item.productCode})
+                                </span>
+                              )}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 mt-0.5">
+                              <span>
+                                Kích thước:{' '}
+                                <strong className="text-stone-700 font-mono">
+                                  {dim ? `${dim} cm` : 'Theo thiết kế'}
+                                </strong>
+                              </span>
+                              <span>•</span>
+                              <span>
+                                SL: <strong className="text-stone-700">{item.quantity}</strong>
+                              </span>
+                              <span>•</span>
+                              <span>
+                                Đơn giá: <strong className="text-stone-700">{formatCurrency(item.unitPrice)}</strong>
+                              </span>
+                              {item.materialName && (
+                                <>
+                                  <span>•</span>
+                                  <span>Chất liệu: <strong className="text-stone-700">{item.materialName}</strong></span>
+                                </>
+                              )}
+                              {item.colorName && (
+                                <>
+                                  <span>•</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    Màu sắc:
+                                    {item.colorHex && (
+                                      <span
+                                        className="inline-block h-2.5 w-2.5 rounded-full border border-stone-300"
+                                        style={{ backgroundColor: item.colorHex }}
+                                      />
+                                    )}
+                                    <strong className="text-stone-700">{item.colorName}</strong>
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-[11px] text-stone-400 block">Thành tiền</span>
+                          <span className="text-sm font-bold text-amber-900">{formatCurrency(item.totalPrice)}</span>
+                        </div>
+                      </div>
+
+                      {item.description && (
+                        <div className="rounded-lg bg-stone-50 border border-stone-200 p-2.5 text-xs text-stone-700">
+                          <span className="font-semibold text-stone-800 block mb-0.5">Mô tả kỹ thuật:</span>
+                          <p className="whitespace-pre-line">{item.description}</p>
+                        </div>
+                      )}
+
+                      {isCustomItem ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                          <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-2">
+                            <div className="flex items-center justify-between pb-1.5 border-b border-sky-100">
+                              <div className="flex items-center gap-1.5">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                                  <ImageIcon className="h-3 w-3" />
+                                </span>
+                                <h5 className="text-xs font-bold text-sky-950 uppercase tracking-wide">
+                                  Ảnh mẫu khách gửi
+                                </h5>
+                              </div>
+                              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+                                {customerImgs.length} ảnh
+                              </span>
+                            </div>
+                            <DesignGallery
+                              images={customerImgs}
+                              badgeText={directCustomerImgs.length === 0 && customerImgs.length > 0 ? 'Khách gửi (Chung)' : 'Khách gửi'}
+                              badgeClassName="bg-sky-700/90"
+                              borderClassName="border-sky-200 hover:border-sky-400"
+                              emptyText="Không có ảnh mẫu tham khảo."
+                              emptyClassName="rounded-lg border border-dashed border-sky-200 bg-sky-50/60 p-3 text-center text-xs text-sky-600"
+                              onPreview={setPreviewImg}
+                            />
+                          </div>
+
+                          <div className="rounded-xl border border-amber-300 bg-amber-50/40 p-3 space-y-2">
+                            <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/80">
+                              <div className="flex items-center gap-1.5">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-amber-900">
+                                  <FileUp className="h-3 w-3" />
+                                </span>
+                                <h5 className="text-xs font-bold text-amber-950 uppercase tracking-wide">
+                                  Bản vẽ thiết kế của Chủ xưởng
+                                </h5>
+                              </div>
+                              <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                                {ownerImgs.length} bản vẽ
+                              </span>
+                            </div>
+                            <DesignGallery
+                              images={ownerImgs}
+                              badgeText="Bản vẽ xưởng"
+                              badgeClassName="bg-amber-800/90"
+                              borderClassName="border-amber-300 hover:border-amber-500"
+                              emptyText="Chưa có bản vẽ thiết kế từ Chủ xưởng."
+                              emptyClassName="rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-3 text-center text-xs text-amber-700"
+                              onPreview={setPreviewImg}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        item.imageUrl && (
+                          <div className="flex items-center gap-3 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImg(item.imageUrl)}
+                              className="group relative h-14 w-14 overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
+                              title="Xem ảnh sản phẩm"
+                            >
+                              <img
+                                src={item.imageUrl}
+                                alt={item.productName}
+                                className="h-full w-full object-cover transition group-hover:scale-105"
+                              />
+                            </button>
+                            <span className="text-xs text-stone-500">Hình ảnh sản phẩm mẫu niêm yết</span>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {generalOwnerImgs.length > 0 && (
+              <div className="rounded-xl border border-amber-300 bg-white p-3.5 space-y-2">
+                <h4 className="text-xs font-bold uppercase text-amber-950 flex items-center gap-1.5">
+                  <FileUp className="h-4 w-4 text-amber-700" />
+                  Bản vẽ thiết kế chung từ Chủ xưởng ({generalOwnerImgs.length})
+                </h4>
+                <DesignGallery
+                  images={generalOwnerImgs}
+                  badgeText="Bản vẽ xưởng"
+                  badgeClassName="bg-amber-800/90"
+                  borderClassName="border-amber-300 hover:border-amber-500"
+                  emptyText=""
+                  emptyClassName=""
+                  onPreview={setPreviewImg}
+                />
               </div>
             )}
           </div>
@@ -408,6 +569,30 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
           </button>
         </div>
       </div>
+
+      {/* Lightbox phóng to ảnh thiết kế */}
+      {previewImg && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewImg(null)}
+        >
+          <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={previewImg}
+              alt="Phóng to bản vẽ thiết kế"
+              className="max-h-[85vh] rounded-xl object-contain shadow-2xl"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewImg(null)}
+              aria-label="Đóng ảnh phóng to"
+              className="absolute -top-3 -right-3 rounded-full bg-white p-1.5 text-stone-800 shadow-xl hover:bg-stone-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

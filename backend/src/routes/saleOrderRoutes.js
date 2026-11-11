@@ -24,6 +24,7 @@ const {
   deliverOrder,
   completeOrder,
   updateDesignFile,
+  deleteDesignImage,
   getSaleCustomers,
   getSaleCustomerById,
 } = require('../controllers/saleOrderController');
@@ -83,6 +84,24 @@ router.get('/requests/:id', getRequestById);
 router.post('/requests', createSalesRequest);
 router.put('/requests/:id', updateSalesRequest);
 router.post('/requests/:id/convert-to-contract', convertRequestToContract);
-router.patch('/requests/:id/design', requireRole('OWNER'), uploadDesign.single('design_file'), updateDesignFile);
+router.patch(
+  '/requests/:id/design',
+  requireRole('OWNER'),
+  (req, res, next) => {
+    uploadDesign.single('design_file')(req, res, (err) => {
+      if (err) {
+        console.error('[saleOrderRoutes.design]', err);
+        return res.status(400).json({ message: err.message || 'Lỗi khi tải file thiết kế lên máy chủ.' });
+      }
+      return next();
+    });
+  },
+  updateDesignFile
+);
+router.delete(
+  '/requests/:id/design/:imageId',
+  requireRole('OWNER'),
+  deleteDesignImage
+);
 
 module.exports = router;

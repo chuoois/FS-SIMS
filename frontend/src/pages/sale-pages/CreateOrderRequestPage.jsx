@@ -1231,17 +1231,18 @@ export const CreateOrderRequestPage = () => {
                 disabled={submitting}
                 className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-5 py-2 font-semibold text-white shadow hover:bg-stone-800 disabled:opacity-50 text-sm"
               >
-                {submitting ? (
-                  <>
-                    <RotateCw className="h-4 w-4 animate-spin" />
-                    <span>Đang gửi...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    <span>Xác nhận gửi Chủ xưởng</span>
-                  </>
-                )}
+                <span hidden={!submitting} className={submitting ? 'inline-flex' : 'hidden'} aria-hidden="true">
+                  <RotateCw className="h-4 w-4 animate-spin" />
+                </span>
+                <span hidden={submitting} className={submitting ? 'hidden' : 'inline-flex'} aria-hidden="true">
+                  <Send className="h-4 w-4" />
+                </span>
+                <span hidden={!submitting} className={submitting ? 'inline' : 'hidden'}>
+                  Đang gửi...
+                </span>
+                <span hidden={submitting} className={submitting ? 'hidden' : 'inline'}>
+                  Xác nhận gửi Chủ xưởng
+                </span>
               </button>
             </div>
           </div>

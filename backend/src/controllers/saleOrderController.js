@@ -31,6 +31,7 @@ const {
   findRequestById: findRequestByIdModel,
   convertRequestToContract: convertRequestToContractModel,
   updateDesignFile: updateDesignFileModel,
+  deleteDesignImage: deleteDesignImageModel,
   getCustomersForSales,
   createSalesOrderRequest,
   updateSalesOrderRequest,
@@ -595,6 +596,40 @@ async function updateDesignFile(req, res) {
 }
 
 /**
+ * 15. DELETE /api/sale-orders/requests/:id/design/:imageId
+ * Owner xóa 1 ảnh bản vẽ thiết kế đã gửi nhầm/trùng trên yêu cầu CUSTOM
+ */
+async function deleteDesignImage(req, res) {
+  try {
+    const requestId = parseInt(req.params.id, 10);
+    const imageId = parseInt(req.params.imageId, 10);
+    if (!requestId || isNaN(requestId) || requestId <= 0 || !imageId || isNaN(imageId) || imageId <= 0) {
+      return res.status(400).json({ message: 'Mã yêu cầu hoặc mã ảnh không hợp lệ.' });
+    }
+
+    const result = await deleteDesignImageModel(
+      requestId,
+      imageId,
+      req.user?.email || 'OWNER'
+    );
+
+    const responseData = result ? (toRequestDTO(result) || result) : null;
+
+    return res.status(200).json({
+      message: 'Đã xóa bản vẽ thiết kế thành công.',
+      data: responseData,
+    });
+  } catch (error) {
+    console.error('[saleOrderController.deleteDesignImage]', error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      message: error.message || 'Lỗi máy chủ khi xóa bản vẽ thiết kế.',
+      error: error.message,
+    });
+  }
+}
+
+/**
  * DTO chuyển đổi OrderRequest sang JSON trả về FE
  */
 function toRequestDTO(raw) {
@@ -669,6 +704,7 @@ function toRequestDTO(raw) {
 
           return {
             imageId: img.request_image_id || img.requestImageId || img.imageId,
+            requestImageId: img.request_image_id || img.requestImageId || img.imageId,
             imageUrl: url,
             requestItemId: img.request_item_id || img.requestItemId || it.request_item_id,
             sortOrder: img.sort_order ?? img.sortOrder ?? 0,
@@ -690,6 +726,7 @@ function toRequestDTO(raw) {
 
       return {
         imageId: img.request_image_id || img.requestImageId || img.imageId,
+        requestImageId: img.request_image_id || img.requestImageId || img.imageId,
         imageUrl: url,
         requestItemId: img.request_item_id || img.requestItemId || null,
         sortOrder: img.sort_order ?? img.sortOrder ?? 0,
@@ -907,6 +944,7 @@ module.exports = {
   deliverOrder,
   completeOrder,
   updateDesignFile,
+  deleteDesignImage,
   getSaleCustomers,
   getSaleCustomerById,
   getCustomers: getSaleCustomers,

@@ -46,6 +46,7 @@ jest.mock('../src/models/SaleRequestModel', () => ({
   findRequestById: jest.fn(),
   convertRequestToContract: jest.fn(),
   updateDesignFile: jest.fn(),
+  deleteDesignImage: jest.fn(),
   getCustomersForSales: jest.fn(),
   createSalesOrderRequest: jest.fn(),
   updateSalesOrderRequest: jest.fn(),
@@ -81,6 +82,7 @@ const {
   findRequestById: findSaleRequestById,
   convertRequestToContract,
   updateDesignFile,
+  deleteDesignImage,
 } = require('../src/models/SaleRequestModel');
 
 const {
@@ -588,6 +590,55 @@ describe('Sale Orders API (/api/sale-orders)', () => {
     test('trả về 401 khi không có token', async () => {
       const res = await request(app).get('/api/sale-orders/customers/10');
       expect(res.status).toBe(401);
+    });
+  });
+
+  // =========================================================
+  // DELETE /api/sale-orders/requests/:id/design/:imageId
+  // =========================================================
+  describe('DELETE /api/sale-orders/requests/:id/design/:imageId', () => {
+    test('trả về 200 khi OWNER xóa 1 bản vẽ thiết kế xưởng', async () => {
+      deleteDesignImage.mockResolvedValue({
+        request_id: 21,
+        request_code: 'RQ-20261111-0001',
+        order_type: 'CUSTOM',
+        status: 'PROCESSING',
+        items: [
+          {
+            request_item_id: 34,
+            item_name: 'Kệ tivi',
+            quantity: 1,
+            images: [],
+          },
+        ],
+        images: [],
+      });
+
+      const res = await request(app)
+        .delete('/api/sale-orders/requests/21/design/19')
+        .set('Authorization', `Bearer ${ownerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(deleteDesignImage).toHaveBeenCalledWith(21, 19, 'owner@fssims.com');
+      expect(res.body.data.requestId).toBe(21);
+    });
+
+    test('trả về 403 khi SALES cố gắng xóa bản vẽ thiết kế', async () => {
+      const res = await request(app)
+        .delete('/api/sale-orders/requests/21/design/19')
+        .set('Authorization', `Bearer ${salesToken}`);
+
+      expect(res.status).toBe(403);
+      expect(deleteDesignImage).not.toHaveBeenCalled();
+    });
+
+    test('trả về 400 khi mã yêu cầu hoặc mã ảnh không hợp lệ', async () => {
+      const res = await request(app)
+        .delete('/api/sale-orders/requests/abc/design/19')
+        .set('Authorization', `Bearer ${ownerToken}`);
+
+      expect(res.status).toBe(400);
+      expect(deleteDesignImage).not.toHaveBeenCalled();
     });
   });
 });
