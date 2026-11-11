@@ -161,9 +161,7 @@ export async function uploadRequestImages(files) {
   } else if (files) {
     formData.append('images', files);
   }
-  const response = await api.post('/sale-orders/upload-images', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await api.post('/sale-orders/upload-images', formData);
   return response.data;
 }
 

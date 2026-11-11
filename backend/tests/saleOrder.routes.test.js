@@ -44,6 +44,7 @@ jest.mock('../src/models/ContractModel', () => ({
 jest.mock('../src/models/SaleRequestModel', () => ({
   getRequestsWithPagination: jest.fn(),
   findRequestById: jest.fn(),
+  createSalesOrderRequest: jest.fn(),
   convertRequestToContract: jest.fn(),
   updateDesignFile: jest.fn(),
 }));
@@ -71,6 +72,7 @@ const { createOrderFromContract, getOrdersWithPagination } = require('../src/mod
 const {
   getRequestsWithPagination,
   findRequestById: findSaleRequestById,
+  createSalesOrderRequest,
   convertRequestToContract,
   updateDesignFile,
 } = require('../src/models/SaleRequestModel');
@@ -448,6 +450,76 @@ describe('Sale Orders API (/api/sale-orders)', () => {
         .set('Authorization', `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/sale-orders/requests', () => {
+    test('trả về 201 và gắn đúng ảnh theo từng sản phẩm khi tạo yêu cầu thành công', async () => {
+      createSalesOrderRequest.mockResolvedValue({
+        request_id: 99,
+        request_code: 'RQ-20261110-0099',
+        order_type: 'CUSTOM',
+        request_type: 'CUSTOM',
+        contact_name: 'Nguyễn Văn B',
+        contact_phone: '0912345678',
+        delivery_address: '123 Lê Lợi, Q1',
+        title: 'Đặt làm tủ gỗ sồi',
+        status: 'PENDING',
+        items: [
+          {
+            request_item_id: 201,
+            item_name: 'Tủ áo 3 cánh',
+            quantity: 1,
+            images: [
+              {
+                request_image_id: 301,
+                image_url: 'https://res.cloudinary.com/demo/image/upload/item1.jpg',
+                request_item_id: 201,
+                sort_order: 0,
+              },
+            ],
+          },
+          {
+            request_item_id: 202,
+            item_name: 'Bàn trang điểm',
+            quantity: 1,
+            images: [],
+          },
+        ],
+        images: [],
+      });
+
+      const res = await request(app)
+        .post('/api/sale-orders/requests')
+        .set('Authorization', `Bearer ${salesToken}`)
+        .send({
+          contactName: 'Nguyễn Văn B',
+          contactPhone: '0912345678',
+          deliveryAddress: '123 Lê Lợi, Q1',
+          title: 'Đặt làm tủ gỗ sồi',
+          orderType: 'CUSTOM',
+          items: [
+            {
+              itemName: 'Tủ áo 3 cánh',
+              quantity: 1,
+              images: ['https://res.cloudinary.com/demo/image/upload/item1.jpg'],
+            },
+            {
+              itemName: 'Bàn trang điểm',
+              quantity: 1,
+              images: [],
+            },
+          ],
+        });
+
+      expect(res.status).toBe(201);
+      expect(createSalesOrderRequest).toHaveBeenCalledTimes(1);
+      expect(res.body.data.items[0].images).toHaveLength(1);
+      expect(res.body.data.items[0].images[0].imageUrl).toBe(
+        'https://res.cloudinary.com/demo/image/upload/item1.jpg'
+      );
+      expect(res.body.data.items[1].images).toHaveLength(0);
+      expect(res.body.data.images).toHaveLength(1);
     });
   });
 });

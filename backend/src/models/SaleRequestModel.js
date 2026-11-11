@@ -20,9 +20,15 @@ if (!OrderRequest.associations || !OrderRequest.associations.items) {
     OrderRequestItem.belongsTo(OrderRequest, { foreignKey: 'request_id', as: 'request' });
   }
 }
-if (!OrderRequestItem.associations || !OrderRequestItem.associations.images) {
+if (
+  typeof OrderRequestItem === 'function' &&
+  typeof OrderRequestItem.hasMany === 'function' &&
+  (!OrderRequestItem.associations || !OrderRequestItem.associations.images)
+) {
   OrderRequestItem.hasMany(OrderRequestImage, { foreignKey: 'request_item_id', as: 'images' });
-  OrderRequestImage.belongsTo(OrderRequestItem, { foreignKey: 'request_item_id', as: 'item' });
+  if (typeof OrderRequestImage === 'function' && typeof OrderRequestImage.belongsTo === 'function') {
+    OrderRequestImage.belongsTo(OrderRequestItem, { foreignKey: 'request_item_id', as: 'item' });
+  }
 }
 if (!OrderRequest.associations || !OrderRequest.associations.images) {
   if (typeof OrderRequest === 'function' && typeof OrderRequest.hasMany === 'function') {

@@ -190,6 +190,129 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
     });
   });
 
+  it('2c. CreateOrderRequestPage: Upload ảnh gắn riêng từng sản phẩm và chặn submit khi upload ảnh thất bại (401)', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <MemoryRouter>
+        <CreateOrderRequestPage />
+      </MemoryRouter>
+    );
+
+    // Điền khách hàng & sản phẩm 1
+    fireEvent.change(screen.getByPlaceholderText(/VD: Nguyễn Văn A/i), { target: { value: 'Nguyễn Văn Ảnh' } });
+    fireEvent.change(screen.getByPlaceholderText(/VD: 0912345678/i), { target: { value: '0912345678' } });
+    fireEvent.change(screen.getByPlaceholderText(/VD: Tủ quần áo 4 cánh lùa kịch trần/i), { target: { value: 'Tủ áo 1' } });
+
+    // Thêm sản phẩm thứ 2
+    await user.click(screen.getByRole('button', { name: /Thêm sản phẩm/i }));
+    const itemNameInputs = screen.getAllByPlaceholderText(/VD: Tủ quần áo 4 cánh lùa kịch trần/i);
+    fireEvent.change(itemNameInputs[1], { target: { value: 'Bàn trang điểm 2' } });
+
+    // Upload ảnh thất bại (401) cho sản phẩm 1
+    saleOrderService.uploadRequestImages.mockRejectedValueOnce({ response: { status: 401 } });
+    const fileInputs = container.querySelectorAll('input[type="file"]');
+    const file1 = new File(['img1'], 'item1.png', { type: 'image/png' });
+    fireEvent.change(fileInputs[0], { target: { files: [file1] } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Phiên đăng nhập đã hết hạn.*\(401\)/i)).toBeInTheDocument();
+    });
+
+    // Không được mở modal submit khi còn lỗi upload ảnh
+    await user.click(screen.getByRole('button', { name: /Kiểm Tra & Gửi Chủ Xưởng Thẩm Định/i }));
+    expect(screen.queryByText(/Xác nhận thông tin yêu cầu trước khi gửi Chủ xưởng/i)).not.toBeInTheDocument();
+
+    // Upload lại thành công cho sản phẩm 1 và upload riêng cho sản phẩm 2
+    saleOrderService.uploadRequestImages
+      .mockResolvedValueOnce({ urls: ['https://cdn.example.com/item1.png'] })
+      .mockResolvedValueOnce({ urls: ['https://cdn.example.com/item2.png'] });
+
+    fireEvent.change(fileInputs[0], { target: { files: [file1] } });
+    const file2 = new File(['img2'], 'item2.png', { type: 'image/png' });
+    fireEvent.change(fileInputs[1], { target: { files: [file2] } });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Phiên đăng nhập đã hết hạn/i)).not.toBeInTheDocument();
+      expect(screen.getAllByText('1 ảnh').length).toBe(2);
+    });
+
+    // Mở modal và gửi đơn -> ảnh được gắn đúng riêng từng sản phẩm
+    saleOrderService.createSalesOrderRequest.mockResolvedValueOnce({ data: { requestId: 901 } });
+    await user.click(screen.getByRole('button', { name: /Kiểm Tra & Gửi Chủ Xưởng Thẩm Định/i }));
+    const confirmBtn = await screen.findByRole('button', { name: /Xác nhận gửi Chủ xưởng/i });
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(saleOrderService.createSalesOrderRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contactName: 'Nguyễn Văn Ảnh',
+          items: [
+            expect.objectContaining({
+              itemName: 'Tủ áo 1',
+              images: [{ imageUrl: 'https://cdn.example.com/item1.png', requestItemId: null, sortOrder: 0 }],
+            }),
+            expect.objectContaining({
+              itemName: 'Bàn trang điểm 2',
+              images: [{ imageUrl: 'https://cdn.example.com/item2.png', requestItemId: null, sortOrder: 0 }],
+            }),
+          ],
+          images: [
+            { imageUrl: 'https://cdn.example.com/item1.png', requestItemId: null, itemIndex: 0, sortOrder: 0 },
+            { imageUrl: 'https://cdn.example.com/item2.png', requestItemId: null, itemIndex: 1, sortOrder: 0 },
+          ],
+        })
+      );
+    });
+  });
+
+  it('2d. CreateOrderRequestPage: Ngăn gửi trùng khi nhấn liên tục, hiển thị lỗi 500 rõ ràng và giữ nguyên dữ liệu form', async () => {
+    const user = userEvent.setup();
+    let rejectSubmit;
+    saleOrderService.createSalesOrderRequest.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectSubmit = reject;
+        })
+    );
+
+    render(
+      <MemoryRouter>
+        <CreateOrderRequestPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/VD: Nguyễn Văn A/i), { target: { value: 'Lê Bảo Toàn' } });
+    fireEvent.change(screen.getByPlaceholderText(/VD: 0912345678/i), { target: { value: '0977665544' } });
+    fireEvent.change(screen.getByPlaceholderText(/VD: Tủ quần áo 4 cánh lùa kịch trần/i), { target: { value: 'Kệ tivi gỗ óc chó' } });
+
+    await user.click(screen.getByRole('button', { name: /Kiểm Tra & Gửi Chủ Xưởng Thẩm Định/i }));
+    const confirmBtn = await screen.findByRole('button', { name: /Xác nhận gửi Chủ xưởng/i });
+
+    // Nhấn liên tục nhiều lần -> chỉ được gọi API 1 lần duy nhất
+    fireEvent.click(confirmBtn);
+    fireEvent.click(confirmBtn);
+    expect(saleOrderService.createSalesOrderRequest).toHaveBeenCalledTimes(1);
+
+    // Giả lập backend trả lỗi 500 Internal Server Error
+    rejectSubmit({
+      response: {
+        status: 500,
+        data: { message: 'Lỗi máy chủ khi tạo đơn yêu cầu thiết kế' },
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Không thể gửi yêu cầu đơn hàng/i)).toBeInTheDocument();
+      expect(screen.getByText(/Lỗi máy chủ \(500\): Lỗi máy chủ khi tạo đơn yêu cầu thiết kế/i)).toBeInTheDocument();
+    });
+
+    // Quay lại chỉnh sửa -> toàn bộ dữ liệu người dùng đã nhập vẫn được giữ nguyên
+    await user.click(screen.getByRole('button', { name: /Chỉnh sửa lại/i }));
+    expect(screen.getByPlaceholderText(/VD: Nguyễn Văn A/i)).toHaveValue('Lê Bảo Toàn');
+    expect(screen.getByPlaceholderText(/VD: 0912345678/i)).toHaveValue('0977665544');
+    expect(screen.getByPlaceholderText(/VD: Tủ quần áo 4 cánh lùa kịch trần/i)).toHaveValue('Kệ tivi gỗ óc chó');
+  });
+
   it('3. LeaderOrdersPage: Hiển thị danh sách đơn sản xuất và nút Tiếp nhận / Nghiệm thu', async () => {
     orderManagementService.getOrderDetail.mockResolvedValue({
       order: {
@@ -277,6 +400,101 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
       expect(screen.getByRole('button', { name: /Thẩm định & Chốt/i })).toBeInTheDocument();
     });
   });
+
+  it('4b. OwnerRequestsTab: Hiển thị header/thống kê đồng bộ, ảnh theo sản phẩm và chốt thiết kế inline không dùng window.confirm', async () => {
+    const user = userEvent.setup();
+    const onReviewed = vi.fn();
+    const requestItem = {
+      requestItemId: 501,
+      itemName: 'Tủ áo gỗ gõ đỏ',
+      lengthCm: 220,
+      widthCm: 60,
+      heightCm: 240,
+      quantity: 1,
+      unitPrice: 28000000,
+      description: 'Cửa lùa 3 cánh',
+    };
+
+    orderManagementService.getOwnerRequests.mockResolvedValue({
+      message: 'OK',
+      data: [
+        {
+          requestId: 89,
+          requestCode: 'REQ-20261111-0089',
+          title: 'Tủ áo phòng ngủ master',
+          contactName: 'Nguyễn Minh Tuấn',
+          contactPhone: '0977112233',
+          orderType: 'CUSTOM',
+          status: 'PENDING',
+          createdAt: '2026-11-11T05:00:00Z',
+          items: [requestItem],
+          images: [],
+        },
+      ],
+      pagination: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+    });
+
+    orderManagementService.getOwnerRequestById.mockResolvedValue({
+      data: {
+        requestId: 89,
+        requestCode: 'REQ-20261111-0089',
+        title: 'Tủ áo phòng ngủ master',
+        contactName: 'Nguyễn Minh Tuấn',
+        contactPhone: '0977112233',
+        deliveryAddress: '99 Nguyễn Huệ, Quận 1',
+        orderType: 'CUSTOM',
+        status: 'PENDING',
+        createdAt: '2026-11-11T05:00:00Z',
+        items: [requestItem],
+        images: [
+          {
+            requestImageId: 901,
+            requestItemId: 501,
+            imageUrl: 'https://res.cloudinary.com/demo/image/upload/tu-ao.jpg',
+          },
+        ],
+      },
+    });
+
+    orderManagementService.reviewOwnerRequest.mockResolvedValue({ message: 'OK' });
+
+    render(
+      <MemoryRouter>
+        <OwnerRequestsTab onReviewed={onReviewed} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Thẩm Định Yêu Cầu Thiết Kế')).toBeInTheDocument();
+      expect(screen.getByText('Tổng yêu cầu')).toBeInTheDocument();
+      expect(screen.getByText('REQ-20261111-0089')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Thẩm định & Chốt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Tủ áo gỗ gõ đỏ')).toBeInTheDocument();
+      expect(screen.getByAltText('Tủ áo gỗ gõ đỏ - ảnh 1')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Chốt thiết kế \(Khóa bản vẽ\)/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Xác nhận chốt thiết kế & khóa bản vẽ sản xuất')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Xác nhận chốt thiết kế/i }));
+
+    await waitFor(() => {
+      expect(orderManagementService.reviewOwnerRequest).toHaveBeenCalledWith(89, {
+        action: 'FINALIZE_DESIGN',
+        reason: undefined,
+        note: undefined,
+      });
+      expect(onReviewed).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('5. LeaderOrdersPage: Gửi yêu cầu nghiệm thu kèm ảnh thành phẩm lên Owner', async () => {
     const user = userEvent.setup();
     orderManagementService.getLeaderOrders.mockResolvedValue({

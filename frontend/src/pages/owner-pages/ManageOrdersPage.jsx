@@ -828,7 +828,7 @@ export function ManageOrdersPage({ defaultTab } = {}) {
           <ClipboardList className="h-4 w-4" />
           <span>Thẩm định yêu cầu thiết kế (Design Requests)</span>
           {pendingRequestsCount > 0 && (
-            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-extrabold text-white animate-pulse">
+            <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-semibold text-white">
               {pendingRequestsCount} chờ duyệt
             </span>
           )}
@@ -836,7 +836,7 @@ export function ManageOrdersPage({ defaultTab } = {}) {
       </div>
 
       {activeTab === 'REQUESTS' ? (
-        <OwnerRequestsTab />
+        <OwnerRequestsTab onReviewed={checkPendingRequests} />
       ) : (
         <>
           {/* Thông báo nổi bật nếu có đơn yêu cầu mới đang chờ thẩm định */}

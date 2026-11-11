@@ -3,7 +3,8 @@
 // Axios instance dùng chung toàn app
 //
 // Interceptor tự động:
-//   1. REQUEST  — gắn Authorization: Bearer <accessToken> (lấy từ sessionStorage)
+//   1. REQUEST  — gắn Authorization: Bearer <accessToken> (lấy từ sessionStorage),
+//                 chủ động làm mới token nếu accessToken sắp/đã hết hạn
 //   2. RESPONSE — khi nhận 401:
 //        a. Gọi POST /auth/refresh (cookie httpOnly) để lấy accessToken mới
 //        b. Lưu token mới, retry request gốc
@@ -15,6 +16,7 @@
 import axios from 'axios';
 
 const ACCESS_TOKEN_KEY = 'accessToken';
+const TOKEN_REFRESH_BUFFER_MS = 3000;
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
@@ -23,6 +25,7 @@ const api = axios.create({
 
 // ── Trạng thái refresh đang chạy ──────────────────────────
 let isRefreshing = false;
+let refreshPromise = null;
 let failedQueue = []; // { resolve, reject }[]
 
 function processQueue(error, token = null) {
@@ -33,10 +36,77 @@ function processQueue(error, token = null) {
   failedQueue = [];
 }
 
-// ── Request interceptor: gắn Bearer token ─────────────────
+function getTokenExpiryMs(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = JSON.parse(atob(base64));
+    return typeof decoded?.exp === 'number' ? decoded.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function refreshAccessTokenSingleFlight() {
+  if (!refreshPromise) {
+    isRefreshing = true;
+    refreshPromise = axios
+      .post(
+        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/auth/refresh`,
+        {},
+        { withCredentials: true },
+      )
+      .then(({ data }) => {
+        const newToken = data.accessToken;
+        sessionStorage.setItem(ACCESS_TOKEN_KEY, newToken);
+
+        // Cập nhật header mặc định cho các request tiếp theo
+        api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        processQueue(null, newToken);
+        return newToken;
+      })
+      .catch((refreshError) => {
+        processQueue(refreshError, null);
+
+        // Refresh thất bại → xóa session và chuyển về login
+        sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+        sessionStorage.removeItem('authUser');
+
+        // Dispatch custom event để AuthContext lắng nghe và reset state
+        window.dispatchEvent(new CustomEvent('auth:session-expired'));
+
+        throw refreshError;
+      })
+      .finally(() => {
+        isRefreshing = false;
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+// ── Request interceptor: gắn Bearer token (và pre-refresh nếu hết hạn) ──
 api.interceptors.request.use(
-  (config) => {
-    const token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  async (config) => {
+    const url = config.url || '';
+    const isAuthRoute =
+      url.includes('/auth/refresh') ||
+      url.includes('/auth/login') ||
+      url.includes('/staff-auth/login');
+
+    let token = sessionStorage.getItem(ACCESS_TOKEN_KEY);
+    if (token && !isAuthRoute) {
+      const expMs = getTokenExpiryMs(token);
+      if (expMs !== null && Date.now() >= expMs - TOKEN_REFRESH_BUFFER_MS) {
+        try {
+          token = await refreshAccessTokenSingleFlight();
+        } catch {
+          token = null;
+        }
+      }
+    }
+
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
@@ -63,7 +133,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (isRefreshing) {
+    if (isRefreshing && refreshPromise) {
       // Đang refresh → đưa vào queue, chờ token mới
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject });
@@ -76,37 +146,13 @@ api.interceptors.response.use(
     }
 
     originalRequest._retry = true;
-    isRefreshing = true;
 
     try {
-      const { data } = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/auth/refresh`,
-        {},
-        { withCredentials: true },
-      );
-
-      const newToken = data.accessToken;
-      sessionStorage.setItem(ACCESS_TOKEN_KEY, newToken);
-
-      // Cập nhật header mặc định cho các request tiếp theo
-      api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+      const newToken = await refreshAccessTokenSingleFlight();
       originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
-
-      processQueue(null, newToken);
       return api(originalRequest);
     } catch (refreshError) {
-      processQueue(refreshError, null);
-
-      // Refresh thất bại → xóa session và chuyển về login
-      sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-      sessionStorage.removeItem('authUser');
-
-      // Dispatch custom event để AuthContext lắng nghe và reset state
-      window.dispatchEvent(new CustomEvent('auth:session-expired'));
-
       return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
     }
   },
 );

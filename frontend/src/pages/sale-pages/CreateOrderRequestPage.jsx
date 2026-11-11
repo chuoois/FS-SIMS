@@ -9,7 +9,7 @@
 // 3. Mỗi sản phẩm có danh sách ảnh riêng biệt: thêm/xóa/xem độc lập, tự động ánh xạ khi lưu/sửa
 // =========================================================
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileText,
@@ -44,6 +44,47 @@ import {
 } from '../../services/saleOrderService';
 import { CreatableCombobox } from '../../components/common/CreatableCombobox';
 
+const PHONE_REGEX = /^[0-9+\-\s()]{7,20}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
+const toPositiveIntOrNull = (val) => {
+  if (val === '' || val === null || val === undefined) return null;
+  const num = Number(val);
+  return Number.isInteger(num) && num > 0 ? num : null;
+};
+
+const isValidUploadedImageUrl = (url) => {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return false;
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/');
+};
+
+const formatApiErrorMessage = (err, actionLabel = 'gửi yêu cầu') => {
+  const status = err?.response?.status;
+  const serverMsg = err?.response?.data?.message;
+
+  if (status === 401) {
+    return 'Phiên đăng nhập đã hết hạn hoặc chưa được xác thực (401). Dữ liệu bạn đã nhập vẫn được giữ nguyên — vui lòng đăng nhập lại trước khi tiếp tục.';
+  }
+  if (status === 403) {
+    return 'Tài khoản của bạn không có quyền thực hiện thao tác này (403).';
+  }
+  if (status === 400) {
+    return serverMsg || `Dữ liệu gửi lên chưa hợp lệ khi ${actionLabel} (400).`;
+  }
+  if (status >= 500) {
+    return serverMsg
+      ? `Lỗi máy chủ (${status}): ${serverMsg}. Dữ liệu bạn đã nhập vẫn được giữ nguyên.`
+      : `Máy chủ đang gặp sự cố (${status}) khi ${actionLabel}. Dữ liệu bạn đã nhập vẫn được giữ nguyên.`;
+  }
+  if (!err?.response) {
+    return err?.message || `Không thể kết nối tới máy chủ khi ${actionLabel}. Vui lòng kiểm tra lại kết nối mạng.`;
+  }
+  return serverMsg || err?.message || `Lỗi khi ${actionLabel}.`;
+};
+
 const formatVND = (amount) => {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
@@ -57,6 +98,28 @@ export const CreateOrderRequestPage = () => {
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('editId');
   const [refreshing, setRefreshing] = useState(false);
+
+  const submitLockRef = useRef(false);
+  const itemSeqRef = useRef(1);
+
+  const createEmptyItem = useCallback(() => ({
+    id: `item-${Date.now()}-${itemSeqRef.current++}`,
+    requestItemId: null,
+    itemName: '',
+    categoryId: '',
+    roomId: '',
+    materialId: '',
+    colorId: '',
+    lengthCm: '',
+    widthCm: '',
+    heightCm: '',
+    quantity: 1,
+    unitPrice: '',
+    technicalNotes: '',
+    images: [], // Danh sách ảnh riêng của món này: [{ id, imageUrl }]
+    uploading: false,
+    uploadError: null,
+  }), []);
 
   // ── 1. Metadata từ API hệ thống (Danh mục, phòng, vật liệu, màu sắc) ──
   const [metadata, setMetadata] = useState({
@@ -82,7 +145,7 @@ export const CreateOrderRequestPage = () => {
   // ── 3. Danh sách sản phẩm kỹ thuật - Mỗi món có mảng ảnh riêng ──
   const [items, setItems] = useState([
     {
-      id: Date.now(),
+      id: `item-${Date.now()}-0`,
       requestItemId: null,
       itemName: '',
       categoryId: '',
@@ -97,6 +160,7 @@ export const CreateOrderRequestPage = () => {
       technicalNotes: '',
       images: [], // Danh sách ảnh riêng của món này: [{ id, imageUrl }]
       uploading: false,
+      uploadError: null,
     },
   ]);
 
@@ -106,6 +170,7 @@ export const CreateOrderRequestPage = () => {
   // Modal tóm tắt thông tin trước khi gửi
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
   const [loadingEditData, setLoadingEditData] = useState(false);
   const [editRejectReason, setEditRejectReason] = useState(null);
 
@@ -216,11 +281,12 @@ export const CreateOrderRequestPage = () => {
               unitPrice: it.unitPrice ?? it.unit_price ?? '',
               technicalNotes: it.technicalNotes || it.description || '',
               images: itemImgs.map((img, imgIdx) => ({
-                id: img.imageId || img.requestImageId || Date.now() + imgIdx + Math.random(),
+                id: img.imageId || img.requestImageId || `img-${Date.now()}-${imgIdx}-${Math.random()}`,
                 imageUrl: typeof img === 'string' ? img : img.imageUrl,
                 requestItemId: it.requestItemId || it.request_item_id || null,
               })),
               uploading: false,
+              uploadError: null,
             };
           })
         );
@@ -255,26 +321,9 @@ export const CreateOrderRequestPage = () => {
           expectedDate: '',
           orderType: 'CUSTOM',
         });
-        setItems([
-          {
-            id: Date.now(),
-            requestItemId: null,
-            itemName: '',
-            categoryId: '',
-            roomId: '',
-            materialId: '',
-            colorId: '',
-            lengthCm: '',
-            widthCm: '',
-            heightCm: '',
-            quantity: 1,
-            unitPrice: '',
-            technicalNotes: '',
-            images: [],
-            uploading: false,
-          },
-        ]);
+        setItems([createEmptyItem()]);
       }
+      setSubmitError(null);
       toast.success('Đã làm mới biểu mẫu.');
     } finally {
       setRefreshing(false);
@@ -336,26 +385,7 @@ export const CreateOrderRequestPage = () => {
 
   // ── Xử lý thêm / xóa món sản phẩm ──
   const handleAddItem = () => {
-    setItems((prev) => [
-      ...prev,
-      {
-        id: Date.now() + Math.random(),
-        requestItemId: null,
-        itemName: '',
-        categoryId: '',
-        roomId: '',
-        materialId: '',
-        colorId: '',
-        lengthCm: '',
-        widthCm: '',
-        heightCm: '',
-        quantity: 1,
-        unitPrice: '',
-        technicalNotes: '',
-        images: [],
-        uploading: false,
-      },
-    ]);
+    setItems((prev) => [...prev, createEmptyItem()]);
   };
 
   const handleRemoveItem = (itemId) => {
@@ -374,33 +404,66 @@ export const CreateOrderRequestPage = () => {
 
   // ── Xử lý upload ảnh riêng cho từng sản phẩm ──
   const handleItemFileUpload = async (itemId, fileList) => {
-    const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'));
-    if (files.length === 0) {
-      toast.error('Vui lòng chọn tệp hình ảnh hợp lệ (JPG, PNG, WEBP).');
+    const targetItem = items.find((it) => it.id === itemId);
+    if (targetItem?.uploading) {
+      toast.error('Ảnh của sản phẩm này đang được tải lên, vui lòng đợi.');
+      return;
+    }
+
+    const rawFiles = Array.from(fileList || []);
+    const imageFiles = rawFiles.filter((f) => f.type?.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      const msg = 'Vui lòng chọn tệp hình ảnh hợp lệ (JPG, PNG, WEBP).';
+      toast.error(msg);
+      setItems((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, uploadError: msg } : it))
+      );
+      return;
+    }
+
+    const validFiles = imageFiles.filter((f) => f.size <= MAX_IMAGE_SIZE_BYTES);
+    if (validFiles.length < imageFiles.length) {
+      toast.error('Một số ảnh vượt quá giới hạn 5MB đã bị bỏ qua.');
+    }
+    if (validFiles.length === 0) {
+      const msg = 'Dung lượng mỗi ảnh tối đa 5MB. Vui lòng chọn ảnh nhỏ hơn.';
+      setItems((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, uploadError: msg } : it))
+      );
       return;
     }
 
     setItems((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, uploading: true } : it))
+      prev.map((it) =>
+        it.id === itemId ? { ...it, uploading: true, uploadError: null } : it
+      )
     );
 
     try {
-      const res = await uploadRequestImages(files);
-      const uploadedUrls = res.urls || res.images || [];
+      const res = await uploadRequestImages(validFiles);
+      const rawUrls = res?.urls || res?.images || res?.data?.urls || res?.data?.images || [];
+      const uploadedUrls = (Array.isArray(rawUrls) ? rawUrls : [])
+        .map((entry) => (typeof entry === 'string' ? entry : entry?.imageUrl || entry?.url || ''))
+        .filter(isValidUploadedImageUrl);
 
-      if (!uploadedUrls || uploadedUrls.length === 0) {
-        throw new Error('Máy chủ không trả về URL hình ảnh.');
+      if (uploadedUrls.length === 0) {
+        throw new Error('Máy chủ không trả về URL hình ảnh hợp lệ.');
       }
 
       const newImgs = uploadedUrls.map((url, idx) => ({
-        id: Date.now() + Math.random() + idx,
-        imageUrl: url,
+        id: `img-${Date.now()}-${idx}-${Math.random()}`,
+        imageUrl: url.trim(),
       }));
 
       setItems((prev) =>
         prev.map((it) =>
           it.id === itemId
-            ? { ...it, images: [...it.images, ...newImgs], uploading: false }
+            ? {
+                ...it,
+                images: [...it.images, ...newImgs],
+                uploading: false,
+                uploadError: null,
+              }
             : it
         )
       );
@@ -408,11 +471,22 @@ export const CreateOrderRequestPage = () => {
       toast.success(`Đã thêm ${uploadedUrls.length} ảnh cho sản phẩm.`);
     } catch (err) {
       console.error('Lỗi khi tải ảnh lên:', err);
-      toast.error(err.response?.data?.message || err.message || 'Lỗi khi tải ảnh lên.');
+      const errMsg = formatApiErrorMessage(err, 'tải ảnh lên');
+      toast.error(errMsg);
       setItems((prev) =>
-        prev.map((it) => (it.id === itemId ? { ...it, uploading: false } : it))
+        prev.map((it) =>
+          it.id === itemId
+            ? { ...it, uploading: false, uploadError: errMsg }
+            : it
+        )
       );
     }
+  };
+
+  const handleDismissUploadError = (itemId) => {
+    setItems((prev) =>
+      prev.map((it) => (it.id === itemId ? { ...it, uploadError: null } : it))
+    );
   };
 
   const handleRemoveItemImage = (itemId, imageId) => {
@@ -434,49 +508,149 @@ export const CreateOrderRequestPage = () => {
     }, 0);
   }, [items]);
 
-  // ── Validate form trước khi mở modal tóm tắt ──
-  const handleValidateAndOpenSummary = (e) => {
-    e.preventDefault();
+  // ── Kiểm tra toàn bộ dữ liệu form & trạng thái upload ảnh trước khi mở modal / submit ──
+  const validateBeforeSubmit = useCallback(() => {
+    const trimmedName = customerInfo.contactName.trim();
+    if (!trimmedName) {
+      return 'Vui lòng nhập họ tên khách hàng.';
+    }
 
-    if (!customerInfo.contactName.trim()) {
-      toast.error('Vui lòng nhập họ tên khách hàng.');
-      return;
+    const trimmedPhone = customerInfo.contactPhone.trim();
+    if (!trimmedPhone) {
+      return 'Vui lòng nhập số điện thoại khách hàng.';
     }
-    if (!customerInfo.contactPhone.trim()) {
-      toast.error('Vui lòng nhập số điện thoại khách hàng.');
-      return;
+    if (!PHONE_REGEX.test(trimmedPhone)) {
+      return 'Số điện thoại khách hàng không hợp lệ (cần 7–20 ký tự số).';
     }
-    if (items.length === 0) {
-      toast.error('Vui lòng nhập ít nhất một sản phẩm vào yêu cầu.');
-      return;
+
+    const trimmedEmail = customerInfo.contactEmail.trim();
+    if (trimmedEmail && !EMAIL_REGEX.test(trimmedEmail)) {
+      return 'Địa chỉ email khách hàng không đúng định dạng.';
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return 'Vui lòng nhập ít nhất một sản phẩm vào yêu cầu.';
     }
 
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
+      const label = it.itemName.trim() || `Sản phẩm thứ ${i + 1}`;
+
       if (!it.itemName.trim()) {
-        toast.error(`Sản phẩm thứ ${i + 1} chưa có tên sản phẩm.`);
-        return;
+        return `Sản phẩm thứ ${i + 1} chưa có tên sản phẩm.`;
       }
-      if (!it.quantity || Number(it.quantity) <= 0) {
-        toast.error(`Số lượng sản phẩm "${it.itemName}" phải lớn hơn 0.`);
-        return;
+
+      const qty = Number(it.quantity);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return `Số lượng sản phẩm "${label}" phải lớn hơn 0.`;
+      }
+
+      if (it.unitPrice !== '' && it.unitPrice !== null && it.unitPrice !== undefined) {
+        const price = Number(it.unitPrice);
+        if (!Number.isFinite(price) || price < 0) {
+          return `Đơn giá của "${label}" không hợp lệ.`;
+        }
+      }
+
+      for (const [dimVal, dimName] of [
+        [it.lengthCm, 'Chiều dài'],
+        [it.widthCm, 'Chiều rộng'],
+        [it.heightCm, 'Chiều cao'],
+      ]) {
+        if (dimVal !== '' && dimVal !== null && dimVal !== undefined) {
+          const parsedDim = Number(dimVal);
+          if (!Number.isFinite(parsedDim) || parsedDim < 0) {
+            return `${dimName} của "${label}" không hợp lệ.`;
+          }
+        }
+      }
+
+      if (it.uploading) {
+        return `Hình ảnh cho "${label}" đang được tải lên, vui lòng đợi hoàn tất trước khi gửi.`;
+      }
+
+      if (it.uploadError) {
+        return `Upload ảnh cho "${label}" chưa thành công. Vui lòng tải lại ảnh hoặc xử lý lỗi trước khi gửi.`;
+      }
+
+      const hasInvalidImage = (it.images || []).some((img) => {
+        const url = typeof img === 'string' ? img : img?.imageUrl;
+        return !isValidUploadedImageUrl(url);
+      });
+      if (hasInvalidImage) {
+        return `Hình ảnh của "${label}" chưa được tải lên hợp lệ. Vui lòng xóa hoặc tải lại ảnh.`;
       }
     }
 
+    return null;
+  }, [customerInfo, items]);
+
+  // ── Validate form trước khi mở modal tóm tắt ──
+  const handleValidateAndOpenSummary = (e) => {
+    e.preventDefault();
+    if (submitting || submitLockRef.current) return;
+
+    const validationError = validateBeforeSubmit();
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    setSubmitError(null);
     setSummaryModalOpen(true);
   };
 
   // ── Gửi đơn yêu cầu lên Owner thẩm định ──
   const handleConfirmSubmit = async () => {
-    try {
-      setSubmitting(true);
+    if (submitLockRef.current || submitting) {
+      return;
+    }
 
+    const validationError = validateBeforeSubmit();
+    if (validationError) {
+      setSubmitError(validationError);
+      toast.error(validationError);
+      return;
+    }
+
+    submitLockRef.current = true;
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
       const generatedTitle =
         customerInfo.title.trim() ||
         `${customerInfo.contactName.trim()} - Đơn may đo nội thất`;
 
+      const normalizedItems = items.map((it) => {
+        const itemImages = (it.images || [])
+          .map((img) => (typeof img === 'string' ? img : img?.imageUrl))
+          .filter(isValidUploadedImageUrl)
+          .map((url, imgIdx) => ({
+            imageUrl: url.trim(),
+            requestItemId: it.requestItemId || null,
+            sortOrder: imgIdx,
+          }));
+
+        return {
+          requestItemId: it.requestItemId || null,
+          itemName: it.itemName.trim(),
+          categoryId: toPositiveIntOrNull(it.categoryId),
+          roomId: toPositiveIntOrNull(it.roomId),
+          materialId: toPositiveIntOrNull(it.materialId),
+          colorId: toPositiveIntOrNull(it.colorId),
+          lengthCm: it.lengthCm ? Number(it.lengthCm) : null,
+          widthCm: it.widthCm ? Number(it.widthCm) : null,
+          heightCm: it.heightCm ? Number(it.heightCm) : null,
+          quantity: Number(it.quantity) || 1,
+          unitPrice: it.unitPrice ? Number(it.unitPrice) : 0,
+          technicalNotes: it.technicalNotes?.trim() || null,
+          images: itemImages,
+        };
+      });
+
       const payload = {
-        customerAccountId: customerInfo.customerAccountId,
+        customerAccountId: toPositiveIntOrNull(customerInfo.customerAccountId),
         contactName: customerInfo.contactName.trim(),
         contactPhone: customerInfo.contactPhone.trim(),
         contactEmail: customerInfo.contactEmail.trim() || null,
@@ -484,31 +658,13 @@ export const CreateOrderRequestPage = () => {
         title: generatedTitle,
         expectedDate: customerInfo.expectedDate || null,
         orderType: customerInfo.orderType || 'CUSTOM',
-        items: items.map((it) => ({
-          requestItemId: it.requestItemId || null,
-          itemName: it.itemName.trim(),
-          categoryId: it.categoryId ? Number(it.categoryId) : null,
-          roomId: it.roomId ? Number(it.roomId) : null,
-          materialId: it.materialId ? Number(it.materialId) : null,
-          colorId: it.colorId ? Number(it.colorId) : null,
-          lengthCm: it.lengthCm ? Number(it.lengthCm) : null,
-          widthCm: it.widthCm ? Number(it.widthCm) : null,
-          heightCm: it.heightCm ? Number(it.heightCm) : null,
-          quantity: Number(it.quantity) || 1,
-          unitPrice: it.unitPrice ? Number(it.unitPrice) : 0,
-          technicalNotes: it.technicalNotes?.trim() || null,
-          images: (it.images || []).map((img, imgIdx) => ({
-            imageUrl: typeof img === 'string' ? img : img.imageUrl,
-            requestItemId: it.requestItemId || null,
-            sortOrder: imgIdx,
-          })),
-        })),
-        images: items.flatMap((it, itemIdx) =>
-          (it.images || []).map((img, imgIdx) => ({
-            imageUrl: typeof img === 'string' ? img : img.imageUrl,
+        items: normalizedItems,
+        images: normalizedItems.flatMap((it, itemIdx) =>
+          it.images.map((img) => ({
+            imageUrl: img.imageUrl,
             requestItemId: it.requestItemId || null,
             itemIndex: itemIdx,
-            sortOrder: imgIdx,
+            sortOrder: img.sortOrder,
           }))
         ),
       };
@@ -525,8 +681,11 @@ export const CreateOrderRequestPage = () => {
       navigate('/sale/requests');
     } catch (err) {
       console.error('Lỗi khi gửi yêu cầu:', err);
-      toast.error(err.response?.data?.message || err.message || 'Lỗi khi gửi đơn theo yêu cầu.');
+      const errMsg = formatApiErrorMessage(err, 'gửi yêu cầu');
+      setSubmitError(errMsg);
+      toast.error(errMsg);
     } finally {
+      submitLockRef.current = false;
       setSubmitting(false);
     }
   };
@@ -986,6 +1145,24 @@ export const CreateOrderRequestPage = () => {
                       />
                     </label>
 
+                    {/* Thông báo nếu upload ảnh gặp lỗi (không tiếp tục submit cho đến khi xử lý) */}
+                    {it.uploadError && (
+                      <div className="flex items-start justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                          <span>{it.uploadError}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDismissUploadError(it.id)}
+                          className="text-rose-500 hover:text-rose-700 p-0.5"
+                          title="Đóng thông báo lỗi"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Danh sách ảnh thu nhỏ của riêng món này */}
                     {it.images.length > 0 ? (
                       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5 pt-1">
@@ -1097,8 +1274,15 @@ export const CreateOrderRequestPage = () => {
                 </h3>
               </div>
               <button
-                onClick={() => setSummaryModalOpen(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                type="button"
+                disabled={submitting}
+                onClick={() => {
+                  if (!submitting) {
+                    setSubmitError(null);
+                    setSummaryModalOpen(false);
+                  }
+                }}
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 disabled:opacity-50"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1106,6 +1290,15 @@ export const CreateOrderRequestPage = () => {
 
             {/* Nội dung tóm tắt */}
             <div className="p-6 text-xs text-stone-800 space-y-4">
+              {submitError && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-900">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-0.5">
+                    <p className="font-semibold text-rose-950">Không thể gửi yêu cầu đơn hàng</p>
+                    <p>{submitError}</p>
+                  </div>
+                </div>
+              )}
               {/* Thông tin khách hàng */}
               <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-4">
                 <div className="flex items-center justify-between mb-3 border-b border-stone-200/60 pb-2">
@@ -1220,8 +1413,14 @@ export const CreateOrderRequestPage = () => {
             <div className="flex items-center justify-end gap-3 border-t border-stone-200 bg-stone-50 px-6 py-4">
               <button
                 type="button"
-                onClick={() => setSummaryModalOpen(false)}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 font-medium text-stone-700 hover:bg-stone-50 text-sm"
+                disabled={submitting}
+                onClick={() => {
+                  if (!submitting) {
+                    setSubmitError(null);
+                    setSummaryModalOpen(false);
+                  }
+                }}
+                className="rounded-lg border border-stone-300 bg-white px-4 py-2 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50 text-sm"
               >
                 Chỉnh sửa lại
               </button>

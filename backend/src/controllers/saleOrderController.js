@@ -31,6 +31,9 @@ const {
   findRequestById: findRequestByIdModel,
   convertRequestToContract: convertRequestToContractModel,
   updateDesignFile: updateDesignFileModel,
+  getCustomersForSales,
+  createSalesOrderRequest,
+  updateSalesOrderRequest,
 } = require('../models/SaleRequestModel');
 
 const {
@@ -626,36 +629,61 @@ function toRequestDTO(raw) {
       contractCode: r.contract.contract_code,
       status: r.contract.status,
     } : null,
-    items: (r.items || []).map((it) => ({
-      requestItemId: it.request_item_id,
-      productId: it.product_id,
-      itemName: it.item_name,
-      categoryId: it.category_id,
-      roomId: it.room_id,
-      materialId: it.material_id,
-      colorId: it.color_id,
-      quantity: it.quantity,
-      unitPrice: it.unit_price ? Number(it.unit_price) : null,
-      description: it.description,
-      technicalNotes: it.description,
-      lengthCm: it.length_cm,
-      widthCm: it.width_cm,
-      heightCm: it.height_cm,
-      images: (r.images || [])
-        .filter((img) => img.request_item_id && Number(img.request_item_id) === Number(it.request_item_id))
-        .map((img) => ({
+    items: (r.items || []).map((it) => {
+      const rawItemImages =
+        Array.isArray(it.images) && it.images.length > 0
+          ? it.images
+          : (r.images || []).filter(
+              (img) => img.request_item_id && Number(img.request_item_id) === Number(it.request_item_id)
+            );
+      return {
+        requestItemId: it.request_item_id,
+        productId: it.product_id,
+        itemName: it.item_name,
+        categoryId: it.category_id,
+        roomId: it.room_id,
+        materialId: it.material_id,
+        colorId: it.color_id,
+        quantity: it.quantity,
+        unitPrice: it.unit_price ? Number(it.unit_price) : null,
+        description: it.description,
+        technicalNotes: it.description,
+        lengthCm: it.length_cm,
+        widthCm: it.width_cm,
+        heightCm: it.height_cm,
+        images: rawItemImages.map((img) => ({
           imageId: img.request_image_id,
           imageUrl: img.image_url,
-          requestItemId: img.request_item_id,
+          requestItemId: img.request_item_id ?? it.request_item_id ?? null,
           sortOrder: img.sort_order,
         })),
-    })),
-    images: (r.images || []).map((img) => ({
-      imageId: img.request_image_id,
-      imageUrl: img.image_url,
-      requestItemId: img.request_item_id,
-      sortOrder: img.sort_order,
-    })),
+      };
+    }),
+    images: (() => {
+      const seen = new Set();
+      const merged = [];
+      const addImage = (img, fallbackItemId = null) => {
+        if (!img) return;
+        const itemId = img.request_item_id ?? fallbackItemId;
+        const key =
+          img.request_image_id != null
+            ? `id:${img.request_image_id}`
+            : `url:${img.image_url || ''}:${itemId ?? ''}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push({
+          imageId: img.request_image_id,
+          imageUrl: img.image_url,
+          requestItemId: itemId,
+          sortOrder: img.sort_order,
+        });
+      };
+      (r.images || []).forEach((img) => addImage(img, null));
+      (r.items || []).forEach((it) => {
+        (it.images || []).forEach((img) => addImage(img, it.request_item_id ?? null));
+      });
+      return merged;
+    })(),
   };
 }
 
