@@ -26,7 +26,7 @@ const MaterialIssue = sequelize.define(
     },
     production_id: {
       type: DataTypes.BIGINT,
-      allowNull: false,
+      allowNull: true,
       references: { model: 'production_order', key: 'production_id' },
     },
     issue_date: {

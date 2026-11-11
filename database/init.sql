@@ -901,7 +901,7 @@ CREATE TABLE IF NOT EXISTS production_order_item (
 CREATE TABLE IF NOT EXISTS material_issue (
     issue_id       BIGINT        NOT NULL AUTO_INCREMENT,
     issue_code     VARCHAR(30)   NOT NULL,
-    production_id  BIGINT        NOT NULL,
+    production_id  BIGINT        NULL,
     issue_date     DATE          NOT NULL,
     status         VARCHAR(20)   NOT NULL DEFAULT 'DRAFT',
     issued_by      BIGINT        NULL,                  -- nhân viên xuất kho
@@ -917,7 +917,7 @@ CREATE TABLE IF NOT EXISTS material_issue (
     KEY idx_material_issue_issued_by (issued_by),
     CONSTRAINT fk_material_issue_production
         FOREIGN KEY (production_id) REFERENCES production_order (production_id)
-        ON UPDATE RESTRICT ON DELETE RESTRICT,
+        ON UPDATE CASCADE ON DELETE SET NULL,
     CONSTRAINT fk_material_issue_issued_by
         FOREIGN KEY (issued_by) REFERENCES user_account (user_account_id)
         ON UPDATE CASCADE ON DELETE SET NULL
