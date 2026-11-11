@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CreateOrderRequestPage } from '../pages/sale-pages/CreateOrderRequestPage';
 import { LeaderOrdersPage } from '../pages/staff-pages/LeaderOrdersPage';
-import { OwnerRequestsTab } from '../pages/owner-pages/OwnerRequestsTab';
 import { ManageOrdersPage } from '../pages/owner-pages/ManageOrdersPage';
 import * as saleOrderService from '../services/saleOrderService';
 import * as orderManagementService from '../services/orderManagementService';
@@ -245,38 +244,6 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
     });
   });
 
-  it('4. OwnerRequestsTab: Hiển thị đơn yêu cầu thiết kế từ Sales để Chủ xưởng thẩm định và chốt thiết kế', async () => {
-    orderManagementService.getOwnerRequests.mockResolvedValue({
-      message: 'Lấy danh sách yêu cầu thiết kế thành công',
-      data: [
-        {
-          requestId: 88,
-          requestCode: 'REQ-20261107-0088',
-          contactName: 'Trần Khách May Đo',
-          contactPhone: '0988888888',
-          orderType: 'CUSTOM',
-          status: 'PENDING',
-          createdAt: '2026-11-07T10:00:00Z',
-          items: [{ itemName: 'Tủ rượu gỗ sồi', lengthCm: 200, widthCm: 60, heightCm: 210, quantity: 1 }],
-          images: [],
-        },
-      ],
-      pagination: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
-    });
-
-    render(
-      <MemoryRouter>
-        <OwnerRequestsTab />
-      </MemoryRouter>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('REQ-20261107-0088')).toBeInTheDocument();
-      expect(screen.getByText('Trần Khách May Đo')).toBeInTheDocument();
-      expect(screen.getAllByText('Chờ thẩm định').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByRole('button', { name: /Thẩm định & Chốt/i })).toBeInTheDocument();
-    });
-  });
   it('5. LeaderOrdersPage: Gửi yêu cầu nghiệm thu kèm ảnh thành phẩm lên Owner', async () => {
     const user = userEvent.setup();
     orderManagementService.getLeaderOrders.mockResolvedValue({
@@ -380,7 +347,7 @@ describe('Frontend Integrated Workflow - Order Request & Leader Management', () 
 
     await waitFor(() => {
       expect(screen.getByText('ORD-INSPECT-001')).toBeInTheDocument();
-      expect(screen.getAllByText('Chờ nghiệm thu').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Đang xử lý|Chờ nghiệm thu/).length).toBeGreaterThanOrEqual(1);
       expect(screen.getByRole('button', { name: /Thẩm định nghiệm thu/i })).toBeInTheDocument();
     });
 

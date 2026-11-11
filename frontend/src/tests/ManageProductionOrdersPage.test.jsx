@@ -27,6 +27,15 @@ describe('ManageProductionOrdersPage Component', () => {
       assigned_to: 5,
       leader_name: 'Trần Văn Trưởng',
       leader_phone: '0901234567',
+      items: [
+        {
+          production_item_id: 1,
+          item_name: 'Tủ giày 3 tầng',
+          quantity_planned: 1,
+          quantity_done: 0,
+          dimensions: '100 × 35 × 110 cm',
+        },
+      ],
     },
     {
       production_id: 2,
@@ -192,5 +201,23 @@ describe('ManageProductionOrdersPage Component', () => {
     await waitFor(() => {
       expect(productionOrderService.cancelProductionOrder).toHaveBeenCalledWith(1);
     });
+  });
+
+  it('7. Hiển thị sản phẩm của đơn trong modal chi tiết khi bấm nút "Chi tiết"', async () => {
+    const user = userEvent.setup();
+    render(<ManageProductionOrdersPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('PO-20261031-0001')).toBeInTheDocument();
+    });
+
+    const detailBtns = screen.getAllByRole('button', { name: /Chi tiết/i });
+    expect(detailBtns.length).toBeGreaterThan(0);
+    await user.click(detailBtns[0]);
+
+    expect(screen.getByRole('heading', { name: /Chi Tiết Lệnh #PO-20261031-0001/i })).toBeInTheDocument();
+    expect(screen.getByText(/Danh Sách Sản Phẩm Cần Gia Công/i)).toBeInTheDocument();
+    expect(screen.getByText('Tủ giày 3 tầng')).toBeInTheDocument();
+    expect(screen.getByText(/100 × 35 × 110 cm/i)).toBeInTheDocument();
   });
 });

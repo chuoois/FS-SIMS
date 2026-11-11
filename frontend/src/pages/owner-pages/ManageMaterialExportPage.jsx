@@ -362,10 +362,6 @@ export const ManageMaterialExportPage = () => {
 
   // ── Submit Lưu phiếu xuất kho ─────────────────────────────
   const handleSubmitForm = async (targetStatus = null) => {
-    if (!form.production_id) {
-      toast.error('Vui lòng chọn lệnh gia công');
-      return;
-    }
     if (!form.issue_date) {
       toast.error('Vui lòng chọn ngày xuất kho');
       return;
@@ -412,7 +408,7 @@ export const ManageMaterialExportPage = () => {
     try {
       const submitData = {
         issue_code: form.issue_code ? form.issue_code.trim() : undefined,
-        production_id: Number(form.production_id),
+        production_id: form.production_id ? Number(form.production_id) : null,
         issue_date: form.issue_date,
         status: targetStatus || form.status || 'DRAFT',
         note: form.note || undefined,
@@ -744,8 +740,10 @@ export const ManageMaterialExportPage = () => {
 
                     {/* Lệnh gia công */}
                     <td className="px-3 py-3.5">
-                      <div className="font-medium text-stone-800">{issue.production_code}</div>
-                      <div className="text-xs text-stone-400">Loại: {issue.production_type}</div>
+                      <div className="font-medium text-stone-800">{issue.production_code || '—'}</div>
+                      {issue.production_type && (
+                        <div className="text-xs text-stone-400">Loại: {issue.production_type}</div>
+                      )}
                     </td>
 
                     {/* Người xuất */}
@@ -883,7 +881,7 @@ export const ManageMaterialExportPage = () => {
             {/* Nội dung Form */}
             <div className="max-h-[75vh] overflow-y-auto p-6 space-y-6">
               {/* Thông tin chung */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {/* Mã phiếu xuất */}
                 <div>
                   <label className="block text-xs font-semibold text-stone-700">
@@ -913,25 +911,6 @@ export const ManageMaterialExportPage = () => {
                     onChange={(e) => setForm({ ...form, issue_date: e.target.value })}
                     className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
                   />
-                </div>
-
-                {/* Lệnh gia công */}
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700">
-                    Lệnh gia công sản xuất <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={form.production_id}
-                    onChange={(e) => setForm({ ...form, production_id: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
-                  >
-                    <option value="">-- Chọn lệnh gia công --</option>
-                    {productionOrders.map((ord) => (
-                      <option key={ord.production_id} value={ord.production_id}>
-                        {ord.production_code} ({ord.production_type === 'CUSTOM' ? 'Đơn đặt riêng' : 'Làm hàng sẵn'})
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
 
@@ -1174,25 +1153,31 @@ export const ManageMaterialExportPage = () => {
                     <span>Lệnh Gia Công Sản Xuất</span>
                   </div>
                   <div className="mt-2.5 space-y-1 text-xs text-stone-700">
-                    <h4 className="text-base font-bold text-stone-900">
-                      {selectedIssue.production_order?.production_code || '—'}
-                    </h4>
-                    <p>
-                      <span className="font-semibold text-stone-600">Loại gia công:</span>{' '}
-                      {selectedIssue.production_order?.production_type === 'CUSTOM'
-                        ? 'Gia công theo đơn hàng riêng (CUSTOM)'
-                        : 'Sản xuất hàng lưu kho (STOCK)'}
-                    </p>
-                    <p>
-                      <span className="font-semibold text-stone-600">Trạng thái lệnh:</span>{' '}
-                      {selectedIssue.production_order?.status || '—'}
-                    </p>
-                    {selectedIssue.production_order?.planned_start && (
-                      <p>
-                        <span className="font-semibold text-stone-600">Kế hoạch:</span>{' '}
-                        {formatDate(selectedIssue.production_order.planned_start)} đến{' '}
-                        {formatDate(selectedIssue.production_order.planned_end)}
-                      </p>
+                    {selectedIssue.production_order ? (
+                      <>
+                        <h4 className="text-base font-bold text-stone-900">
+                          {selectedIssue.production_order.production_code || '—'}
+                        </h4>
+                        <p>
+                          <span className="font-semibold text-stone-600">Loại gia công:</span>{' '}
+                          {selectedIssue.production_order.production_type === 'CUSTOM'
+                            ? 'Gia công theo đơn hàng riêng (CUSTOM)'
+                            : 'Sản xuất hàng lưu kho (STOCK)'}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-stone-600">Trạng thái lệnh:</span>{' '}
+                          {selectedIssue.production_order.status || '—'}
+                        </p>
+                        {selectedIssue.production_order.planned_start && (
+                          <p>
+                            <span className="font-semibold text-stone-600">Kế hoạch:</span>{' '}
+                            {formatDate(selectedIssue.production_order.planned_start)} đến{' '}
+                            {formatDate(selectedIssue.production_order.planned_end)}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-stone-400 italic">Không gắn với lệnh gia công nào</p>
                     )}
                   </div>
                 </div>
@@ -1409,13 +1394,15 @@ export const ManageMaterialExportPage = () => {
               <div className="grid grid-cols-2 gap-y-2 text-xs text-stone-800 mb-6">
                 <div>
                   <span className="font-semibold text-stone-700">Lệnh gia công:</span>{' '}
-                  <span className="font-bold">{selectedIssue.production_order?.production_code}</span>
+                  <span className="font-bold">{selectedIssue.production_order?.production_code || '—'}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-stone-700">Loại sản xuất:</span>{' '}
-                  {selectedIssue.production_order?.production_type === 'CUSTOM'
-                    ? 'Gia công theo đơn riêng'
-                    : 'Sản xuất hàng kho'}
+                  {selectedIssue.production_order
+                    ? selectedIssue.production_order.production_type === 'CUSTOM'
+                      ? 'Gia công theo đơn riêng'
+                      : 'Sản xuất hàng kho'
+                    : 'Xuất kho trực tiếp'}
                 </div>
                 <div>
                   <span className="font-semibold text-stone-700">Thủ kho xuất:</span>{' '}

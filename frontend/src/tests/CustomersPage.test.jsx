@@ -7,11 +7,12 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { vi } from 'vitest';
 import { CustomersPage } from '../pages/sale-pages/CustomersPage';
 import * as saleOrderService from '../services/saleOrderService';
 
 // Mock service
-jest.mock('../services/saleOrderService');
+vi.mock('../services/saleOrderService');
 
 const mockPagination = {
   totalItems: 2,
@@ -58,7 +59,7 @@ function renderPage() {
 
 describe('CustomersPage', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     saleOrderService.getCustomers.mockResolvedValue({
       data: mockCustomers,
       pagination: mockPagination,

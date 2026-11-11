@@ -31,6 +31,16 @@ function getProductionOrderItem() {
   return _ProductionOrderItem;
 }
 
+let _Product = null;
+function getProduct() {
+  if (!_Product) {
+    try {
+      _Product = require('./ProductModel').Product;
+    } catch (_e) {}
+  }
+  return _Product;
+}
+
 const ProductionOrder = sequelize.define(
   'ProductionOrder',
   {
@@ -112,24 +122,55 @@ if (isModel(ProductionOrder) && isModel(UserAccount)) {
   }
 }
 
-// Setup CustomerOrder association lazily to avoid circular deps
-setImmediate(() => {
+// Setup CustomerOrder & ProductionOrderItem associations lazily to avoid circular deps
+function setupAssociations() {
   try {
     const CustomerOrder = getCustomerOrder();
+    const CustomerOrderItem = getCustomerOrderItem();
+    const ProductionOrderItem = getProductionOrderItem();
+    const Product = getProduct();
+
     if (isModel(ProductionOrder) && isModel(CustomerOrder)) {
       if (!ProductionOrder.associations || !ProductionOrder.associations.customerOrder) {
         ProductionOrder.belongsTo(CustomerOrder, { foreignKey: 'order_id', as: 'customerOrder' });
       }
     }
+
+    if (isModel(ProductionOrder) && isModel(ProductionOrderItem)) {
+      if (!ProductionOrder.associations || !ProductionOrder.associations.items) {
+        ProductionOrder.hasMany(ProductionOrderItem, { foreignKey: 'production_id', as: 'items' });
+      }
+      if (isModel(CustomerOrderItem) && (!ProductionOrderItem.associations || !ProductionOrderItem.associations.orderItem)) {
+        ProductionOrderItem.belongsTo(CustomerOrderItem, { foreignKey: 'order_item_id', as: 'orderItem' });
+      }
+      if (isModel(Product) && (!ProductionOrderItem.associations || !ProductionOrderItem.associations.product)) {
+        ProductionOrderItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+      }
+    }
+
+    if (isModel(CustomerOrderItem) && isModel(Product) && (!CustomerOrderItem.associations || !CustomerOrderItem.associations.product)) {
+      CustomerOrderItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+    }
+
+    if (isModel(CustomerOrder) && isModel(CustomerOrderItem)) {
+      if (!CustomerOrder.associations || !CustomerOrder.associations.items) {
+        CustomerOrder.hasMany(CustomerOrderItem, { foreignKey: 'order_id', as: 'items' });
+      }
+    }
   } catch (_e) {
-    // Ignore if CustomerOrder not available (e.g. during test mocking)
+    // Ignore if not available (e.g. during test mocking)
   }
-});
+}
+
+// Chạy khởi tạo ban đầu và trì hoãn 1 tick để phòng trường hợp model load tuần tự
+setupAssociations();
+setImmediate(setupAssociations);
 
 /**
  * Tìm lệnh gia công theo ID
  */
 async function findProductionOrderById(productionId) {
+  setupAssociations();
   const include = [];
   if (isModel(UserAccount)) {
     include.push({
@@ -138,6 +179,67 @@ async function findProductionOrderById(productionId) {
       attributes: ['user_account_id', 'full_name', 'email', 'phone_number'],
     });
   }
+
+  try {
+    const CustomerOrder = getCustomerOrder();
+    const CustomerOrderItem = getCustomerOrderItem();
+    if (isModel(CustomerOrder)) {
+      const orderInclude = [];
+      if (isModel(CustomerOrderItem)) {
+        orderInclude.push({
+          model: CustomerOrderItem,
+          as: 'items',
+          attributes: ['order_item_id', 'item_name', 'description', 'length_cm', 'width_cm', 'height_cm', 'quantity', 'unit_price'],
+          required: false,
+        });
+      }
+      include.push({
+        model: CustomerOrder,
+        as: 'customerOrder',
+        attributes: ['order_id', 'order_code', 'order_type', 'status', 'contact_name'],
+        include: orderInclude,
+        required: false,
+      });
+    }
+
+    const ProductionOrderItem = getProductionOrderItem();
+    const Product = getProduct();
+    if (isModel(ProductionOrderItem)) {
+      const itemInclude = [];
+      if (isModel(CustomerOrderItem)) {
+        const orderItemInclude = [];
+        if (isModel(Product)) {
+          orderItemInclude.push({
+            model: Product,
+            as: 'product',
+            attributes: ['product_id', 'product_name', 'product_code', 'image_url', 'length_cm', 'width_cm', 'height_cm'],
+            required: false,
+          });
+        }
+        itemInclude.push({
+          model: CustomerOrderItem,
+          as: 'orderItem',
+          attributes: ['order_item_id', 'item_name', 'description', 'length_cm', 'width_cm', 'height_cm', 'quantity', 'unit_price', 'product_id'],
+          include: orderItemInclude,
+          required: false,
+        });
+      }
+      if (isModel(Product)) {
+        itemInclude.push({
+          model: Product,
+          as: 'product',
+          attributes: ['product_id', 'product_name', 'product_code', 'image_url', 'length_cm', 'width_cm', 'height_cm'],
+          required: false,
+        });
+      }
+      include.push({
+        model: ProductionOrderItem,
+        as: 'items',
+        include: itemInclude,
+        required: false,
+      });
+    }
+  } catch (_e) {}
 
   return ProductionOrder.findByPk(productionId, { include });
 }
@@ -196,6 +298,8 @@ async function getAllProductionOrders({ page = 1, limit = 10, status, search } =
 
   const offset = (Number(page) - 1) * Number(limit);
 
+  setupAssociations();
+
   const include = [];
 
   // Include supervisor (UserAccount)
@@ -210,16 +314,65 @@ async function getAllProductionOrders({ page = 1, limit = 10, status, search } =
   // Include customer order (lazy-loaded to avoid circular deps)
   try {
     const CustomerOrder = getCustomerOrder();
+    const CustomerOrderItem = getCustomerOrderItem();
     if (isModel(CustomerOrder)) {
+      const orderInclude = [];
+      if (isModel(CustomerOrderItem)) {
+        orderInclude.push({
+          model: CustomerOrderItem,
+          as: 'items',
+          attributes: ['order_item_id', 'item_name', 'description', 'length_cm', 'width_cm', 'height_cm', 'quantity', 'unit_price'],
+          required: false,
+        });
+      }
       include.push({
         model: CustomerOrder,
         as: 'customerOrder',
         attributes: ['order_id', 'order_code', 'order_type', 'status', 'contact_name'],
+        include: orderInclude,
+        required: false,
+      });
+    }
+
+    const ProductionOrderItem = getProductionOrderItem();
+    const Product = getProduct();
+    if (isModel(ProductionOrderItem)) {
+      const itemInclude = [];
+      if (isModel(CustomerOrderItem)) {
+        const orderItemInclude = [];
+        if (isModel(Product)) {
+          orderItemInclude.push({
+            model: Product,
+            as: 'product',
+            attributes: ['product_id', 'product_name', 'product_code', 'image_url', 'length_cm', 'width_cm', 'height_cm'],
+            required: false,
+          });
+        }
+        itemInclude.push({
+          model: CustomerOrderItem,
+          as: 'orderItem',
+          attributes: ['order_item_id', 'item_name', 'description', 'length_cm', 'width_cm', 'height_cm', 'quantity', 'unit_price', 'product_id'],
+          include: orderItemInclude,
+          required: false,
+        });
+      }
+      if (isModel(Product)) {
+        itemInclude.push({
+          model: Product,
+          as: 'product',
+          attributes: ['product_id', 'product_name', 'product_code', 'image_url', 'length_cm', 'width_cm', 'height_cm'],
+          required: false,
+        });
+      }
+      include.push({
+        model: ProductionOrderItem,
+        as: 'items',
+        include: itemInclude,
         required: false,
       });
     }
   } catch (_e) {
-    // CustomerOrder not available (e.g. test mock), skip
+    // Models not available (e.g. test mock), skip
   }
 
   const { count, rows } = await ProductionOrder.findAndCountAll({
@@ -281,16 +434,19 @@ async function createProductionOrder({ orderId, plannedStart, plannedEnd, create
     if (!order) {
       throw new Error('Đơn hàng không tồn tại.');
     }
-    if (order.status !== 'CONFIRMED') {
-      throw new Error(`Đơn hàng phải ở trạng thái CONFIRMED để tạo lệnh gia công (trạng thái hiện tại: ${order.status}).`);
+    if (order.status !== 'IN_PRODUCTION') {
+      throw new Error(`Đơn hàng phải ở trạng thái Đang xử lý (IN_PRODUCTION) để tạo lệnh gia công (trạng thái hiện tại: ${order.status}).`);
     }
     if (order.order_type !== 'CUSTOM') {
       throw new Error(`Chỉ đơn hàng loại CUSTOM mới có thể tạo lệnh gia công (loại hiện tại: ${order.order_type}).`);
     }
 
-    // Kiểm tra đã có lệnh gia công chưa
+    // Kiểm tra đã có lệnh gia công đang hoạt động chưa
     const existing = await ProductionOrder.findOne({
-      where: { order_id: orderId },
+      where: {
+        order_id: orderId,
+        status: { [Op.ne]: 'CANCELLED' },
+      },
       transaction: t,
     });
     if (existing) {
@@ -325,6 +481,7 @@ async function createProductionOrder({ orderId, plannedStart, plannedEnd, create
           const poItems = orderItems.map((it) => ({
             production_id: po.production_id,
             order_item_id: it.order_item_id,
+            product_id: null,
             quantity_planned: it.quantity,
             quantity_done: 0,
             createby: createBy || 'system',
@@ -336,11 +493,13 @@ async function createProductionOrder({ orderId, plannedStart, plannedEnd, create
       console.warn('Không thể sao chép item sang production_order_item:', errItem.message);
     }
 
-    // Cập nhật trạng thái đơn hàng sang IN_PRODUCTION (hoặc PRODUCTION)
-    await CustomerOrder.update(
-      { status: 'IN_PRODUCTION', modifieby: createBy || 'system' },
-      { where: { order_id: orderId }, transaction: t }
-    );
+    // Cập nhật trạng thái đơn hàng sang IN_PRODUCTION nếu chưa phải
+    if (order.status !== 'IN_PRODUCTION') {
+      await CustomerOrder.update(
+        { status: 'IN_PRODUCTION', modifieby: createBy || 'system' },
+        { where: { order_id: orderId }, transaction: t }
+      );
+    }
 
     return po;
   });
@@ -399,22 +558,25 @@ async function cancelProductionOrder(productionId, modifieBy) {
 /**
  * Lấy danh sách đơn hàng đủ điều kiện để tạo lệnh gia công:
  * - Loại CUSTOM
- * - Trạng thái CONFIRMED
- * - Chưa có lệnh gia công
+ * - Trạng thái IN_PRODUCTION (Đang xử lý)
+ * - Chưa có lệnh gia công đang hoạt động (không tính CANCELLED)
  */
 async function getEligibleCustomerOrders() {
   const CustomerOrder = getCustomerOrder();
 
-  // Lấy danh sách order_id đã có lệnh gia công
+  // Lấy danh sách order_id đã có lệnh gia công chưa bị hủy
   const existingPOs = await ProductionOrder.findAll({
     attributes: ['order_id'],
-    where: { order_id: { [Op.ne]: null } },
+    where: {
+      order_id: { [Op.ne]: null },
+      status: { [Op.ne]: 'CANCELLED' },
+    },
   });
   const usedOrderIds = existingPOs.map((po) => po.order_id).filter(Boolean);
 
   const where = {
     order_type: 'CUSTOM',
-    status: 'CONFIRMED',
+    status: 'IN_PRODUCTION',
   };
 
   if (usedOrderIds.length > 0) {

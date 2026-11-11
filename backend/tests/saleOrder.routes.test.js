@@ -46,6 +46,9 @@ jest.mock('../src/models/SaleRequestModel', () => ({
   findRequestById: jest.fn(),
   convertRequestToContract: jest.fn(),
   updateDesignFile: jest.fn(),
+  getCustomersForSales: jest.fn(),
+  createSalesOrderRequest: jest.fn(),
+  updateSalesOrderRequest: jest.fn(),
 }));
 
 jest.mock('../src/models/SaleCustomerModel', () => ({

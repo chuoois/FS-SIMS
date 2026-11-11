@@ -9,6 +9,7 @@ const {
   validateCreateOrderFromContractInput,
   toContractDTO,
   toOrderDTO,
+  toRequestDTO,
 } = require('../src/utils/saleOrderValidator');
 
 describe('saleOrderValidator - validateCreateOfflineContractInput', () => {
@@ -195,5 +196,47 @@ describe('saleOrderValidator - DTO converters', () => {
     expect(dto.orderId).toBe(10);
     expect(dto.orderCode).toBe('ORD-20261028-0001');
     expect(dto.remainingAmount).toBe(3000000);
+  });
+
+  test('toRequestDTO chuyển đổi đúng cấu trúc yêu cầu kèm ảnh chung và ảnh theo sản phẩm', () => {
+    const raw = {
+      request_id: 100,
+      request_code: 'RQ-20261111-0001',
+      order_type: 'CUSTOM',
+      contact_name: 'Trần Văn B',
+      contact_phone: '0988776655',
+      title: 'Đặt đóng tủ bếp gỗ sồi',
+      items: [
+        {
+          request_item_id: 501,
+          item_name: 'Tủ bếp trên',
+          quantity: 1,
+          unit_price: 15000000,
+          images: [
+            {
+              request_image_id: 901,
+              request_item_id: 501,
+              image_url: 'https://cloudinary.com/tu-bep-1.jpg',
+            },
+          ],
+        },
+      ],
+      images: [
+        {
+          request_image_id: 900,
+          request_item_id: null,
+          image_url: 'https://cloudinary.com/hien-trang-bep.jpg',
+        },
+      ],
+    };
+
+    const dto = toRequestDTO(raw);
+    expect(dto.requestId).toBe(100);
+    expect(dto.requestCode).toBe('RQ-20261111-0001');
+    expect(dto.items).toHaveLength(1);
+    expect(dto.items[0].images).toHaveLength(1);
+    expect(dto.items[0].images[0].imageUrl).toBe('https://cloudinary.com/tu-bep-1.jpg');
+    expect(dto.images).toHaveLength(1);
+    expect(dto.images[0].imageUrl).toBe('https://cloudinary.com/hien-trang-bep.jpg');
   });
 });

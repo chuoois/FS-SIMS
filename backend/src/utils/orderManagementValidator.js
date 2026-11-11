@@ -8,12 +8,12 @@ const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'UNDE
 
 const STATUS_LABELS = {
   NEW: 'Mới',
-  CONFIRMED: 'Chờ phân công SX',
-  IN_PRODUCTION: 'Đang sản xuất',
-  PROCESSING: 'Đang sản xuất',
-  UNDER_INSPECTION: 'Chờ nghiệm thu',
-  READY_TO_DELIVER: 'Đã nghiệm thu (Chờ giao)',
-  DELIVERING: 'Đang giao hàng',
+  CONFIRMED: 'Đã xác nhận',
+  IN_PRODUCTION: 'Đang xử lý',
+  PROCESSING: 'Đang xử lý',
+  UNDER_INSPECTION: 'Đang xử lý',
+  READY_TO_DELIVER: 'Đang xử lý',
+  DELIVERING: 'Đang xử lý',
   COMPLETED: 'Hoàn thành',
   CANCELLED: 'Đã hủy',
 };
@@ -27,10 +27,10 @@ const ORDER_TYPE_LABELS = {
 const NEXT_ORDER_STATUS = {
   NEW: 'CONFIRMED',
   CONFIRMED: 'IN_PRODUCTION',
-  IN_PRODUCTION: 'UNDER_INSPECTION',
-  PROCESSING: 'UNDER_INSPECTION',
-  UNDER_INSPECTION: 'READY_TO_DELIVER',
-  READY_TO_DELIVER: 'DELIVERING',
+  IN_PRODUCTION: 'COMPLETED',
+  PROCESSING: 'COMPLETED',
+  UNDER_INSPECTION: 'COMPLETED',
+  READY_TO_DELIVER: 'COMPLETED',
   DELIVERING: 'COMPLETED',
 };
 

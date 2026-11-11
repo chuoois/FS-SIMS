@@ -21,13 +21,14 @@ function validateCreateExportInput(data = {}) {
     items,
   } = data;
 
-  // 1. Kiểm tra lệnh gia công (production_id)
-  if (production_id === undefined || production_id === null || String(production_id).trim() === '') {
-    return { isValid: false, error: 'Vui lòng chọn lệnh gia công cho phiếu xuất kho.' };
-  }
-  const pId = Number(production_id);
-  if (isNaN(pId) || pId <= 0) {
-    return { isValid: false, error: 'ID lệnh gia công không hợp lệ.' };
+  // 1. Kiểm tra lệnh gia công (production_id) - Không bắt buộc
+  let pId = null;
+  if (production_id !== undefined && production_id !== null && String(production_id).trim() !== '') {
+    const parsed = Number(production_id);
+    if (isNaN(parsed) || parsed <= 0) {
+      return { isValid: false, error: 'ID lệnh gia công không hợp lệ.' };
+    }
+    pId = parsed;
   }
 
   // 2. Kiểm tra ngày xuất kho (issue_date)
@@ -158,13 +159,17 @@ function validateUpdateExportInput(data = {}) {
 
   const result = {};
 
-  // 1. production_id
-  if (production_id !== undefined && production_id !== null) {
-    const pId = Number(production_id);
-    if (isNaN(pId) || pId <= 0) {
-      return { isValid: false, error: 'ID lệnh gia công không hợp lệ.' };
+  // 1. production_id (Không bắt buộc)
+  if (production_id !== undefined) {
+    if (production_id === null || String(production_id).trim() === '') {
+      result.production_id = null;
+    } else {
+      const pId = Number(production_id);
+      if (isNaN(pId) || pId <= 0) {
+        return { isValid: false, error: 'ID lệnh gia công không hợp lệ.' };
+      }
+      result.production_id = pId;
     }
-    result.production_id = pId;
   }
 
   // 2. issue_date

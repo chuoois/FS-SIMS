@@ -287,11 +287,11 @@ describe('Manage Material Export Slips API (/api/material-exports)', () => {
       ],
     };
 
-    test('trả về 400 khi thiếu production_id', async () => {
+    test('trả về 400 khi production_id không hợp lệ', async () => {
       const res = await request(app)
         .post('/api/material-exports')
         .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ ...validBody, production_id: undefined });
+        .send({ ...validBody, production_id: -999 });
 
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(/lệnh gia công/);

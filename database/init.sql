@@ -901,7 +901,7 @@ CREATE TABLE IF NOT EXISTS production_order_item (
 CREATE TABLE IF NOT EXISTS material_issue (
     issue_id       BIGINT        NOT NULL AUTO_INCREMENT,
     issue_code     VARCHAR(30)   NOT NULL,
-    production_id  BIGINT        NOT NULL,
+    production_id  BIGINT        NULL,
     issue_date     DATE          NOT NULL,
     status         VARCHAR(20)   NOT NULL DEFAULT 'DRAFT',
     issued_by      BIGINT        NULL,                  -- nhân viên xuất kho
@@ -917,7 +917,7 @@ CREATE TABLE IF NOT EXISTS material_issue (
     KEY idx_material_issue_issued_by (issued_by),
     CONSTRAINT fk_material_issue_production
         FOREIGN KEY (production_id) REFERENCES production_order (production_id)
-        ON UPDATE RESTRICT ON DELETE RESTRICT,
+        ON UPDATE CASCADE ON DELETE SET NULL,
     CONSTRAINT fk_material_issue_issued_by
         FOREIGN KEY (issued_by) REFERENCES user_account (user_account_id)
         ON UPDATE CASCADE ON DELETE SET NULL
@@ -1322,11 +1322,11 @@ SET @ct1 = (SELECT contract_id FROM contract WHERE contract_code = 'CT-20261016-
 -- =========================================================
 INSERT INTO contract_item (contract_id, product_id, request_item_id, item_name, description, category_id, room_id, material_id, color_id, length_cm, width_cm, height_cm, quantity, unit_price)
 VALUES
-    (@ct1, NULL,     @rqi1a, 'Tủ quần áo gỗ thông 2 cánh', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 6800000),
-    (@ct1, NULL,     @rqi1b, 'Kệ sách gỗ cao su',          NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2, 2200000),
+    (@ct1, NULL,     @rqi1a, 'Tủ quần áo gỗ thông 2 cánh', NULL, NULL, NULL, NULL, NULL, 120, 55, 200, 1, 6800000),
+    (@ct1, NULL,     @rqi1b, 'Kệ sách gỗ cao su',          NULL, NULL, NULL, NULL, NULL, 80, 30, 180, 2, 2200000),
     (@ct2, NULL,     @rqi2,  'Tủ giày 3 tầng', 'Có 3 ngăn kéo, tay nắm màu đen', @c_cabinet, @r_living, @m_oak, @col_white, 100, 35, 110, 1, 3500000),
-    (@ct3, @p_table, NULL,   'Bàn ăn gỗ sồi 6 người',      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 4500000),
-    (@ct3, @p_chair, NULL,   'Ghế ăn gỗ sồi',              NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4, 900000);
+    (@ct3, @p_table, NULL,   'Bàn ăn gỗ sồi 6 người',      NULL, NULL, NULL, NULL, NULL, 160, 80, 75, 1, 4500000),
+    (@ct3, @p_chair, NULL,   'Ghế ăn gỗ sồi',              NULL, NULL, NULL, NULL, NULL, 45, 50, 90, 4, 900000);
 
 
 -- =========================================================
@@ -1355,15 +1355,15 @@ SET @od1 = (SELECT order_id FROM customer_order WHERE order_code = 'ORD-20261017
 INSERT INTO customer_order_item (order_id, contract_item_id, product_id, item_name, description, category_id, room_id, material_id, color_id, length_cm, width_cm, height_cm, quantity, unit_price)
 VALUES
     (@od1, (SELECT contract_item_id FROM contract_item WHERE contract_id = @ct1 AND item_name = 'Tủ quần áo gỗ thông 2 cánh'),
-           @p_wardrobe, 'Tủ quần áo gỗ thông 2 cánh', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 6800000),
+           @p_wardrobe, 'Tủ quần áo gỗ thông 2 cánh', NULL, NULL, NULL, NULL, NULL, 120, 55, 200, 1, 6800000),
     (@od1, (SELECT contract_item_id FROM contract_item WHERE contract_id = @ct1 AND item_name = 'Kệ sách gỗ cao su'),
-           @p_shelf,    'Kệ sách gỗ cao su',          NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 2, 2200000),
+           @p_shelf,    'Kệ sách gỗ cao su',          NULL, NULL, NULL, NULL, NULL, 80, 30, 180, 2, 2200000),
     (@od2, (SELECT contract_item_id FROM contract_item WHERE contract_id = @ct2 AND item_name = 'Tủ giày 3 tầng'),
            NULL,        'Tủ giày 3 tầng', 'Có 3 ngăn kéo, tay nắm màu đen', @c_cabinet, @r_living, @m_oak, @col_white, 100, 35, 110, 1, 3500000),
     (@od3, (SELECT contract_item_id FROM contract_item WHERE contract_id = @ct3 AND item_name = 'Bàn ăn gỗ sồi 6 người'),
-           @p_table,    'Bàn ăn gỗ sồi 6 người',      NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 4500000),
+           @p_table,    'Bàn ăn gỗ sồi 6 người',      NULL, NULL, NULL, NULL, NULL, 160, 80, 75, 1, 4500000),
     (@od3, (SELECT contract_item_id FROM contract_item WHERE contract_id = @ct3 AND item_name = 'Ghế ăn gỗ sồi'),
-           @p_chair,    'Ghế ăn gỗ sồi',              NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 4, 900000);
+           @p_chair,    'Ghế ăn gỗ sồi',              NULL, NULL, NULL, NULL, NULL, 45, 50, 90, 4, 900000);
 
 
 -- =========================================================

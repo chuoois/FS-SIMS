@@ -130,8 +130,8 @@ async function createProductionOrderHandler(req, res) {
     // Business logic errors return 400
     const clientErrors = [
       'Đơn hàng không tồn tại',
-      'phải ở trạng thái CONFIRMED',
-      'Chỉ đơn hàng loại CUSTOM',
+      'phải ở trạng thái',
+      'Chỉ đơn hàng',
       'đã có lệnh gia công',
     ];
     const isClientError = clientErrors.some((msg) => error.message && error.message.includes(msg));

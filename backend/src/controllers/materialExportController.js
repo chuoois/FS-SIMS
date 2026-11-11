@@ -173,12 +173,14 @@ async function createMaterialExport(req, res) {
       items,
     } = validation.value;
 
-    // 1. Kiểm tra lệnh gia công có tồn tại
-    const prodOrder = await findProductionOrderById(production_id);
-    if (!prodOrder) {
-      return res.status(400).json({
-        message: `Lệnh gia công với ID ${production_id} không tồn tại trong hệ thống.`,
-      });
+    // 1. Kiểm tra lệnh gia công có tồn tại (nếu có)
+    if (production_id) {
+      const prodOrder = await findProductionOrderById(production_id);
+      if (!prodOrder) {
+        return res.status(400).json({
+          message: `Lệnh gia công với ID ${production_id} không tồn tại trong hệ thống.`,
+        });
+      }
     }
 
     // 2. Kiểm tra tất cả nguyên vật liệu có tồn tại & đang ACTIVE
