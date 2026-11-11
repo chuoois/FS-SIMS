@@ -151,7 +151,7 @@ function DesignStatusBadge({ count = 0 }) {
 }
 
 // ─── Component Thẻ Bản Thiết Kế Cho Từng Sản Phẩm ────────────────
-function ItemDesignCard({ item, index, requestId, onUpdated }) {
+function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated }) {
   const [description, setDescription] = useState(item.description || '');
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
@@ -215,7 +215,30 @@ function ItemDesignCard({ item, index, requestId, onUpdated }) {
     }
   };
 
-  const itemImages = item.images || [];
+  const itemImages = (item.images || [])
+    .map((img) => (typeof img === 'string' ? { imageUrl: img } : img))
+    .filter((img) => img?.imageUrl);
+
+  const isOwnerImg = (img) =>
+    Boolean(
+      img.imageType === 'OWNER_DESIGN' ||
+      img.isOwnerDesign ||
+      (typeof img.createdBy === 'string' && img.createdBy.toUpperCase().includes('OWNER')) ||
+      (typeof img.imageUrl === 'string' && img.imageUrl.includes('design_files'))
+    );
+
+  const directCustomerImages = itemImages.filter((img) => !isOwnerImg(img));
+  const ownerImages = itemImages.filter((img) => isOwnerImg(img));
+
+  // Nếu sản phẩm không có ảnh mẫu riêng, lấy ảnh tham khảo chung của yêu cầu (nếu có)
+  const customerImages =
+    directCustomerImages.length > 0
+      ? directCustomerImages
+      : (generalImages || [])
+          .map((img) => (typeof img === 'string' ? { imageUrl: img } : img))
+          .filter((img) => img?.imageUrl && !isOwnerImg(img));
+
+  const isUsingGeneral = directCustomerImages.length === 0 && customerImages.length > 0;
 
   return (
     <div className="rounded-xl border border-stone-300 bg-white p-4 shadow-xs space-y-3.5 transition hover:border-amber-400">
@@ -251,7 +274,7 @@ function ItemDesignCard({ item, index, requestId, onUpdated }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-center">
+        <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
           {itemImages.length > 0 ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -261,6 +284,16 @@ function ItemDesignCard({ item, index, requestId, onUpdated }) {
             <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500 border border-stone-200">
               <Clock className="h-3.5 w-3.5 text-stone-400" />
               Chưa có ảnh
+            </span>
+          )}
+          {customerImages.length > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 border border-sky-200">
+              {customerImages.length} ảnh khách
+            </span>
+          )}
+          {ownerImages.length > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 border border-amber-300">
+              {ownerImages.length} bản vẽ xưởng
             </span>
           )}
         </div>
@@ -274,35 +307,112 @@ function ItemDesignCard({ item, index, requestId, onUpdated }) {
         </div>
       )}
 
-      {/* Danh sách ảnh thiết kế của món */}
-      {itemImages.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-stone-800 flex items-center gap-1.5">
-            <ImageIcon className="h-3.5 w-3.5 text-amber-700" />
-            Ảnh bản vẽ / thiết kế của sản phẩm ({itemImages.length} ảnh):
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {itemImages.map((img, imgIdx) => (
-              <a
-                key={img.imageId || imgIdx}
-                href={img.imageUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="group relative block overflow-hidden rounded-lg border border-stone-200 bg-stone-100 aspect-square shadow-2xs"
-              >
-                <img
-                  src={img.imageUrl}
-                  alt={`Bản vẽ ${item.itemName} ${imgIdx + 1}`}
-                  className="h-full w-full object-cover transition group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
-                  <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
-                </div>
-              </a>
-            ))}
+      {/* ── KHỐI PHÂN BIỆT RÕ RÀNG: ẢNH CỦA KHÁCH VS BẢN VẼ CỦA CHỦ XƯỞNG ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {/* Khối 1: Ảnh mẫu tham khảo do khách hàng gửi */}
+        <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3.5 space-y-2.5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-2 border-b border-sky-100">
+              <div className="flex items-center gap-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                  <ImageIcon className="h-3 w-3" />
+                </span>
+                <h5 className="text-xs font-bold text-sky-950 uppercase tracking-wide">
+                  Ảnh mẫu khách gửi
+                </h5>
+              </div>
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+                {customerImages.length} ảnh
+              </span>
+            </div>
+
+            {customerImages.length > 0 ? (
+              <div className="grid grid-cols-3 gap-2 mt-2.5">
+                {customerImages.map((img, imgIdx) => (
+                  <a
+                    key={img.imageId || imgIdx}
+                    href={img.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group relative block overflow-hidden rounded-lg border border-sky-200 bg-white aspect-square shadow-2xs hover:border-sky-400 transition"
+                  >
+                    <img
+                      src={img.imageUrl}
+                      alt={`Ảnh mẫu khách gửi ${imgIdx + 1}`}
+                      className="h-full w-full object-cover transition group-hover:scale-105"
+                    />
+                    <span className="absolute top-1 left-1 rounded bg-sky-700/90 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white shadow-xs">
+                      {isUsingGeneral ? 'Khách gửi (Ảnh chung)' : 'Khách gửi'}
+                    </span>
+                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
+                      <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-sky-200 bg-sky-50/60 p-4 text-center text-xs text-sky-600 mt-2.5">
+                Khách không đính kèm ảnh mẫu tham khảo.
+              </div>
+            )}
           </div>
+          <p className="text-[11px] text-sky-600/90 italic mt-2">
+            💡 Dùng làm tư liệu tham khảo yêu cầu thực tế của khách hàng.
+          </p>
         </div>
-      )}
+
+        {/* Khối 2: Bản vẽ kỹ thuật thiết kế của Chủ xưởng */}
+        <div className="rounded-xl border border-amber-300 bg-amber-50/40 p-3.5 space-y-2.5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-2 border-b border-amber-200/80">
+              <div className="flex items-center gap-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-amber-900">
+                  <FileUp className="h-3 w-3" />
+                </span>
+                <h5 className="text-xs font-bold text-amber-950 uppercase tracking-wide">
+                  Bản vẽ thiết kế của Chủ xưởng
+                </h5>
+              </div>
+              <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                {ownerImages.length} bản vẽ
+              </span>
+            </div>
+
+            {ownerImages.length > 0 ? (
+              <div className="grid grid-cols-3 gap-2 mt-2.5">
+                {ownerImages.map((img, imgIdx) => (
+                  <a
+                    key={img.imageId || imgIdx}
+                    href={img.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group relative block overflow-hidden rounded-lg border border-amber-300 bg-white aspect-square shadow-2xs hover:border-amber-500 transition"
+                  >
+                    <img
+                      src={img.imageUrl}
+                      alt={`Bản vẽ thiết kế xưởng ${imgIdx + 1}`}
+                      className="h-full w-full object-cover transition group-hover:scale-105"
+                    />
+                    <span className="absolute top-1 left-1 rounded bg-amber-800/90 backdrop-blur-xs px-1.5 py-0.5 text-[10px] font-medium text-white shadow-xs">
+                      Bản vẽ xưởng
+                    </span>
+                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
+                      <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-4 text-center text-xs text-amber-700 mt-2.5">
+                Chưa có bản vẽ xưởng nào cho món này. Hãy tải ảnh bản vẽ ở biểu mẫu phía dưới.
+              </div>
+            )}
+          </div>
+          <p className="text-[11px] text-amber-700/90 italic mt-2">
+            📐 Bản vẽ kỹ thuật xưởng sẽ được gửi sang Sales để trao đổi & chốt hợp đồng.
+          </p>
+        </div>
+      </div>
 
       {/* Form tải lên bản thiết kế & cập nhật mô tả kỹ thuật cho món */}
       <form onSubmit={handleSendItemDesign} className="rounded-lg bg-stone-50/80 p-3.5 border border-stone-200 space-y-3">
@@ -559,6 +669,14 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                     </p>
                   </div>
                 )}
+                {detail.description && (
+                  <div>
+                    <p className="text-xs text-stone-400 mb-1">Ghi chú / Yêu cầu của khách hàng</p>
+                    <p className="text-sm text-stone-800 bg-stone-50 rounded-lg p-3 border border-stone-200 whitespace-pre-line">
+                      {detail.description}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* KHỐI TRỌNG TÂM: BẢN THIẾT KẾ CHO TỪNG SẢN PHẨM */}
@@ -585,6 +703,7 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                         item={item}
                         index={idx}
                         requestId={requestId}
+                        generalImages={detail.images}
                         onUpdated={(newData) => {
                           if (newData) setDetail(newData);
                           if (onUpdated) onUpdated();
@@ -597,54 +716,6 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                     </div>
                   )}
                 </div>
-              </div>
-
-              {/* Ảnh tham khảo & Ghi chú do khách hàng gửi sang */}
-              <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-                  <ImageIcon className="h-4 w-4 text-amber-700" /> Ảnh tham khảo & Ghi chú do khách hàng gửi
-                </h3>
-
-                {detail.description && (
-                  <div>
-                    <p className="text-xs text-stone-400 mb-1">Mô tả / Yêu cầu ban đầu của khách hàng:</p>
-                    <p className="text-sm text-stone-800 bg-white rounded-lg p-3 border border-stone-200 whitespace-pre-line">
-                      {detail.description}
-                    </p>
-                  </div>
-                )}
-
-                {detail.images && detail.images.length > 0 ? (
-                  <div>
-                    <p className="text-xs font-semibold text-stone-700 mb-1.5">
-                      Ảnh tham khảo / hiện trạng do khách hàng đính kèm ({detail.images.length} ảnh):
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                      {detail.images.map((img, idx) => (
-                        <a
-                          key={img.imageId || idx}
-                          href={img.imageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="group relative block overflow-hidden rounded-lg border border-stone-200 bg-white aspect-square shadow-2xs"
-                        >
-                          <img
-                            src={img.imageUrl}
-                            alt={`Ảnh tham khảo của khách ${idx + 1}`}
-                            className="h-full w-full object-cover transition group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-xs font-medium gap-1">
-                            <ExternalLink className="h-3.5 w-3.5" /> Xem lớn
-                          </div>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-stone-400 italic">
-                    Khách hàng không đính kèm ảnh tham khảo chung.
-                  </p>
-                )}
               </div>
 
               {/* Hợp đồng liên kết */}

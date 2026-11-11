@@ -634,36 +634,70 @@ function toRequestDTO(raw) {
       contractCode: r.contract.contract_code,
       status: r.contract.status,
     } : null,
-    items: (r.items || []).map((it) => ({
-      requestItemId: it.request_item_id,
-      productId: it.product_id,
-      itemName: it.item_name,
-      categoryId: it.category_id,
-      roomId: it.room_id,
-      materialId: it.material_id,
-      colorId: it.color_id,
-      quantity: it.quantity,
-      unitPrice: it.unit_price ? Number(it.unit_price) : null,
-      description: it.description,
-      technicalNotes: it.description,
-      lengthCm: it.length_cm,
-      widthCm: it.width_cm,
-      heightCm: it.height_cm,
-      images: (r.images || [])
-        .filter((img) => img.request_item_id && Number(img.request_item_id) === Number(it.request_item_id))
-        .map((img) => ({
-          imageId: img.request_image_id,
-          imageUrl: img.image_url,
-          requestItemId: img.request_item_id,
-          sortOrder: img.sort_order,
-        })),
-    })),
-    images: (r.images || []).map((img) => ({
-      imageId: img.request_image_id,
-      imageUrl: img.image_url,
-      requestItemId: img.request_item_id,
-      sortOrder: img.sort_order,
-    })),
+    items: (r.items || []).map((it) => {
+      const itRawImages = (it.images && Array.isArray(it.images) && it.images.length > 0)
+        ? it.images
+        : (r.images || []).filter((img) => {
+            const rId = img.request_item_id || img.requestItemId;
+            const itId = it.request_item_id || it.requestItemId;
+            return rId && itId && Number(rId) === Number(itId);
+          });
+
+      return {
+        requestItemId: it.request_item_id,
+        productId: it.product_id,
+        itemName: it.item_name,
+        categoryId: it.category_id,
+        roomId: it.room_id,
+        materialId: it.material_id,
+        colorId: it.color_id,
+        quantity: it.quantity,
+        unitPrice: it.unit_price ? Number(it.unit_price) : null,
+        description: it.description,
+        technicalNotes: it.description,
+        lengthCm: it.length_cm,
+        widthCm: it.width_cm,
+        heightCm: it.height_cm,
+        images: (itRawImages || []).map((img) => {
+          const url = typeof img === 'string' ? img : (img.image_url || img.imageUrl);
+          const createdBy = typeof img === 'object' ? (img.createby || img.createBy || img.createdBy || null) : null;
+          const isOwner = Boolean(
+            (createdBy && String(createdBy).toUpperCase().includes('OWNER')) ||
+            (typeof url === 'string' && url.includes('design_files')) ||
+            (typeof img === 'object' && (img.imageType === 'OWNER_DESIGN' || img.isOwnerDesign))
+          );
+
+          return {
+            imageId: img.request_image_id || img.requestImageId || img.imageId,
+            imageUrl: url,
+            requestItemId: img.request_item_id || img.requestItemId || it.request_item_id,
+            sortOrder: img.sort_order ?? img.sortOrder ?? 0,
+            createdBy,
+            imageType: isOwner ? 'OWNER_DESIGN' : 'CUSTOMER_REF',
+            isOwnerDesign: isOwner,
+          };
+        }),
+      };
+    }),
+    images: (r.images || []).map((img) => {
+      const url = typeof img === 'string' ? img : (img.image_url || img.imageUrl);
+      const createdBy = typeof img === 'object' ? (img.createby || img.createBy || img.createdBy || null) : null;
+      const isOwner = Boolean(
+        (createdBy && String(createdBy).toUpperCase().includes('OWNER')) ||
+        (typeof url === 'string' && url.includes('design_files')) ||
+        (typeof img === 'object' && (img.imageType === 'OWNER_DESIGN' || img.isOwnerDesign))
+      );
+
+      return {
+        imageId: img.request_image_id || img.requestImageId || img.imageId,
+        imageUrl: url,
+        requestItemId: img.request_item_id || img.requestItemId || null,
+        sortOrder: img.sort_order ?? img.sortOrder ?? 0,
+        createdBy,
+        imageType: isOwner ? 'OWNER_DESIGN' : 'CUSTOMER_REF',
+        isOwnerDesign: isOwner,
+      };
+    }),
   };
 }
 
@@ -675,34 +709,34 @@ function toRequestDTO(raw) {
  */
 async function getSaleCustomers(req, res) {
   try {
-    const { page, limit, search, search_by, status } = req.query;
+    const { page, limit, search, search_by, status, mode } = req.query;
 
-    // Phân trang & Quản lý khách hàng
-    if (page !== undefined || status !== undefined) {
-      const result = await getCustomersModel({ page, limit, search, search_by, status });
+    // Dropdown / Autocomplete cho tạo đơn
+    if (mode === 'dropdown' || req.query.autocomplete === 'true') {
+      const customers = await getCustomersForSales({ search });
       return res.status(200).json({
         message: 'Lấy danh sách khách hàng thành công',
-        data: result.customers,
-        pagination: {
-          totalItems: result.totalItems,
-          totalPages: result.totalPages,
-          currentPage: result.currentPage,
-          itemsPerPage: result.itemsPerPage,
-        },
+        data: (customers || []).map((c) => ({
+          customerAccountId: c.user_account_id,
+          fullName: c.full_name,
+          phoneNumber: c.phone_number,
+          email: c.email,
+          address: c.address,
+        })),
       });
     }
 
-    // Dropdown / Autocomplete cho tạo đơn
-    const customers = await getCustomersForSales({ search });
+    // Phân trang & Quản lý khách hàng mặc định
+    const result = await getCustomersModel({ page, limit, search, search_by, status });
     return res.status(200).json({
       message: 'Lấy danh sách khách hàng thành công',
-      data: (customers || []).map((c) => ({
-        customerAccountId: c.user_account_id,
-        fullName: c.full_name,
-        phoneNumber: c.phone_number,
-        email: c.email,
-        address: c.address,
-      })),
+      data: result.customers,
+      pagination: {
+        totalItems: result.totalItems,
+        totalPages: result.totalPages,
+        currentPage: result.currentPage,
+        itemsPerPage: result.itemsPerPage,
+      },
     });
   } catch (error) {
     console.error('[saleOrderController.getSaleCustomers]', error);

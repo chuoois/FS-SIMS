@@ -424,6 +424,13 @@ function ConvertToContractModal({ request, onClose, onSuccess }) {
       quantity: it.quantity || 1,
       unitPrice: it.unitPrice || 0,
       description: it.description || null,
+      lengthCm: it.lengthCm ?? it.length_cm ?? null,
+      widthCm: it.widthCm ?? it.width_cm ?? null,
+      heightCm: it.heightCm ?? it.height_cm ?? null,
+      categoryId: it.categoryId || it.category_id || null,
+      roomId: it.roomId || it.room_id || null,
+      materialId: it.materialId || it.material_id || null,
+      colorId: it.colorId || it.color_id || null,
     }));
   }, [request]);
 
@@ -498,6 +505,13 @@ function ConvertToContractModal({ request, onClose, onSuccess }) {
           quantity: item.quantity,
           unit_price: item.unitPrice,
           description: item.description,
+          length_cm: item.lengthCm,
+          width_cm: item.widthCm,
+          height_cm: item.heightCm,
+          category_id: item.categoryId,
+          room_id: item.roomId,
+          material_id: item.materialId,
+          color_id: item.colorId,
         })),
       };
 

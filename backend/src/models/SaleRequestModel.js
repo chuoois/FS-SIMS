@@ -21,8 +21,12 @@ if (!OrderRequest.associations || !OrderRequest.associations.items) {
   }
 }
 if (!OrderRequestItem.associations || !OrderRequestItem.associations.images) {
-  OrderRequestItem.hasMany(OrderRequestImage, { foreignKey: 'request_item_id', as: 'images' });
-  OrderRequestImage.belongsTo(OrderRequestItem, { foreignKey: 'request_item_id', as: 'item' });
+  if (typeof OrderRequestItem === 'function' && typeof OrderRequestItem.hasMany === 'function') {
+    OrderRequestItem.hasMany(OrderRequestImage, { foreignKey: 'request_item_id', as: 'images' });
+  }
+  if (typeof OrderRequestImage === 'function' && typeof OrderRequestImage.belongsTo === 'function') {
+    OrderRequestImage.belongsTo(OrderRequestItem, { foreignKey: 'request_item_id', as: 'item' });
+  }
 }
 if (!OrderRequest.associations || !OrderRequest.associations.images) {
   if (typeof OrderRequest === 'function' && typeof OrderRequest.hasMany === 'function') {
@@ -293,21 +297,34 @@ async function convertRequestToContract({
       const productId = item.product_id || item.productId || null;
       const hasProductId = Boolean(productId);
       const reqItemId = item.request_item_id || item.requestItemId || null;
+
+      // Tìm thông tin gốc từ order_request_item nếu có
+      const orig = (request.items || []).find((ri) => {
+        const riId = ri.request_item_id || ri.requestItemId;
+        const riPid = ri.product_id || ri.productId;
+        return (reqItemId && String(riId) === String(reqItemId)) ||
+               (productId && String(riPid) === String(productId));
+      });
+
+      const len = item.length_cm ?? item.lengthCm ?? orig?.length_cm ?? orig?.lengthCm ?? null;
+      const wid = item.width_cm ?? item.widthCm ?? orig?.width_cm ?? orig?.widthCm ?? null;
+      const hei = item.height_cm ?? item.heightCm ?? orig?.height_cm ?? orig?.heightCm ?? null;
+
       return {
         contract_id: contract.contract_id,
         product_id: hasProductId ? productId : null,
         request_item_id: hasProductId ? null : reqItemId,
-        item_name: item.item_name || item.itemName || 'Sản phẩm',
-        category_id: item.category_id || item.categoryId || null,
-        room_id: item.room_id || item.roomId || null,
-        material_id: item.material_id || item.materialId || null,
-        color_id: item.color_id || item.colorId || null,
-        length_cm: item.length_cm || item.lengthCm || null,
-        width_cm: item.width_cm || item.widthCm || null,
-        height_cm: item.height_cm || item.heightCm || null,
+        item_name: item.item_name || item.itemName || orig?.item_name || orig?.itemName || 'Sản phẩm',
+        category_id: item.category_id || item.categoryId || orig?.category_id || orig?.categoryId || null,
+        room_id: item.room_id || item.roomId || orig?.room_id || orig?.roomId || null,
+        material_id: item.material_id || item.materialId || orig?.material_id || orig?.materialId || null,
+        color_id: item.color_id || item.colorId || orig?.color_id || orig?.colorId || null,
+        length_cm: len != null ? Number(len) : null,
+        width_cm: wid != null ? Number(wid) : null,
+        height_cm: hei != null ? Number(hei) : null,
         quantity: Number(item.quantity) || 1,
         unit_price: Number(item.unit_price ?? item.unitPrice) || 0,
-        description: item.description || null,
+        description: item.description || orig?.description || null,
         createby: createBy,
       };
     });

@@ -330,32 +330,16 @@ describe('ManageOrdersPage Component', () => {
     });
   });
 
-  // ─── 11. Giao việc cho Tổ trưởng ──────────────────────────────────
-  it('cho phép Owner mở modal và giao việc cho Tổ trưởng xưởng', async () => {
+  // ─── 11. Giao việc -> Chuyển sang Quản lý lệnh gia công ─────────────
+  it('cho phép Owner bấm nút "Giao việc" để chuyển sang trang Quản lý lệnh gia công', async () => {
     const user = userEvent.setup();
     render(<ManageOrdersPage />);
 
     await waitFor(() => screen.getByText('ORD-20261101-0001'));
 
-    const assignButtons = screen.getAllByRole('button', { name: /Giao việc|Đổi giao việc/i });
+    const assignButtons = screen.getAllByRole('button', { name: /^Giao việc$/i });
     expect(assignButtons.length).toBeGreaterThan(0);
+    expect(assignButtons[0]).toHaveTextContent('Giao việc');
     await user.click(assignButtons[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Phân công Tổ trưởng sản xuất #ORD-20261101-0001/i)).toBeInTheDocument();
-      expect(screen.getByText(/Lê Văn Tổ Trưởng/i)).toBeInTheDocument();
-    });
-
-    const submitBtn = screen.getByRole('button', { name: /Xác nhận giao việc/i });
-    await user.click(submitBtn);
-
-    await waitFor(() => {
-      expect(orderManagementService.assignLeaderToOrder).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({
-          leaderId: 3,
-        })
-      );
-    });
   });
 });

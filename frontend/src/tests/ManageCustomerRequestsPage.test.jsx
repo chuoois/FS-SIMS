@@ -319,6 +319,110 @@ describe('ManageCustomerRequestsPage', () => {
     });
   });
 
+  it('hiển thị ảnh tham khảo của khách hàng trực tiếp trong từng sản phẩm và đã bỏ khối "Ảnh tham khảo & Ghi chú do khách hàng gửi"', async () => {
+    const detailWithCustomerImages = {
+      ...mockDetail,
+      images: [
+        { imageId: 1, imageUrl: 'https://example.com/general-reference.jpg' },
+      ],
+      items: [
+        {
+          requestItemId: 201,
+          itemName: 'Bàn trà phòng khách',
+          quantity: 1,
+          unitPrice: 5000000,
+          images: [
+            { imageId: 2, imageUrl: 'https://example.com/item-reference-1.jpg' },
+          ],
+        },
+        {
+          requestItemId: 202,
+          itemName: 'Ghế đôn đồng bộ',
+          quantity: 2,
+          unitPrice: 1500000,
+          images: [],
+        },
+      ],
+    };
+
+    getRequestById.mockResolvedValue({ data: detailWithCustomerImages });
+    render(<ManageCustomerRequestsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
+    });
+
+    const viewButtons = screen.getAllByRole('button', { name: /Xem chi tiết/i });
+    await act(async () => {
+      fireEvent.click(viewButtons[0]);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Chi tiết yêu cầu đặt làm')).toBeInTheDocument();
+      expect(screen.getByText('Bàn trà phòng khách')).toBeInTheDocument();
+      expect(screen.getByText('Ghế đôn đồng bộ')).toBeInTheDocument();
+      // Khối "Ảnh tham khảo & Ghi chú do khách hàng gửi" ở đáy modal đã được loại bỏ
+      expect(
+        screen.queryByText(/Ảnh tham khảo & Ghi chú do khách hàng gửi/i)
+      ).not.toBeInTheDocument();
+    });
+
+    const imgElements = screen.getAllByRole('img');
+    const imgSrcs = imgElements.map((el) => el.getAttribute('src'));
+    expect(imgSrcs).toContain('https://example.com/item-reference-1.jpg');
+    expect(imgSrcs).toContain('https://example.com/general-reference.jpg');
+  });
+
+  it('phân biệt rõ ràng khối ảnh mẫu của khách và bản vẽ thiết kế của chủ xưởng trong từng sản phẩm', async () => {
+    const detailSeparated = {
+      ...mockDetail,
+      items: [
+        {
+          requestItemId: 301,
+          itemName: 'Tủ rượu gỗ gõ đỏ',
+          quantity: 1,
+          unitPrice: 12000000,
+          images: [
+            {
+              imageId: 10,
+              imageUrl: 'https://example.com/customer-wine-cabinet.jpg',
+              imageType: 'CUSTOMER_REF',
+              isOwnerDesign: false,
+              createdBy: 'Customer',
+            },
+            {
+              imageId: 11,
+              imageUrl: 'https://example.com/owner-wine-cad.jpg',
+              imageType: 'OWNER_DESIGN',
+              isOwnerDesign: true,
+              createdBy: 'OWNER',
+            },
+          ],
+        },
+      ],
+    };
+
+    getRequestById.mockResolvedValue({ data: detailSeparated });
+    render(<ManageCustomerRequestsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
+    });
+
+    const viewButtons = screen.getAllByRole('button', { name: /Xem chi tiết/i });
+    await act(async () => {
+      fireEvent.click(viewButtons[0]);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Tủ rượu gỗ gõ đỏ')).toBeInTheDocument();
+      expect(screen.getByText('Ảnh mẫu khách gửi')).toBeInTheDocument();
+      expect(screen.getByText('Bản vẽ thiết kế của Chủ xưởng')).toBeInTheDocument();
+      expect(screen.getByText('1 ảnh khách')).toBeInTheDocument();
+      expect(screen.getByText('1 bản vẽ xưởng')).toBeInTheDocument();
+    });
+  });
+
   it('hiển thị thông báo khi API lỗi', async () => {
     getRequests.mockRejectedValue({
       response: { data: { message: 'Lỗi kết nối máy chủ' } },

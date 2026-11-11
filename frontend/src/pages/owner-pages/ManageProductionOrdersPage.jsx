@@ -25,6 +25,8 @@ import {
   Layers,
   ShoppingBag,
   User,
+  Eye,
+  Package,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -120,6 +122,13 @@ export const ManageProductionOrdersPage = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailOrder, setDetailOrder] = useState(null);
+
+  const handleOpenDetailModal = (order) => {
+    setDetailOrder(order);
+    setIsDetailOpen(true);
+  };
 
   // Đối tượng đang chọn & Loading
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -152,6 +161,25 @@ export const ManageProductionOrdersPage = () => {
 
   useEffect(() => {
     loadMetadata();
+  }, []);
+
+  // Tự động mở modal Tạo lệnh gia công nếu chuyển sang từ trang Quản lý đơn hàng (?orderId=...)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location?.search) {
+      const sp = new URLSearchParams(window.location.search);
+      const oId = sp.get('orderId');
+      if (oId) {
+        const today = new Date().toISOString().slice(0, 10);
+        const nextTwoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        setCreateForm((prev) => ({
+          ...prev,
+          order_id: String(oId),
+          planned_start: prev.planned_start || today,
+          planned_end: prev.planned_end || nextTwoWeeks,
+        }));
+        setIsCreateOpen(true);
+      }
+    }
   }, []);
 
   // ── Tải danh sách lệnh gia công ───────────────────────────
@@ -328,9 +356,6 @@ export const ManageProductionOrdersPage = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-900">
-              <Hammer className="h-6 w-6 text-amber-800" />
-            </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-stone-900">
                 Quản Lý Lệnh Gia Công
@@ -580,31 +605,41 @@ export const ManageProductionOrdersPage = () => {
 
                       {/* Thao tác */}
                       <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
-                        {canAct ? (
-                          <div className="inline-flex items-center gap-1.5">
-                            {/* Nút Phân công trưởng nhóm */}
-                            <button
-                              onClick={() => handleOpenAssignModal(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-amber-700 active:scale-95"
-                              title="Phân công trưởng nhóm"
-                            >
-                              <UserCheck className="h-3.5 w-3.5" />
-                              <span>Phân công</span>
-                            </button>
+                        <div className="inline-flex items-center justify-center gap-1.5">
+                          {/* Nút Xem chi tiết */}
+                          <button
+                            onClick={() => handleOpenDetailModal(order)}
+                            className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-amber-700 active:scale-95"
+                            title="Xem chi tiết lệnh gia công và sản phẩm"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-stone-400" />
+                            <span>Chi tiết</span>
+                          </button>
 
-                            {/* Nút Hủy lệnh */}
-                            <button
-                              onClick={() => handleOpenCancelModal(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100 active:scale-95"
-                              title="Hủy lệnh gia công"
-                            >
-                              <Ban className="h-3.5 w-3.5" />
-                              <span>Hủy</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-stone-400 italic">Không khả dụng</span>
-                        )}
+                          {canAct && (
+                            <>
+                              {/* Nút Phân công trưởng nhóm */}
+                              <button
+                                onClick={() => handleOpenAssignModal(order)}
+                                className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-amber-700 active:scale-95"
+                                title="Phân công trưởng nhóm"
+                              >
+                                <UserCheck className="h-3.5 w-3.5" />
+                                <span>Phân công</span>
+                              </button>
+
+                              {/* Nút Hủy lệnh */}
+                              <button
+                                onClick={() => handleOpenCancelModal(order)}
+                                className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100 active:scale-95"
+                                title="Hủy lệnh gia công"
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                                <span>Hủy</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -643,7 +678,7 @@ export const ManageProductionOrdersPage = () => {
                 <div>
                   <h3 className="text-lg font-bold text-stone-900">Tạo Lệnh Gia Công</h3>
                   <p className="text-xs text-stone-500">
-                    Chọn đơn hàng CUSTOM đã chốt để giao cho xưởng sản xuất
+                    Chọn đơn hàng CUSTOM đang xử lý để giao cho xưởng sản xuất
                   </p>
                 </div>
               </div>
@@ -665,7 +700,7 @@ export const ManageProductionOrdersPage = () => {
                   <div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
                     <span>
-                      Hiện không có đơn hàng đặt làm (CUSTOM) nào ở trạng thái CONFIRMED chưa được tạo lệnh gia công.
+                      Hiện không có đơn hàng đặt làm (CUSTOM) nào ở trạng thái Đang xử lý cần tạo lệnh gia công.
                     </span>
                   </div>
                 ) : (
@@ -886,6 +921,171 @@ export const ManageProductionOrdersPage = () => {
               >
                 {submitting && <RotateCw className="h-4 w-4 animate-spin" />}
                 <span>Xác nhận hủy lệnh</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal 4: Chi Tiết Lệnh Gia Công & Sản Phẩm ────── */}
+      {isDetailOpen && detailOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 my-8 border border-stone-200">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
+                  <Hammer className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-stone-900">
+                      Chi Tiết Lệnh #{detailOrder.production_code}
+                    </h3>
+                    <StatusBadge status={detailOrder.status} />
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    {detailOrder.production_type === 'CUSTOM' ? 'Hàng đặt làm theo yêu cầu' : 'Hàng sản xuất kho'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDetailOpen(false)}
+                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {/* Thông tin đơn hàng & Người phụ trách */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs">
+                <div className="rounded-xl border border-stone-200 p-3.5 bg-stone-50/60 space-y-1.5">
+                  <span className="font-bold text-stone-700 block uppercase tracking-wider text-[11px]">
+                    Đơn hàng liên kết
+                  </span>
+                  {detailOrder.order_code ? (
+                    <>
+                      <div className="flex items-center gap-1.5 text-stone-800 font-semibold">
+                        <ShoppingBag className="h-3.5 w-3.5 text-amber-700" />
+                        <span>Mã đơn: #{detailOrder.order_code}</span>
+                      </div>
+                      {detailOrder.customer_name && (
+                        <div className="text-stone-600 flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5 text-stone-400" />
+                          <span>Khách hàng: {detailOrder.customer_name}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-stone-400 italic">Không có đơn hàng liên kết (Hàng kho)</span>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-stone-200 p-3.5 bg-stone-50/60 space-y-1.5">
+                  <span className="font-bold text-stone-700 block uppercase tracking-wider text-[11px]">
+                    Tiến độ & Phân công
+                  </span>
+                  <div className="text-stone-800">
+                    <span className="font-medium text-stone-600">Trưởng nhóm: </span>
+                    <span className="font-semibold">{detailOrder.leader_name || 'Chưa phân công'}</span>
+                    {detailOrder.leader_phone && ` (${detailOrder.leader_phone})`}
+                  </div>
+                  <div className="text-stone-600 flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5 text-stone-400" />
+                    <span>Kế hoạch: {formatDate(detailOrder.planned_start)} → {formatDate(detailOrder.planned_end)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Danh sách sản phẩm của đơn hàng cần gia công */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-stone-800 flex items-center gap-1.5">
+                    <Layers className="h-4 w-4 text-amber-700" />
+                    <span>Danh Sách Sản Phẩm Cần Gia Công ({detailOrder.items?.length || 0})</span>
+                  </h4>
+                </div>
+
+                {detailOrder.items && detailOrder.items.length > 0 ? (
+                  <div className="overflow-hidden rounded-xl border border-stone-200 shadow-xs">
+                    <table className="min-w-full divide-y divide-stone-200 text-left text-xs">
+                      <thead className="bg-stone-50 font-semibold text-stone-700">
+                        <tr>
+                          <th className="py-2.5 pl-3 pr-2">#</th>
+                          <th className="px-3 py-2.5">Tên sản phẩm</th>
+                          <th className="px-3 py-2.5">Kích thước (D x R x C)</th>
+                          <th className="px-3 py-2.5">Mô tả / Yêu cầu</th>
+                          <th className="px-3 py-2.5 text-center">SL kế hoạch</th>
+                          <th className="py-2.5 pl-2 pr-3 text-center">Đã xong</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-200 bg-white">
+                        {detailOrder.items.map((it, idx) => (
+                          <tr key={idx} className="hover:bg-stone-50/70">
+                            <td className="py-2.5 pl-3 pr-2 text-stone-400 font-mono">{idx + 1}</td>
+                            <td className="px-3 py-2.5 font-bold text-stone-900">
+                              {it.item_name}
+                              {it.product_code && (
+                                <span className="block font-mono text-[10px] text-stone-500 font-normal">
+                                  Mã: {it.product_code}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 font-mono text-stone-700 whitespace-nowrap">
+                              {it.dimensions ? (
+                                <span className="inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[11px] font-medium text-stone-800">
+                                  {it.dimensions}
+                                </span>
+                              ) : (it.length_cm || it.width_cm || it.height_cm) ? (
+                                <span className="inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[11px] font-medium text-stone-800">
+                                  {it.length_cm || '—'} × {it.width_cm || '—'} × {it.height_cm || '—'} cm
+                                </span>
+                              ) : (
+                                <span className="text-stone-400 italic">Tiêu chuẩn</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-stone-500 max-w-xs truncate" title={it.description || ''}>
+                              {it.description || '—'}
+                            </td>
+                            <td className="px-3 py-2.5 text-center font-bold text-amber-900">
+                              {it.quantity_planned}
+                            </td>
+                            <td className="py-2.5 pl-2 pr-3 text-center">
+                              <span className={`inline-block rounded px-1.5 py-0.5 font-semibold text-[11px] ${
+                                it.quantity_done >= it.quantity_planned
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-stone-100 text-stone-700'
+                              }`}>
+                                {it.quantity_done} / {it.quantity_planned}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-stone-200 p-6 text-center text-xs text-stone-400">
+                    Chưa có thông tin sản phẩm chi tiết cho lệnh này
+                  </div>
+                )}
+              </div>
+
+              {detailOrder.note && (
+                <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                  <span className="font-semibold">Ghi chú: </span>
+                  {detailOrder.note}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setIsDetailOpen(false)}
+                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+              >
+                Đóng
               </button>
             </div>
           </div>

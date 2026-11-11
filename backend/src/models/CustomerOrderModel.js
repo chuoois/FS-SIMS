@@ -188,23 +188,29 @@ async function createOrderFromContract(contractId, { assignedTo, createBy } = {}
       { transaction }
     );
 
-    const orderItemsData = contract.items.map((it) => ({
-      order_id: order.order_id,
-      contract_item_id: it.contract_item_id,
-      product_id: it.product_id,
-      item_name: it.item_name,
-      description: it.description,
-      category_id: it.category_id,
-      room_id: it.room_id,
-      material_id: it.material_id,
-      color_id: it.color_id,
-      length_cm: it.length_cm,
-      width_cm: it.width_cm,
-      height_cm: it.height_cm,
-      quantity: it.quantity,
-      unit_price: it.unit_price,
-      createby: createBy || null,
-    }));
+    const orderItemsData = contract.items.map((it) => {
+      const prod = it.product ? (it.product.get ? it.product.get({ plain: true }) : it.product) : null;
+      const len = it.length_cm ?? prod?.length_cm ?? null;
+      const wid = it.width_cm ?? prod?.width_cm ?? null;
+      const hei = it.height_cm ?? prod?.height_cm ?? null;
+      return {
+        order_id: order.order_id,
+        contract_item_id: it.contract_item_id,
+        product_id: it.product_id,
+        item_name: it.item_name,
+        description: it.description,
+        category_id: it.category_id,
+        room_id: it.room_id,
+        material_id: it.material_id,
+        color_id: it.color_id,
+        length_cm: len != null ? Number(len) : null,
+        width_cm: wid != null ? Number(wid) : null,
+        height_cm: hei != null ? Number(hei) : null,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        createby: createBy || null,
+      };
+    });
 
     await CustomerOrderItem.bulkCreate(orderItemsData, { transaction });
 

@@ -336,30 +336,71 @@ function toRequestDTO(raw) {
     contractStatus: req.contract?.status || req.contractStatus || null,
     createdAt: req.createdate || req.createdAt || null,
     updatedAt: req.modifiedate || req.updatedAt || null,
-    items: (req.items || []).map((it) => ({
-      requestItemId: it.request_item_id || it.requestItemId,
-      productId: it.product_id || it.productId || null,
-      itemName: it.item_name || it.itemName || null,
-      categoryId: it.category_id || it.categoryId || null,
-      roomId: it.room_id || it.roomId || null,
-      materialId: it.material_id || it.materialId || null,
-      colorId: it.color_id || it.colorId || null,
-      lengthCm: it.length_cm ?? it.lengthCm ?? null,
-      widthCm: it.width_cm ?? it.widthCm ?? null,
-      heightCm: it.height_cm ?? it.heightCm ?? null,
-      quantity: Number(it.quantity) || 1,
-      unitPrice: Number(it.unit_price ?? it.unitPrice) || 0,
-      totalPrice: (Number(it.quantity) || 1) * (Number(it.unit_price ?? it.unitPrice) || 0),
-      description: it.description || null,
-      technicalNotes: it.description || it.technicalNotes || it.technical_notes || null,
-    })),
-    images: (req.images || []).map((img) => {
-      if (typeof img === 'string') return img;
+    items: (req.items || []).map((it) => {
+      const itRawImages = (it.images && Array.isArray(it.images) && it.images.length > 0)
+        ? it.images
+        : (req.images || []).filter((img) => {
+            const rId = img.request_item_id || img.requestItemId;
+            const itId = it.request_item_id || it.requestItemId;
+            return rId && itId && Number(rId) === Number(itId);
+          });
+
       return {
-        requestImageId: img.request_image_id || img.requestImageId,
+        requestItemId: it.request_item_id || it.requestItemId,
+        productId: it.product_id || it.productId || null,
+        itemName: it.item_name || it.itemName || null,
+        categoryId: it.category_id || it.categoryId || null,
+        roomId: it.room_id || it.roomId || null,
+        materialId: it.material_id || it.materialId || null,
+        colorId: it.color_id || it.colorId || null,
+        lengthCm: it.length_cm ?? it.lengthCm ?? null,
+        widthCm: it.width_cm ?? it.widthCm ?? null,
+        heightCm: it.height_cm ?? it.heightCm ?? null,
+        quantity: Number(it.quantity) || 1,
+        unitPrice: Number(it.unit_price ?? it.unitPrice) || 0,
+        totalPrice: (Number(it.quantity) || 1) * (Number(it.unit_price ?? it.unitPrice) || 0),
+        description: it.description || null,
+        technicalNotes: it.description || it.technicalNotes || it.technical_notes || null,
+        images: (itRawImages || []).map((img) => {
+          const url = typeof img === 'string' ? img : (img.image_url || img.imageUrl);
+          const createdBy = typeof img === 'object' ? (img.createby || img.createBy || img.createdBy || null) : null;
+          const isOwner = Boolean(
+            (createdBy && String(createdBy).toUpperCase().includes('OWNER')) ||
+            (typeof url === 'string' && url.includes('design_files')) ||
+            (typeof img === 'object' && (img.imageType === 'OWNER_DESIGN' || img.isOwnerDesign))
+          );
+
+          return {
+            imageId: img.request_image_id || img.requestImageId || img.imageId,
+            requestImageId: img.request_image_id || img.requestImageId || img.imageId,
+            imageUrl: url,
+            requestItemId: img.request_item_id || img.requestItemId || it.request_item_id || it.requestItemId,
+            sortOrder: img.sort_order ?? img.sortOrder ?? 0,
+            createdBy,
+            imageType: isOwner ? 'OWNER_DESIGN' : 'CUSTOMER_REF',
+            isOwnerDesign: isOwner,
+          };
+        }),
+      };
+    }),
+    images: (req.images || []).map((img) => {
+      const url = typeof img === 'string' ? img : (img.image_url || img.imageUrl);
+      const createdBy = typeof img === 'object' ? (img.createby || img.createBy || img.createdBy || null) : null;
+      const isOwner = Boolean(
+        (createdBy && String(createdBy).toUpperCase().includes('OWNER')) ||
+        (typeof url === 'string' && url.includes('design_files')) ||
+        (typeof img === 'object' && (img.imageType === 'OWNER_DESIGN' || img.isOwnerDesign))
+      );
+
+      return {
+        imageId: img.request_image_id || img.requestImageId || img.imageId,
+        requestImageId: img.request_image_id || img.requestImageId || img.imageId,
         requestItemId: img.request_item_id || img.requestItemId || null,
-        imageUrl: img.image_url || img.imageUrl,
+        imageUrl: url,
         sortOrder: img.sort_order ?? img.sortOrder ?? 0,
+        createdBy,
+        imageType: isOwner ? 'OWNER_DESIGN' : 'CUSTOMER_REF',
+        isOwnerDesign: isOwner,
       };
     }),
   };

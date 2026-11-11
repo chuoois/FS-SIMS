@@ -11,6 +11,7 @@
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Filter,
   ClipboardList,
@@ -45,10 +46,8 @@ import {
   getStaffLeaders,
   assignLeaderToOrder,
   inspectOrder,
-  getOwnerRequests,
 } from '../../services/orderManagementService';
 import { TablePagination } from '../../components/common/TablePagination';
-import OwnerRequestsTab from './OwnerRequestsTab';
 
 // ─── Hằng số ──────────────────────────────────────────────
 const STATUSES = ['ALL', 'NEW', 'CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'];
@@ -141,36 +140,18 @@ const StatusBadge = ({ status }) => {
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
           <Clock className="h-3.5 w-3.5" />
-          Chờ phân công SX
+          Đã xác nhận
         </span>
       );
     case 'IN_PRODUCTION':
     case 'PROCESSING':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
-          <Hammer className="h-3.5 w-3.5" />
-          Đang gia công
-        </span>
-      );
     case 'UNDER_INSPECTION':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-semibold text-purple-800 border border-purple-200 animate-pulse">
-          <Clock className="h-3.5 w-3.5" />
-          Chờ nghiệm thu
-        </span>
-      );
     case 'READY_TO_DELIVER':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 border border-indigo-200">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Đã nghiệm thu (Chờ giao)
-        </span>
-      );
     case 'DELIVERING':
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 border border-teal-200">
-          <Package className="h-3.5 w-3.5" />
-          Đang giao hàng
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
+          <RefreshCw className="h-3.5 w-3.5" />
+          Đang xử lý
         </span>
       );
     case 'COMPLETED':
@@ -190,7 +171,7 @@ const StatusBadge = ({ status }) => {
     default:
       return (
         <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700">
-          {status}
+          {STATUS_LABELS[status] || status}
         </span>
       );
   }
@@ -265,38 +246,6 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
                   </span>
                 )}
               </div>
-            </div>
-          </div>
-
-                    {/* Stepper 6 bước quy trình sản xuất & hoàn tất */}
-          <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-3 flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5 text-amber-800" />
-              <span>Tiến trình đơn hàng (Quy trình chuẩn 6 Bước)</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center text-xs">
-              {[
-                { step: 1, label: '1. Chốt đơn & Ký HĐ', active: ['CONFIRMED', 'IN_PRODUCTION', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
-                { step: 2, label: '2. Duyệt & Phân công', active: ['IN_PRODUCTION', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
-                { step: 3, label: '3. Gia công xưởng', active: ['IN_PRODUCTION', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
-                { step: 4, label: '4. Gửi nghiệm thu', active: ['UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
-                { step: 5, label: '5. Nghiệm thu Đạt', active: ['READY_TO_DELIVER', 'DELIVERING', 'COMPLETED'].includes(order.status) },
-                { step: 6, label: '6. Giao & Hoàn tất', active: order.status === 'COMPLETED' },
-              ].map((s) => (
-                <div
-                  key={s.step}
-                  className={`rounded-lg p-2 border font-medium transition ${
-                    s.active
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800 font-bold'
-                      : 'border-stone-200 bg-white text-stone-400'
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    {s.active ? <CheckCircle2 className="h-3 w-3 text-emerald-600" /> : <Clock className="h-3 w-3" />}
-                    <span>{s.label}</span>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
 
@@ -515,7 +464,7 @@ function CancelConfirmDialog({ order, loading, onConfirm, onClose }) {
 }
 
 // ─── Trang chính ManageOrdersPage ─────────────────────────
-export function ManageOrdersPage({ defaultTab } = {}) {
+export function ManageOrdersPage() {
   // States danh sách
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -543,44 +492,23 @@ export function ManageOrdersPage({ defaultTab } = {}) {
   const [advanceLoadingId, setAdvanceLoadingId] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  const getInitialTab = () => {
-    if (defaultTab === 'REQUESTS') return 'REQUESTS';
-    if (typeof window !== 'undefined' && window.location?.search?.includes('tab=REQUESTS')) {
-      return 'REQUESTS';
-    }
-    return 'ORDERS';
-  };
-  const [activeTab, setActiveTab] = useState(getInitialTab);
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  // Điều hướng sang trang Quản lý Lệnh Gia Công
+  let navigate = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    navigate = useNavigate();
+  } catch {
+    navigate = null;
+  }
 
-  const checkPendingRequests = useCallback(async () => {
-    try {
-      const res = await getOwnerRequests({ status: 'PENDING', limit: 1 });
-      const total = res.pagination?.totalItems ?? (res.data || res.requests || []).length ?? 0;
-      setPendingRequestsCount(total);
-    } catch (err) {
-      // Safe catch
-    }
-  }, []);
-
-  useEffect(() => {
-    checkPendingRequests();
-  }, [checkPendingRequests, activeTab]);
-
-  const handleSwitchTab = (tab) => {
-    setActiveTab(tab);
-    if (typeof window !== 'undefined' && window.history?.pushState) {
-      try {
-        const url = new URL(window.location.href);
-        if (tab === 'REQUESTS') {
-          url.searchParams.set('tab', 'REQUESTS');
-        } else {
-          url.searchParams.delete('tab');
-        }
-        window.history.pushState({}, '', url.toString());
-      } catch (e) {
-        // Safe catch
-      }
+  const handleGoToProductionOrders = (order) => {
+    const targetUrl = `/owner/production-orders?orderId=${order.orderId}&orderCode=${encodeURIComponent(order.orderCode || '')}`;
+    if (navigate) {
+      navigate(targetUrl, {
+        state: { orderId: order.orderId, orderCode: order.orderCode, autoCreate: true },
+      });
+    } else if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
+      window.location.href = targetUrl;
     }
   };
 
@@ -801,71 +729,6 @@ export function ManageOrdersPage({ defaultTab } = {}) {
 
   return (
     <div className="space-y-6">
-      {/* ── Tabs Chuyển đổi giữa Đơn hàng và Yêu cầu thiết kế ── */}
-      <div className="flex border-b border-stone-200 gap-2">
-        <button
-          type="button"
-          onClick={() => handleSwitchTab('ORDERS')}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
-            activeTab === 'ORDERS'
-              ? 'border-amber-800 text-amber-900 bg-amber-50/50'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <Package className="h-4 w-4" />
-          <span>Danh sách đơn hàng (Orders)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleSwitchTab('REQUESTS')}
-          className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-bold transition ${
-            activeTab === 'REQUESTS'
-              ? 'border-amber-800 text-amber-900 bg-amber-50/50'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <ClipboardList className="h-4 w-4" />
-          <span>Thẩm định yêu cầu thiết kế (Design Requests)</span>
-          {pendingRequestsCount > 0 && (
-            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-extrabold text-white animate-pulse">
-              {pendingRequestsCount} chờ duyệt
-            </span>
-          )}
-        </button>
-      </div>
-
-      {activeTab === 'REQUESTS' ? (
-        <OwnerRequestsTab />
-      ) : (
-        <>
-          {/* Thông báo nổi bật nếu có đơn yêu cầu mới đang chờ thẩm định */}
-          {pendingRequestsCount > 0 && (
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-amber-500/20 p-2 text-amber-800 shrink-0">
-                  <AlertTriangle className="h-5 w-5 text-amber-700" />
-                </div>
-                <div>
-                  <p className="font-bold text-amber-950 text-sm">
-                    Có {pendingRequestsCount} yêu cầu may đo / thiết kế mới từ Sales đang chờ bạn thẩm định và chốt thiết kế!
-                  </p>
-                  <p className="text-xs text-amber-800">
-                    Vui lòng duyệt thông số kỹ thuật và hình ảnh bản vẽ trước khi Sales tạo hợp đồng.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleSwitchTab('REQUESTS')}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-800 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-900 transition whitespace-nowrap shrink-0"
-              >
-                <span>Xem & Thẩm định ngay</span>
-                <span>&rarr;</span>
-              </button>
-            </div>
-          )}
-
       {/* ── Tiêu đề & Nút thao tác ───────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -920,7 +783,7 @@ export function ManageOrdersPage({ defaultTab } = {}) {
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-amber-900">{stats.confirmed}</span>
-            <span className="text-xs text-amber-600">chờ gia công / xuất kho</span>
+            <span className="text-xs text-amber-600">chờ xử lý</span>
           </div>
         </div>
 
@@ -1071,12 +934,22 @@ export function ManageOrdersPage({ defaultTab } = {}) {
 
                   return (
                     <tr key={order.orderId} className="transition hover:bg-stone-50/80">
-                      {/* Mã đơn & Loại đơn */}
+                      {/* 1. Mã đơn */}
                       <td className="whitespace-nowrap py-3.5 pl-4 pr-3 sm:pl-6">
                         <div className="font-mono font-bold text-amber-800 text-xs">
                           {order.orderCode}
                         </div>
-                        <span className="inline-block mt-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-600">
+                      </td>
+
+                      {/* 2. Loại đơn */}
+                      <td className="whitespace-nowrap px-3 py-3.5">
+                        <span
+                          className={`inline-block rounded px-2 py-0.5 text-[11px] font-semibold border ${
+                            order.orderType === 'CUSTOM'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : 'bg-stone-100 text-stone-700 border-stone-200'
+                          }`}
+                        >
                           {ORDER_TYPE_LABELS[order.orderType] || order.orderType}
                         </span>
                       </td>
@@ -1130,7 +1003,7 @@ export function ManageOrdersPage({ defaultTab } = {}) {
 
                       {/* Thao tác */}
                       <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
-                        <div className="inline-flex items-center gap-1.5">
+                        <div className="inline-flex items-center justify-center gap-1.5">
                           {/* Nút Nghiệm thu chất lượng khi UNDER_INSPECTION */}
                           {order.status === 'UNDER_INSPECTION' && (
                             <button
@@ -1147,15 +1020,16 @@ export function ManageOrdersPage({ defaultTab } = {}) {
                             </button>
                           )}
 
-                          {/* Nút Giao việc cho Leader khi NEW, CONFIRMED, hoặc IN_PRODUCTION */}
-                          {(order.status === 'CONFIRMED' || order.status === 'NEW' || order.status === 'IN_PRODUCTION') && (
+                          {/* Nút Giao việc -> Chuyển sang trang Quản Lý Lệnh Gia Công (chỉ áp dụng cho đơn đặt làm CUSTOM đang ở trạng thái Đang xử lý - IN_PRODUCTION) */}
+                          {(order.orderType === 'CUSTOM' || order.order_type === 'CUSTOM') &&
+                            order.status === 'IN_PRODUCTION' && (
                             <button
-                              onClick={() => handleOpenAssignLeader(order)}
+                              onClick={() => handleGoToProductionOrders(order)}
                               className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
-                              title={order.staffName ? `Đã giao: ${order.staffName} (Bấm để đổi)` : "Phân công Tổ trưởng xưởng"}
+                              title="Chuyển sang trang Quản lý lệnh gia công để giao việc"
                             >
                               <Hammer className="h-3.5 w-3.5" />
-                              <span>{order.staffName ? 'Đổi giao việc' : 'Giao việc'}</span>
+                              <span>Giao việc</span>
                             </button>
                           )}
 
@@ -1531,8 +1405,6 @@ export function ManageOrdersPage({ defaultTab } = {}) {
             </button>
           </div>
         </div>
-      )}
-        </>
       )}
     </div>
   );

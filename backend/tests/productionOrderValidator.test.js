@@ -127,5 +127,35 @@ describe('productionOrderValidator - toProductionOrderDTO', () => {
     expect(dto.customer_name).toBe('Anh Nam');
     expect(dto.leader_name).toBe('Trần Văn Trưởng');
     expect(dto.leader_email).toBe('truong@test.com');
+    expect(dto.items).toEqual([]);
+  });
+
+  test('chuyển đổi danh sách items từ production_order_item và customerOrder', () => {
+    const raw = {
+      production_id: 2,
+      production_code: 'PO-20261031-0002',
+      items: [
+        {
+          production_item_id: 1,
+          order_item_id: 8,
+          quantity_planned: 2,
+          quantity_done: 1,
+          orderItem: {
+            item_name: 'Bàn ăn sồi',
+            length_cm: 180,
+            width_cm: 90,
+            height_cm: 75,
+            description: 'Sơn PU màu tự nhiên',
+          },
+        },
+      ],
+    };
+
+    const dto = toProductionOrderDTO(raw);
+    expect(dto.items).toHaveLength(1);
+    expect(dto.items[0].item_name).toBe('Bàn ăn sồi');
+    expect(dto.items[0].dimensions).toBe('180 × 90 × 75 cm');
+    expect(dto.items[0].quantity_planned).toBe(2);
+    expect(dto.items[0].quantity_done).toBe(1);
   });
 });

@@ -271,7 +271,9 @@ function CustomerDetailModal({ customerId, onClose }) {
                           : o.status === 'CANCELLED'
                           ? 'Đã huỷ'
                           : o.status === 'IN_PRODUCTION'
-                          ? 'Đang gia công'
+                          ? 'Đang xử lý'
+                          : o.status === 'CONFIRMED'
+                          ? 'Đã xác nhận'
                           : o.status}
                       </span>
                     </div>

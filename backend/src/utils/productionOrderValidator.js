@@ -74,10 +74,78 @@ function validateAssignLeaderInput(data = {}) {
  * @param {object} raw - Sequelize model instance hoặc plain object
  * @returns {object}
  */
+function formatDimensions(length, width, height, fallbackText = '') {
+  if (length != null || width != null || height != null) {
+    return `${length ?? '—'} × ${width ?? '—'} × ${height ?? '—'} cm`;
+  }
+  if (fallbackText && typeof fallbackText === 'string') {
+    const match = fallbackText.match(/(\d+(?:\.\d+)?)\s*(?:[xX*×]|x)\s*(\d+(?:\.\d+)?)\s*(?:[xX*×]|x)\s*(\d+(?:\.\d+)?)(?:\s*(cm|mm|m))?/i);
+    if (match) {
+      const unit = match[4] ? match[4].toLowerCase() : 'cm';
+      return `${match[1]} × ${match[2]} × ${match[3]} ${unit}`;
+    }
+  }
+  return null;
+}
+
 function toProductionOrderDTO(raw) {
   if (!raw) return null;
 
   const plain = raw.get ? raw.get({ plain: true }) : raw;
+
+  // Lấy danh sách sản phẩm cần gia công (từ production_order_item hoặc từ customerOrder.items)
+  let items = [];
+  if (Array.isArray(plain.items) && plain.items.length > 0) {
+    items = plain.items.map((it) => {
+      const p = it.get ? it.get({ plain: true }) : it;
+      const orderItem = p.orderItem ? (p.orderItem.get ? p.orderItem.get({ plain: true }) : p.orderItem) : null;
+      const product = p.product ? (p.product.get ? p.product.get({ plain: true }) : p.product) : null;
+      const itemProduct = orderItem?.product ? (orderItem.product.get ? orderItem.product.get({ plain: true }) : orderItem.product) : null;
+
+      const len = orderItem?.length_cm ?? product?.length_cm ?? itemProduct?.length_cm ?? null;
+      const wid = orderItem?.width_cm ?? product?.width_cm ?? itemProduct?.width_cm ?? null;
+      const hei = orderItem?.height_cm ?? product?.height_cm ?? itemProduct?.height_cm ?? null;
+      const desc = orderItem?.description || p.note || '';
+
+      return {
+        production_item_id: p.production_item_id,
+        order_item_id: p.order_item_id,
+        product_id: p.product_id || orderItem?.product_id || null,
+        item_name: orderItem?.item_name || product?.product_name || itemProduct?.product_name || p.item_name || 'Sản phẩm gia công',
+        product_code: product?.product_code || itemProduct?.product_code || null,
+        description: orderItem?.description || null,
+        dimensions: formatDimensions(len, wid, hei, desc),
+        length_cm: len,
+        width_cm: wid,
+        height_cm: hei,
+        quantity_planned: p.quantity_planned !== undefined ? p.quantity_planned : (orderItem?.quantity || 1),
+        quantity_done: p.quantity_done || 0,
+        note: p.note || null,
+      };
+    });
+  } else if (Array.isArray(plain.customerOrder?.items) && plain.customerOrder.items.length > 0) {
+    items = plain.customerOrder.items.map((it) => {
+      const oi = it.get ? it.get({ plain: true }) : it;
+      const prod = oi.product ? (oi.product.get ? oi.product.get({ plain: true }) : oi.product) : null;
+      const len = oi.length_cm ?? prod?.length_cm ?? null;
+      const wid = oi.width_cm ?? prod?.width_cm ?? null;
+      const hei = oi.height_cm ?? prod?.height_cm ?? null;
+      const desc = oi.description || '';
+
+      return {
+        order_item_id: oi.order_item_id,
+        item_name: oi.item_name || prod?.product_name || 'Sản phẩm đặt làm',
+        product_code: prod?.product_code || null,
+        description: oi.description || null,
+        dimensions: formatDimensions(len, wid, hei, desc),
+        length_cm: len,
+        width_cm: wid,
+        height_cm: hei,
+        quantity_planned: oi.quantity || 1,
+        quantity_done: 0,
+      };
+    });
+  }
 
   return {
     production_id: plain.production_id,
@@ -99,6 +167,8 @@ function toProductionOrderDTO(raw) {
     leader_name: plain.supervisor?.full_name || null,
     leader_email: plain.supervisor?.email || null,
     leader_phone: plain.supervisor?.phone_number || null,
+    // Items
+    items,
     // Audit
     note: plain.note || null,
     createby: plain.createby || null,
@@ -112,5 +182,6 @@ module.exports = {
   validateCreateProductionOrderInput,
   validateAssignLeaderInput,
   toProductionOrderDTO,
+  formatDimensions,
 };
 
