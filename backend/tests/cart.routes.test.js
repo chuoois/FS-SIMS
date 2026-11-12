@@ -2,7 +2,7 @@ jest.mock('../src/models/userRole.model', () => ({
   findUserRoleByCode: jest.fn(),
 }));
 
-jest.mock('../src/models/cartRepository', () => ({
+jest.mock('../src/models/CartModel', () => ({
   findOrCreateCart: jest.fn(),
   getCartItems: jest.fn(),
   addProductToCart: jest.fn(),
@@ -14,7 +14,7 @@ const express = require('express');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { findUserRoleByCode } = require('../src/models/userRole.model');
-const cartRepository = require('../src/models/cartRepository');
+const cartModel = require('../src/models/CartModel');
 const cartRoutes = require('../src/routes/cartRoutes');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
@@ -42,11 +42,11 @@ describe('Cart Routes - /api/cart', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     findUserRoleByCode.mockResolvedValue({ role_id: 5, role_code: 'CUSTOMER' });
-    cartRepository.findOrCreateCart.mockResolvedValue(cart);
-    cartRepository.addProductToCart.mockResolvedValue(cart);
-    cartRepository.updateCartItemQuantity.mockResolvedValue(cart);
-    cartRepository.removeCartItem.mockResolvedValue(cart);
-    cartRepository.getCartItems.mockResolvedValue([
+    cartModel.findOrCreateCart.mockResolvedValue(cart);
+    cartModel.addProductToCart.mockResolvedValue(cart);
+    cartModel.updateCartItemQuantity.mockResolvedValue(cart);
+    cartModel.removeCartItem.mockResolvedValue(cart);
+    cartModel.getCartItems.mockResolvedValue([
       { cartItem: { cart_item_id: 3, quantity: 2 }, product },
     ]);
   });
@@ -74,7 +74,7 @@ describe('Cart Routes - /api/cart', () => {
       .send({ productId: 21, quantity: 2 });
 
     expect(response.status).toBe(200);
-    expect(cartRepository.addProductToCart).toHaveBeenCalledWith(
+    expect(cartModel.addProductToCart).toHaveBeenCalledWith(
       17,
       21,
       2,
@@ -89,7 +89,7 @@ describe('Cart Routes - /api/cart', () => {
       .send({ productId: 21, quantity: 0 });
 
     expect(response.status).toBe(400);
-    expect(cartRepository.addProductToCart).not.toHaveBeenCalled();
+    expect(cartModel.addProductToCart).not.toHaveBeenCalled();
   });
 
   test('cập nhật số lượng sản phẩm', async () => {
@@ -99,7 +99,7 @@ describe('Cart Routes - /api/cart', () => {
       .send({ quantity: 4 });
 
     expect(response.status).toBe(200);
-    expect(cartRepository.updateCartItemQuantity).toHaveBeenCalledWith(
+    expect(cartModel.updateCartItemQuantity).toHaveBeenCalledWith(
       17,
       21,
       4,
@@ -113,7 +113,7 @@ describe('Cart Routes - /api/cart', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(cartRepository.removeCartItem).toHaveBeenCalledWith(
+    expect(cartModel.removeCartItem).toHaveBeenCalledWith(
       17,
       21,
       'customer@example.com'

@@ -1,4 +1,4 @@
-const { createReadyOrderRequestFromCart } = require('../models/orderRequestRepository');
+const { createReadyOrderRequestFromCart } = require('../models/OrderRequestModel');
 const { validateCreateCartRequestInput } = require('../utils/orderRequestValidator');
 
 async function createCartOrderRequest(req, res) {
