@@ -1,5 +1,7 @@
-jest.mock('../src/models/CartModel', () => ({
-  Cart: { findOrCreate: jest.fn() },
+const mockCart = { findOrCreate: jest.fn() };
+
+jest.mock('../src/config/sequelize', () => ({
+  sequelize: { define: jest.fn(() => mockCart) },
 }));
 jest.mock('../src/models/CartItemModel', () => ({
   CartItem: {
@@ -15,9 +17,9 @@ jest.mock('../src/models/ProductModel', () => ({
 const { Cart } = require('../src/models/CartModel');
 const { CartItem } = require('../src/models/CartItemModel');
 const { findProductById } = require('../src/models/ProductModel');
-const { addProductToCart, updateCartItemQuantity } = require('../src/models/cartRepository');
+const { addProductToCart, updateCartItemQuantity } = require('../src/models/CartModel');
 
-describe('cartRepository', () => {
+describe('CartModel', () => {
   const cart = { cart_id: 8 };
   const product = { status: 'ACTIVE', stock_quantity: 8 };
 

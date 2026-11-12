@@ -163,6 +163,22 @@ describe('POST /api/auth/register', () => {
     expect(res.body.message).toBe('Email đã được sử dụng');
   });
 
+  test('trả 409 đúng định dạng khi DB báo email bị trùng', async () => {
+    findUserAccountByEmail.mockResolvedValue(null);
+    findUserRoleByCode.mockResolvedValue({ role_id: 3, role_code: 'CUSTOMER' });
+    createUserAccount.mockRejectedValue({ name: 'SequelizeUniqueConstraintError' });
+
+    const res = await request(app).post('/api/auth/register').send({
+      fullName: 'Test User',
+      email: 'user@example.com',
+      phone: '0901234567',
+      password: 'password123',
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ message: 'Email đã được sử dụng' });
+  });
+
   test('trả 500 khi chưa cấu hình vai trò CUSTOMER', async () => {
     findUserAccountByEmail.mockResolvedValue(null);
     findUserRoleByCode.mockResolvedValue(null);

@@ -1,14 +1,16 @@
+const mockOrderRequest = { create: jest.fn() };
+
 jest.mock('../src/config/sequelize', () => ({
-  sequelize: { transaction: jest.fn() },
+  sequelize: {
+    define: jest.fn(() => mockOrderRequest),
+    transaction: jest.fn(),
+  },
 }));
 jest.mock('../src/models/CartModel', () => ({
   Cart: { findOne: jest.fn() },
 }));
 jest.mock('../src/models/CartItemModel', () => ({
   CartItem: { findAll: jest.fn(), destroy: jest.fn() },
-}));
-jest.mock('../src/models/OrderRequestModel', () => ({
-  OrderRequest: { create: jest.fn() },
 }));
 jest.mock('../src/models/OrderRequestItemModel', () => ({
   OrderRequestItem: { bulkCreate: jest.fn() },
@@ -25,9 +27,9 @@ const { OrderRequestItem } = require('../src/models/OrderRequestItemModel');
 const { Product } = require('../src/models/ProductModel');
 const {
   createReadyOrderRequestFromCart,
-} = require('../src/models/orderRequestRepository');
+} = require('../src/models/OrderRequestModel');
 
-describe('orderRequestRepository', () => {
+describe('OrderRequestModel', () => {
   const transaction = {
     LOCK: { UPDATE: 'UPDATE' },
     commit: jest.fn(),

@@ -1,7 +1,7 @@
 jest.mock('../src/models/userRole.model', () => ({
   findUserRoleByCode: jest.fn(),
 }));
-jest.mock('../src/models/orderRequestRepository', () => ({
+jest.mock('../src/models/OrderRequestModel', () => ({
   createReadyOrderRequestFromCart: jest.fn(),
 }));
 
@@ -9,7 +9,7 @@ const express = require('express');
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { findUserRoleByCode } = require('../src/models/userRole.model');
-const { createReadyOrderRequestFromCart } = require('../src/models/orderRequestRepository');
+const { createReadyOrderRequestFromCart } = require('../src/models/OrderRequestModel');
 const cartRoutes = require('../src/routes/cartRoutes');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';

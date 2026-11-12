@@ -4,7 +4,7 @@ const {
   addProductToCart,
   updateCartItemQuantity,
   removeCartItem,
-} = require('../models/cartRepository');
+} = require('../models/CartModel');
 const { toProductDTO } = require('../utils/productValidator');
 
 function getCustomerAccountId(req) {

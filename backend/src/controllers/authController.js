@@ -29,6 +29,12 @@ const { sendNewPasswordEmail } = require('../services/mailService');
 const ACCESS_TOKEN_EXPIRES = '30s';
 const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
+function isDuplicateEmailError(error) {
+  return error?.name === 'SequelizeUniqueConstraintError'
+    || error?.original?.code === 'ER_DUP_ENTRY'
+    || error?.parent?.code === 'ER_DUP_ENTRY';
+}
+
 function generateAccessToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES });
 }
