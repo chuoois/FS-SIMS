@@ -60,15 +60,19 @@ export const PrintContractModal = ({ isOpen, onClose, contract }) => {
               box-sizing: border-box;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
+              letter-spacing: normal !important;
             }
-            body {
-              font-family: 'Times New Roman', Times, serif;
+            html, body {
+              font-family: 'Times New Roman', Times, serif !important;
               font-size: 13px;
               line-height: 1.5;
               color: #000;
               background: #fff;
               margin: 0;
               padding: 0;
+              text-rendering: optimizeLegibility;
+              -webkit-font-smoothing: antialiased;
+              -moz-osx-font-smoothing: grayscale;
             }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
@@ -78,12 +82,13 @@ export const PrintContractModal = ({ isOpen, onClose, contract }) => {
             .italic { font-style: italic; }
             .underline { text-decoration: underline; text-underline-offset: 3px; }
             .divider { width: 140px; margin: 4px auto 8px auto; border-bottom: 1px solid #000; }
-            table.data-table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 10px; }
+            .tracking-wider, .tracking-wide { letter-spacing: normal !important; }
+            table.data-table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 10px; font-family: 'Times New Roman', Times, serif; }
             table.data-table th, table.data-table td { border: 1px solid #222; padding: 6px 8px; font-size: 12px; }
             table.data-table th { background-color: #f2f2f2; font-weight: bold; }
-            table.layout-table { width: 100%; border-collapse: collapse; border: none; margin-bottom: 12px; }
+            table.layout-table { width: 100%; border-collapse: collapse; border: none; margin-bottom: 12px; font-family: 'Times New Roman', Times, serif; }
             table.layout-table td { border: none; padding: 0; vertical-align: top; }
-            table.signature-table { width: 100%; border-collapse: collapse; border: none; margin-top: 25px; margin-bottom: 10px; }
+            table.signature-table { width: 100%; border-collapse: collapse; border: none; margin-top: 25px; margin-bottom: 10px; font-family: 'Times New Roman', Times, serif; }
             table.signature-table td { border: none; padding: 0 10px; text-align: center; vertical-align: top; width: 50%; }
             .sign-space { height: 90px; min-height: 90px; }
           </style>
@@ -145,15 +150,21 @@ export const PrintContractModal = ({ isOpen, onClose, contract }) => {
         <div className="max-h-[80vh] overflow-y-auto p-4 bg-stone-100/50">
           <div
             id="printable-contract"
-            className="mx-auto max-w-3xl p-10 font-serif text-stone-900 bg-white shadow-sm border border-stone-200 text-xs"
-            style={{ minHeight: '297mm' }}
+            className="mx-auto max-w-3xl p-10 text-stone-900 bg-white shadow-sm border border-stone-200 text-xs"
+            style={{
+              fontFamily: '"Times New Roman", Times, serif',
+              minHeight: '297mm',
+              lineHeight: '1.5',
+              textRendering: 'optimizeLegibility',
+              letterSpacing: 'normal',
+            }}
           >
             {/* Quốc hiệu & Tiêu ngữ */}
             <div className="text-center">
-              <h2 className="text-sm font-bold uppercase tracking-wider">
+              <h2 className="text-sm font-bold uppercase" style={{ letterSpacing: '0px' }}>
                 CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
               </h2>
-              <p className="text-xs font-semibold underline underline-offset-4">
+              <p className="text-xs font-semibold underline underline-offset-4" style={{ letterSpacing: '0px' }}>
                 Độc lập - Tự do - Hạnh phúc
               </p>
               <div className="divider mx-auto my-1.5 w-32 border-b border-stone-800"></div>
@@ -164,11 +175,11 @@ export const PrintContractModal = ({ isOpen, onClose, contract }) => {
 
             {/* Tiêu đề Hợp đồng */}
             <div className="my-5 text-center">
-              <h1 className="text-xl font-bold uppercase tracking-wide text-stone-950">
+              <h1 className="text-xl font-bold uppercase text-stone-950" style={{ letterSpacing: '0px' }}>
                 HỢP ĐỒNG MUA BÁN NỘI THẤT
               </h1>
-              <p className="mt-1 font-mono text-xs font-bold text-stone-800">
-                Số: {contract.contractCode}
+              <p className="mt-1 text-xs font-bold text-stone-800">
+                Số: <span className="font-mono">{contract.contractCode}</span>
               </p>
             </div>
 

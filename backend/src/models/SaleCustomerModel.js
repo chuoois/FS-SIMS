@@ -152,18 +152,15 @@ async function getCustomersWithPagination({
 
 /**
  * Lấy chi tiết 1 khách hàng kèm lịch sử yêu cầu, hợp đồng, đơn hàng
- * @param {number} customerId
+ * @param {number|string} customerId
  * @returns {object|null}
  */
 async function findCustomerById(customerId) {
-  const customerRole = typeof findUserRoleByCode === 'function'
-    ? await findUserRoleByCode('CUSTOMER')
-    : (UserRole && typeof UserRole.findOne === 'function' ? await UserRole.findOne({ where: { role_code: 'CUSTOMER' }, raw: true }) : null);
+  const accountId = parseInt(customerId, 10) || customerId;
 
   const account = await UserAccount.findOne({
     where: {
-      user_account_id: customerId,
-      ...(customerRole ? { role_id: customerRole.role_id } : {}),
+      user_account_id: accountId,
     },
     attributes: { exclude: ['password_hash'] },
     raw: true,
@@ -171,37 +168,53 @@ async function findCustomerById(customerId) {
 
   if (!account) return null;
 
+  let requests = [];
+  let contracts = [];
+  let orders = [];
+
   // Lịch sử yêu cầu (order_request)
-  const requests = await sequelize.query(
-    `SELECT request_id, request_code, order_type, status, note, createdate
-     FROM order_request
-     WHERE customer_account_id = :id
-     ORDER BY createdate DESC
-     LIMIT 20`,
-    { replacements: { id: customerId }, type: sequelize.QueryTypes.SELECT }
-  );
+  try {
+    requests = await sequelize.query(
+      `SELECT request_id, request_code, order_type, status, title, description, staff_note, createdate
+       FROM order_request
+       WHERE customer_account_id = :id
+       ORDER BY createdate DESC
+       LIMIT 20`,
+      { replacements: { id: accountId }, type: sequelize.QueryTypes.SELECT }
+    );
+  } catch (err) {
+    console.error('[SaleCustomerModel.findCustomerById] Lỗi truy vấn order_request:', err.message);
+  }
 
   // Lịch sử hợp đồng (contract)
-  const contracts = await sequelize.query(
-    `SELECT contract_id, contract_code, source, contract_type, status,
-            total_amount, deposit_amount, signed_date, createdate
-     FROM contract
-     WHERE customer_account_id = :id
-     ORDER BY createdate DESC
-     LIMIT 20`,
-    { replacements: { id: customerId }, type: sequelize.QueryTypes.SELECT }
-  );
+  try {
+    contracts = await sequelize.query(
+      `SELECT contract_id, contract_code, source, contract_type, status,
+              total_amount, deposit_amount, signed_date, createdate
+       FROM contract
+       WHERE customer_account_id = :id
+       ORDER BY createdate DESC
+       LIMIT 20`,
+      { replacements: { id: accountId }, type: sequelize.QueryTypes.SELECT }
+    );
+  } catch (err) {
+    console.error('[SaleCustomerModel.findCustomerById] Lỗi truy vấn contract:', err.message);
+  }
 
   // Lịch sử đơn hàng (customer_order)
-  const orders = await sequelize.query(
-    `SELECT order_id, order_code, order_type, status,
-            total_amount, paid_amount, expected_date, delivered_date, createdate
-     FROM customer_order
-     WHERE customer_account_id = :id
-     ORDER BY createdate DESC
-     LIMIT 20`,
-    { replacements: { id: customerId }, type: sequelize.QueryTypes.SELECT }
-  );
+  try {
+    orders = await sequelize.query(
+      `SELECT order_id, order_code, order_type, status,
+              total_amount, paid_amount, expected_date, delivered_date, createdate
+       FROM customer_order
+       WHERE customer_account_id = :id
+       ORDER BY createdate DESC
+       LIMIT 20`,
+      { replacements: { id: accountId }, type: sequelize.QueryTypes.SELECT }
+    );
+  } catch (err) {
+    console.error('[SaleCustomerModel.findCustomerById] Lỗi truy vấn customer_order:', err.message);
+  }
 
   return { ...account, requests, contracts, orders };
 }
