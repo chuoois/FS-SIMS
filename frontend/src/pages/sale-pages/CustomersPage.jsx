@@ -83,8 +83,13 @@ function CustomerDetailModal({ customerId, onClose }) {
     if (!customerId) return;
     setLoading(true);
     getCustomerById(customerId)
-      .then((res) => setCustomer(res.data))
-      .catch(() => toast.error('Không thể tải thông tin khách hàng'))
+      .then((res) => {
+        setCustomer(res?.data || null);
+      })
+      .catch((err) => {
+        console.error('Lỗi tải chi tiết khách hàng:', err);
+        toast.error(err.response?.data?.message || 'Không thể tải thông tin khách hàng');
+      })
       .finally(() => setLoading(false));
   }, [customerId]);
 
