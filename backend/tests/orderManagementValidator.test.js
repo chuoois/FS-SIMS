@@ -228,6 +228,54 @@ describe('orderManagementValidator', () => {
         'https://cdn.example.com/customer-ref.jpg'
       );
     });
+
+    test('đọc inspectionImages từ bảng customer_order_image và fallback sang note', () => {
+      // 1. Trường hợp có ảnh từ bảng
+      const mockWithTableImages = {
+        order_id: 11,
+        order_code: 'ORD-20261114-0001',
+        order_type: 'CUSTOM',
+        status: 'UNDER_INSPECTION',
+        inspectionImages: [
+          { order_image_id: 1, image_url: 'https://cdn.example.com/inspection-table-1.jpg' },
+          { order_image_id: 2, image_url: 'https://cdn.example.com/inspection-table-2.jpg' },
+        ],
+        note: '[Ảnh nghiệm thu]: https://cdn.example.com/old-note-image.jpg',
+      };
+      const dto1 = toOrderManagementDTO(mockWithTableImages);
+      expect(dto1.inspectionImages).toEqual([
+        'https://cdn.example.com/inspection-table-1.jpg',
+        'https://cdn.example.com/inspection-table-2.jpg',
+      ]);
+
+      // 2. Trường hợp fallback đọc từ note cũ
+      const mockWithNoteFallback = {
+        order_id: 12,
+        order_code: 'ORD-20261114-0002',
+        order_type: 'CUSTOM',
+        status: 'UNDER_INSPECTION',
+        inspectionImages: [],
+        note: '[Gửi nghiệm thu]: Đã xong\n[Ảnh nghiệm thu]: https://cdn.example.com/note-1.jpg, https://cdn.example.com/note-2.jpg',
+      };
+      const dto2 = toOrderManagementDTO(mockWithNoteFallback);
+      expect(dto2.inspectionImages).toEqual([
+        'https://cdn.example.com/note-1.jpg',
+        'https://cdn.example.com/note-2.jpg',
+      ]);
+      expect(dto2.inspectionNote).toBe('Đã xong');
+
+      // 3. Trường hợp parse isProductionCompleted và rejectReason
+      const mockWithRejectAndComplete = {
+        order_id: 13,
+        order_code: 'ORD-20261114-0003',
+        order_type: 'CUSTOM',
+        status: 'IN_PRODUCTION',
+        note: '[PRODUCTION_DONE - 14/11/2026]: Hoàn thành\n[Nghiệm thu KHÔNG ĐẠT - 14/11/2026]: Sơn chưa đều, mối ghép hở',
+      };
+      const dto3 = toOrderManagementDTO(mockWithRejectAndComplete);
+      expect(dto3.isProductionCompleted).toBe(true);
+      expect(dto3.rejectReason).toBe('Sơn chưa đều, mối ghép hở');
+    });
   });
 });
 
