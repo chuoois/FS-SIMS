@@ -700,6 +700,33 @@ CREATE TABLE IF NOT EXISTS customer_order_item (
 
 
 -- =========================================================
+-- 18b. customer_order_image (ảnh thành phẩm, ảnh nghiệm thu hoặc ảnh đơn hàng)
+-- =========================================================
+CREATE TABLE IF NOT EXISTS customer_order_image (
+    order_image_id    BIGINT        NOT NULL AUTO_INCREMENT,
+    order_id          BIGINT        NOT NULL,
+    order_item_id     BIGINT        NULL,
+    image_url         VARCHAR(500)  NOT NULL,
+    image_type        VARCHAR(30)   NOT NULL DEFAULT 'INSPECTION', -- INSPECTION, FINISHED, OTHER
+    sort_order        INT           NOT NULL DEFAULT 0,
+    createdate        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    modifiedate       DATETIME      NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    createby          VARCHAR(100)  NULL,
+    modifieby         VARCHAR(100)  NULL,
+    PRIMARY KEY (order_image_id),
+    KEY idx_customer_order_image_order (order_id),
+    KEY idx_customer_order_image_item (order_item_id),
+    KEY idx_customer_order_image_type (image_type),
+    CONSTRAINT fk_customer_order_image_order
+        FOREIGN KEY (order_id) REFERENCES customer_order (order_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_customer_order_image_item
+        FOREIGN KEY (order_item_id) REFERENCES customer_order_item (order_item_id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE = InnoDB;
+
+
+-- =========================================================
 -- 19. supplier  (nhà cung cấp nguyên vật liệu)
 -- =========================================================
 CREATE TABLE IF NOT EXISTS supplier (

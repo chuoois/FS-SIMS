@@ -11,11 +11,7 @@ const {
   cancelOrder: cancelOrderModel,
   updateOrderStatus: updateOrderStatusModel,
   assignLeaderToCustomerOrder,
-  leaderAcceptOrder,
-  leaderUpdateProgress,
-  leaderSubmitInspection,
   ownerInspectOrder,
-  getOrdersForLeader,
 } = require('../models/CustomerOrderModel');
 
 const {
@@ -416,110 +412,6 @@ async function inspectOrder(req, res) {
   }
 }
 
-/**
- * GET /api/order-management/leader/orders
- * Tổ trưởng xem danh sách đơn hàng được phân công cho mình
- */
-async function getLeaderOrders(req, res) {
-  try {
-    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
-    const { search, status, page = 1, limit = 10 } = req.query;
-
-    const result = await getOrdersForLeader(leaderId, { search, status, page, limit });
-
-    return res.status(200).json({
-      message: 'Lấy danh sách đơn hàng sản xuất thành công',
-      orders: (result.orders || []).map(toOrderManagementDTO),
-      pagination: {
-        totalItems: result.totalItems,
-        totalPages: result.totalPages,
-        currentPage: result.currentPage,
-        itemsPerPage: result.itemsPerPage,
-      },
-    });
-  } catch (error) {
-    console.error('[orderManagementController.getLeaderOrders]', error);
-    return res.status(500).json({
-      message: 'Lỗi máy chủ khi lấy danh sách đơn của Tổ trưởng',
-      error: error.message,
-    });
-  }
-}
-
-/**
- * POST /api/order-management/leader/orders/:id/accept
- * Tổ trưởng xác nhận tiếp nhận đơn hàng vào sản xuất
- */
-async function leaderAccept(req, res) {
-  try {
-    const { id } = req.params;
-    const orderId = parseInt(id, 10);
-    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
-
-    const order = await leaderAcceptOrder(orderId, leaderId);
-    return res.status(200).json({
-      message: 'Tiếp nhận đơn hàng vào sản xuất thành công',
-      order: toOrderManagementDTO(order),
-    });
-  } catch (error) {
-    console.error('[orderManagementController.leaderAccept]', error);
-    return res.status(400).json({
-      message: error.message || 'Lỗi khi tiếp nhận đơn hàng',
-      error: error.message,
-    });
-  }
-}
-
-/**
- * POST /api/order-management/leader/orders/:id/progress
- * Tổ trưởng cập nhật tiến độ / ghi chú phát sinh
- */
-async function leaderProgress(req, res) {
-  try {
-    const { id } = req.params;
-    const orderId = parseInt(id, 10);
-    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
-    const { note } = req.body;
-
-    const order = await leaderUpdateProgress(orderId, leaderId, { note });
-    return res.status(200).json({
-      message: 'Cập nhật tiến độ thành công',
-      order: toOrderManagementDTO(order),
-    });
-  } catch (error) {
-    console.error('[orderManagementController.leaderProgress]', error);
-    return res.status(400).json({
-      message: error.message || 'Lỗi khi cập nhật tiến độ',
-      error: error.message,
-    });
-  }
-}
-
-/**
- * POST /api/order-management/leader/orders/:id/submit-inspection
- * Tổ trưởng hoàn thành và gửi yêu cầu nghiệm thu lên Owner
- */
-async function leaderSubmit(req, res) {
-  try {
-    const { id } = req.params;
-    const orderId = parseInt(id, 10);
-    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
-    const { note, images } = req.body;
-
-    const order = await leaderSubmitInspection(orderId, leaderId, { note, images });
-    return res.status(200).json({
-      message: 'Đã gửi yêu cầu nghiệm thu lên Chủ xưởng thành công',
-      order: toOrderManagementDTO(order),
-    });
-  } catch (error) {
-    console.error('[orderManagementController.leaderSubmit]', error);
-    return res.status(400).json({
-      message: error.message || 'Lỗi khi gửi nghiệm thu',
-      error: error.message,
-    });
-  }
-}
-
 module.exports = {
   getOrders,
   getOrderDetail,
@@ -531,8 +423,4 @@ module.exports = {
   getStaffLeaders,
   assignLeader,
   inspectOrder,
-  getLeaderOrders,
-  leaderAccept,
-  leaderProgress,
-  leaderSubmit,
 };

@@ -83,14 +83,40 @@ function toOrderManagementDTO(raw) {
   const rawOrderItems = order.items || [];
   let inspectionImages = [];
   let inspectionNote = null;
+
+  // 1. Ưu tiên lấy từ bảng customer_order_image
+  const tableImages = order.inspectionImages || order.customerOrderImages || order.customerOrderImageOrderIdRecords;
+  if (Array.isArray(tableImages) && tableImages.length > 0) {
+    inspectionImages = tableImages
+      .map((img) => (typeof img === 'string' ? img : img.image_url))
+      .filter(Boolean);
+  }
+
+  // 2. Fallback đọc từ note cũ nếu bảng chưa có ảnh (tương thích ngược đơn cũ)
   if (order.note) {
-    const imgMatch = order.note.match(/\[(?:Ảnh nghiệm thu|INSPECTION_IMAGES)\]:\s*([^\n\r]+)/i);
-    if (imgMatch && imgMatch[1]) {
-      inspectionImages = imgMatch[1].split(',').map((s) => s.trim()).filter(Boolean);
+    if (inspectionImages.length === 0) {
+      const imgMatch = order.note.match(/\[(?:Ảnh nghiệm thu|INSPECTION_IMAGES)\]:\s*([^\n\r]+)/i);
+      if (imgMatch && imgMatch[1]) {
+        inspectionImages = imgMatch[1].split(',').map((s) => s.trim()).filter(Boolean);
+      }
     }
     const noteMatch = order.note.match(/\[Gửi nghiệm thu\]:\s*([^\n\r]+)/i);
     if (noteMatch && noteMatch[1]) {
       inspectionNote = noteMatch[1].trim();
+    }
+  }
+
+  let isProductionCompleted = false;
+  let rejectReason = null;
+  if (order.note) {
+    const lastDoneIdx = order.note.lastIndexOf('[PRODUCTION_DONE');
+    const lastPendingIdx = order.note.lastIndexOf('[PRODUCTION_PENDING');
+    if (lastDoneIdx !== -1) {
+      isProductionCompleted = lastDoneIdx > lastPendingIdx;
+    }
+    const rejectMatch = order.note.match(/\[Nghiệm thu KHÔNG ĐẠT[^\]]*\]:\s*([^\n\r]+)/i);
+    if (rejectMatch && rejectMatch[1]) {
+      rejectReason = rejectMatch[1].trim();
     }
   }
 
@@ -128,6 +154,8 @@ function toOrderManagementDTO(raw) {
     leaderName: order.staff?.full_name || null,
     inspectionImages,
     inspectionNote,
+    isProductionCompleted,
+    rejectReason,
     note: order.note,
     createdAt: order.createdate,
     updatedAt: order.modifiedate,

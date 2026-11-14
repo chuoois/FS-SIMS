@@ -12,6 +12,7 @@ const { UserAccount } = require('./userAccount.model');
 const { OrderRequest } = require('./OrderRequestModel');
 const { OrderRequestItem } = require('./OrderRequestItemModel');
 const { OrderRequestImage } = require('./OrderRequestImageModel');
+const { CustomerOrderImage } = require('./CustomerOrderImageModel');
 
 const CustomerOrder = sequelize.define('CustomerOrder', {
   order_id: { type: DataTypes.BIGINT, allowNull: false, primaryKey: true, autoIncrement: true },
@@ -106,6 +107,12 @@ if (!OrderRequestItem.associations || !OrderRequestItem.associations.images) {
 if (!OrderRequest.associations || !OrderRequest.associations.images) {
   if (typeof OrderRequest === 'function' && typeof OrderRequest.hasMany === 'function' && typeof OrderRequestImage === 'function') {
     OrderRequest.hasMany(OrderRequestImage, { foreignKey: 'request_id', as: 'images' });
+  }
+}
+if (!CustomerOrder.associations || !CustomerOrder.associations.inspectionImages) {
+  if (typeof CustomerOrder === 'function' && typeof CustomerOrder.hasMany === 'function' && typeof CustomerOrderImage === 'function') {
+    CustomerOrder.hasMany(CustomerOrderImage, { foreignKey: 'order_id', as: 'inspectionImages' });
+    CustomerOrderImage.belongsTo(CustomerOrder, { foreignKey: 'order_id', as: 'order' });
   }
 }
 
@@ -274,24 +281,56 @@ async function findOrderById(orderId) {
     itemInclude.push({ model: ContractItem, as: 'contractItem', attributes: ['contract_item_id', 'request_item_id'] });
   }
 
-  const order = await CustomerOrder.findByPk(orderId, {
-    include: [
-      {
-        model: Contract,
-        as: 'contract',
-      },
-      {
-        model: CustomerOrderItem,
-        as: 'items',
-        include: itemInclude,
-      },
-      {
-        model: UserAccount,
-        as: 'staff',
-        attributes: ['user_account_id', 'full_name', 'email', 'phone_number'],
-      },
-    ],
-  });
+  let order;
+  try {
+    order = await CustomerOrder.findByPk(orderId, {
+      include: [
+        {
+          model: Contract,
+          as: 'contract',
+        },
+        {
+          model: CustomerOrderItem,
+          as: 'items',
+          include: itemInclude,
+        },
+        {
+          model: UserAccount,
+          as: 'staff',
+          attributes: ['user_account_id', 'full_name', 'email', 'phone_number'],
+        },
+        ...(CustomerOrder.associations?.inspectionImages
+          ? [
+              {
+                model: CustomerOrderImage,
+                as: 'inspectionImages',
+                required: false,
+              },
+            ]
+          : []),
+      ],
+    });
+  } catch (_err) {
+    // Fallback nếu bảng customer_order_image chưa được tạo trong MySQL
+    order = await CustomerOrder.findByPk(orderId, {
+      include: [
+        {
+          model: Contract,
+          as: 'contract',
+        },
+        {
+          model: CustomerOrderItem,
+          as: 'items',
+          include: itemInclude,
+        },
+        {
+          model: UserAccount,
+          as: 'staff',
+          attributes: ['user_account_id', 'full_name', 'email', 'phone_number'],
+        },
+      ],
+    });
+  }
 
   if (
     order &&
@@ -720,7 +759,7 @@ async function leaderAcceptOrder(orderId, leaderId) {
 /**
  * Leader cập nhật tiến độ / ghi chú xưởng
  */
-async function leaderUpdateProgress(orderId, leaderId, { note } = {}) {
+async function leaderUpdateProgress(orderId, leaderId, { note, isCompleted } = {}) {
   const order = await CustomerOrder.findByPk(orderId);
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
@@ -728,10 +767,22 @@ async function leaderUpdateProgress(orderId, leaderId, { note } = {}) {
   if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
     throw new Error('Bạn không có quyền cập nhật tiến độ cho đơn hàng này.');
   }
+  if (order.status !== 'IN_PRODUCTION') {
+    throw new Error('Chỉ có thể cập nhật tiến độ khi đơn đang ở trạng thái Đang gia công (IN_PRODUCTION).');
+  }
 
-  const updatedNote = note
-    ? (order.note ? `${order.note}\n[${new Date().toLocaleDateString('vi-VN')} Leader]: ${note}` : note)
-    : order.note;
+  const dateStr = new Date().toLocaleDateString('vi-VN');
+  let newLine;
+  if (isCompleted === true) {
+    newLine = `[PRODUCTION_DONE - ${dateStr}]: Tổ trưởng đánh dấu hoàn thành sản xuất${note ? '. ' + String(note).trim() : ''}`;
+  } else {
+    newLine = `[PRODUCTION_PENDING - ${dateStr}]: Chưa hoàn thành${note ? '. Ghi chú: ' + String(note).trim() : ''}`;
+  }
+
+  // Giữ tối đa 490 ký tự để không tràn DB
+  const updatedNote = order.note
+    ? `${order.note}\n${newLine}`.slice(-490)
+    : newLine;
 
   await order.update({
     note: updatedNote,
@@ -764,6 +815,30 @@ async function leaderSubmitInspection(orderId, leaderId, { note, images } = {}) 
   if (images && images.length > 0) {
     const imgList = Array.isArray(images) ? images.filter(Boolean) : [images];
     if (imgList.length > 0) {
+      // 1. Lưu vào bảng CustomerOrderImage
+      try {
+        if (typeof CustomerOrderImage === 'function') {
+          // Xóa ảnh nghiệm thu cũ của lần nộp trước (nếu là nộp lại) để tránh trùng lặp
+          await CustomerOrderImage.destroy({
+            where: {
+              order_id: orderId,
+              image_type: 'INSPECTION',
+            },
+          });
+          const imageRecords = imgList.map((url, idx) => ({
+            order_id: orderId,
+            image_url: String(url).trim(),
+            image_type: 'INSPECTION',
+            sort_order: idx,
+            createby: String(leaderId),
+          }));
+          await CustomerOrderImage.bulkCreate(imageRecords);
+        }
+      } catch (imgErr) {
+        console.warn('[CustomerOrderModel.leaderSubmitInspection] Không thể lưu CustomerOrderImage:', imgErr.message);
+      }
+
+      // 2. Fallback ghi vắn tắt vào note (chỉ khi note không quá dài)
       noteParts.push(`[Ảnh nghiệm thu]: ${imgList.join(', ')}`);
     }
   }
@@ -921,6 +996,7 @@ async function getOrdersForLeader(leaderId, { search, status, page = 1, limit = 
 
 module.exports = {
   CustomerOrder,
+  CustomerOrderImage,
   generateNextOrderCode,
   createOrderFromContract,
   findOrderById,
