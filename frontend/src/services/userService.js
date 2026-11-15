@@ -7,12 +7,12 @@ import api from './api';
 
 export async function getUserProfile() {
   const response = await api.get('/users/profile');
-  return response.data; // { message, user }
+  return { ...(response.data.data || {}), message: response.data.message };
 }
 
 export async function updateUserProfile(profileData) {
   const response = await api.put('/users/profile', profileData);
-  return response.data; // { message, user }
+  return { ...(response.data.data || {}), message: response.data.message };
 }
 
 /**
@@ -21,5 +21,5 @@ export async function updateUserProfile(profileData) {
  */
 export async function changePassword({ currentPassword, newPassword }) {
   const response = await api.put('/users/change-password', { currentPassword, newPassword });
-  return response.data; // { message }
+  return { ...(response.data.data || {}), message: response.data.message };
 }

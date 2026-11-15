@@ -3,6 +3,8 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
+const traceIdMiddleware = require('./middlewares/traceId');
+const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
 const authRoutes = require('./routes/authRoutes');
 const staffAuthRoutes = require('./routes/staffAuthRoutes');
 const staffAccountRoutes = require('./routes/staffAccountRoutes');
@@ -24,15 +26,19 @@ const app = express();
 
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true, // Cần thiết để cookie được gửi/nhận cross-origin
+  credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(traceIdMiddleware);
 
-// Route kiểm tra server sống
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Backend đang chạy' });
+  res.success({
+    status: 200,
+    message: 'Backend đang chạy',
+    data: { status: 'ok' },
+  });
 });
 
 app.use('/api/auth', authRoutes);
@@ -52,10 +58,7 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/customer-orders', customerOrderRoutes);
 app.use('/api/financial-reports', financialReportRoutes);
 
-// Middleware xử lý lỗi tập trung
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Đã có lỗi xảy ra', error: err.message });
-});
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 module.exports = app;

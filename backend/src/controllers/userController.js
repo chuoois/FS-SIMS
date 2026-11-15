@@ -6,6 +6,8 @@ const {
 } = require('../models/userAccount.model');
 const bcrypt = require('bcryptjs');
 const { deleteImage, getPublicIdFromUrl } = require('../services/cloudinaryService');
+const { ApiError } = require('../utils/ApiError');
+const { buildSuccessResponse } = require('../utils/successResponse');
 
 function mapUserProfile(account = {}) {
   return {
@@ -22,50 +24,59 @@ function mapUserProfile(account = {}) {
   };
 }
 
-async function getProfile(req, res) {
-  try {
-    const userId = Number(req.user?.sub);
-    if (!userId) {
-      return res.status(401).json({ message: 'Yêu cầu xác thực. Vui lòng đăng nhập.' });
-    }
+function getErrorForNext(error, detail) {
+  if (error instanceof ApiError) return error;
 
+  const apiError = new ApiError(500, detail);
+  apiError.cause = error;
+  return apiError;
+}
+
+function getAuthenticatedUserId(req) {
+  const userId = Number(req.user?.sub);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new ApiError(401, 'Yêu cầu xác thực. Vui lòng đăng nhập.');
+  }
+  return userId;
+}
+
+async function getProfile(req, res, next) {
+  try {
+    const userId = getAuthenticatedUserId(req);
     const account = await findUserAccountById(userId);
     if (!account) {
-      return res.status(404).json({ message: 'Người dùng không tồn tại' });
+      throw new ApiError(404, 'Người dùng không tồn tại');
     }
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Lấy thông tin hồ sơ thành công',
-      user: mapUserProfile(account),
-    });
+      data: { user: mapUserProfile(account) },
+      req,
+    }));
   } catch (error) {
-    console.error('[userController.getProfile]', error);
-    return res.status(500).json({ message: 'Không thể lấy thông tin hồ sơ' });
+    return next(getErrorForNext(error, 'Không thể lấy thông tin hồ sơ'));
   }
 }
 
-async function updateProfile(req, res) {
+async function updateProfile(req, res, next) {
   try {
-    const userId = Number(req.user?.sub);
-    if (!userId) {
-      return res.status(401).json({ message: 'Yêu cầu xác thực. Vui lòng đăng nhập.' });
-    }
-
+    const userId = getAuthenticatedUserId(req);
     const existing = await findUserAccountById(userId);
     if (!existing) {
-      return res.status(404).json({ message: 'Người dùng không tồn tại' });
+      throw new ApiError(404, 'Người dùng không tồn tại');
     }
 
     const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
     if (!fullName) {
-      return res.status(400).json({ message: 'Họ và tên là bắt buộc' });
+      throw new ApiError(400, 'Họ và tên là bắt buộc');
     }
 
     const phone = req.body?.phone !== undefined && req.body?.phone !== null && req.body?.phone !== ''
       ? String(req.body.phone).trim()
       : null;
     if (phone && !/^(0|\+84)\d{9,10}$/.test(phone.replace(/\s/g, ''))) {
-      return res.status(400).json({ message: 'Số điện thoại không hợp lệ' });
+      throw new ApiError(400, 'Số điện thoại không hợp lệ');
     }
 
     const birthday = req.body?.birthday || null;
@@ -90,7 +101,7 @@ async function updateProfile(req, res) {
 
     const updated = await updateUserProfile(userId, updatePayload, `USER:${userId}`);
     if (!updated) {
-      return res.status(400).json({ message: 'Cập nhật hồ sơ không thành công' });
+      throw new ApiError(400, 'Cập nhật hồ sơ không thành công');
     }
 
     if (avatarUrl !== undefined && existingAvatarUrl && avatarUrl !== existingAvatarUrl) {
@@ -101,66 +112,67 @@ async function updateProfile(req, res) {
       }
     }
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Cập nhật hồ sơ thành công',
-      user: mapUserProfile({
-        ...existing,
-        full_name: fullName,
-        phone_number: phone,
-        dob: birthday,
-        gender,
-        address,
-        avatar_url: avatarUrl !== undefined ? avatarUrl : existingAvatarUrl,
-      }),
-    });
+      data: {
+        user: mapUserProfile({
+          ...existing,
+          full_name: fullName,
+          phone_number: phone,
+          dob: birthday,
+          gender,
+          address,
+          avatar_url: avatarUrl !== undefined ? avatarUrl : existingAvatarUrl,
+        }),
+      },
+      req,
+    }));
   } catch (error) {
-    console.error('[userController.updateProfile]', error);
-    return res.status(500).json({ message: 'Không thể cập nhật hồ sơ' });
+    return next(getErrorForNext(error, 'Không thể cập nhật hồ sơ'));
   }
 }
 
-// =========================================================
-// PUT /api/users/change-password
-// Body: { currentPassword, newPassword }
-// =========================================================
-async function changePassword(req, res) {
+async function changePassword(req, res, next) {
   try {
-    const userId = Number(req.user?.sub);
+    const userId = getAuthenticatedUserId(req);
     const userEmail = req.user?.email;
-    if (!userId) {
-      return res.status(401).json({ message: 'Yêu cầu xác thực. Vui lòng đăng nhập.' });
-    }
-
     const { currentPassword, newPassword } = req.body ?? {};
 
-    if (!currentPassword) {
-      return res.status(400).json({ message: 'Vui lòng nhập mật khẩu hiện tại.' });
+    if (typeof currentPassword !== 'string' || !currentPassword) {
+      throw new ApiError(400, 'Vui lòng nhập mật khẩu hiện tại.');
     }
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 8 ký tự.' });
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      throw new ApiError(400, 'Mật khẩu mới phải có ít nhất 8 ký tự.');
     }
     if (currentPassword === newPassword) {
-      return res.status(400).json({ message: 'Mật khẩu mới phải khác mật khẩu hiện tại.' });
+      throw new ApiError(400, 'Mật khẩu mới phải khác mật khẩu hiện tại.');
     }
 
-    // findUserAccountByEmail trả về password_hash; findById không trả về
     const account = await findUserAccountByEmail(userEmail);
     if (!account) {
-      return res.status(404).json({ message: 'Người dùng không tồn tại.' });
+      throw new ApiError(404, 'Người dùng không tồn tại.');
     }
 
     const isMatch = await bcrypt.compare(currentPassword, account.password_hash);
     if (!isMatch) {
-      return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng.' });
+      throw new ApiError(400, 'Mật khẩu hiện tại không đúng.');
     }
 
     const newHash = await bcrypt.hash(newPassword, 10);
-    await updateUserPassword(userId, newHash);
+    const updated = await updateUserPassword(userId, newHash);
+    if (!updated) {
+      throw new ApiError(404, 'Người dùng không tồn tại.');
+    }
 
-    return res.status(200).json({ message: 'Đổi mật khẩu thành công.' });
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
+      message: 'Đổi mật khẩu thành công.',
+      data: null,
+      req,
+    }));
   } catch (error) {
-    console.error('[userController.changePassword]', error);
-    return res.status(500).json({ message: 'Không thể đổi mật khẩu.' });
+    return next(getErrorForNext(error, 'Không thể đổi mật khẩu.'));
   }
 }
 

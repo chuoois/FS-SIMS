@@ -24,6 +24,12 @@ const AuthContext = createContext(null);
 
 const ACCESS_TOKEN_KEY = 'accessToken';
 
+function getResponsePayload(responseBody) {
+  return responseBody && Object.prototype.hasOwnProperty.call(responseBody, 'data')
+    ? responseBody.data
+    : responseBody;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
@@ -68,7 +74,12 @@ export function AuthProvider({ children }) {
 
       // Không có session trong storage → thử dùng cookie httpOnly để lấy token mới
       try {
-        const data = await refreshAccessToken(); // { message, accessToken }
+        const responseBody = await refreshAccessToken();
+        const data = getResponsePayload(responseBody);
+        if (!data?.accessToken) {
+          throw new Error('Refresh response did not include an access token.');
+        }
+
         if (!cancelled) {
           // Cần lấy thông tin user: giải mã payload từ accessToken
           const payload = parseJwtPayload(data.accessToken);
@@ -103,7 +114,12 @@ export function AuthProvider({ children }) {
 
   // ── Login ──────────────────────────────────────────────
   const login = useCallback(async ({ email, password }) => {
-    const data = await loginUser({ email, password });
+    const responseBody = await loginUser({ email, password });
+    const data = getResponsePayload(responseBody);
+    if (!data?.accessToken || !data?.user) {
+      throw new Error('Login response did not include a user and access token.');
+    }
+
     saveSession(data.accessToken, data.user);
     return data;
   }, [saveSession]);

@@ -87,6 +87,10 @@ export const PublicRouter = {
           element: <CustomerOrdersPage />,
         },
         {
+          path: "my-orders/requests/:requestId",
+          element: <CustomerOrderDetailPage />,
+        },
+        {
           path: "my-orders/:id",
           element: <CustomerOrderDetailPage />,
         },

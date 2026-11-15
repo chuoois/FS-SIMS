@@ -65,7 +65,12 @@ async function refreshAccessTokenSingleFlight() {
       { withCredentials: true }
     )
     .then(({ data }) => {
-      const newToken = data.accessToken;
+      const payload = data?.data ?? data;
+      const newToken = payload?.accessToken;
+      if (!newToken) {
+        throw new Error('Refresh response did not include an access token.');
+      }
+
       sessionStorage.setItem(ACCESS_TOKEN_KEY, newToken);
       api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
       return newToken;

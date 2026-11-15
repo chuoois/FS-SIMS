@@ -159,7 +159,7 @@ const InfoForm = () => {
         setSavedAvatarUrl(currentAvatarUrl);
       } catch (error) {
         if (!active) return;
-        showStatus(error?.response?.data?.message || 'Không thể tải thông tin hồ sơ.', 'error');
+        showStatus(error?.response?.data?.detail || error?.response?.data?.message || 'Không thể tải thông tin hồ sơ.', 'error');
       } finally {
         if (active) setIsFetching(false);
       }
@@ -234,7 +234,7 @@ const InfoForm = () => {
       setRemoveAvatar(false);
       showStatus(response?.message || 'Đã lưu thay đổi.');
     } catch (error) {
-      showStatus(error?.response?.data?.message || 'Không thể cập nhật hồ sơ.', 'error');
+      showStatus(error?.response?.data?.detail || error?.response?.data?.message || 'Không thể cập nhật hồ sơ.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -263,7 +263,7 @@ const InfoForm = () => {
         <Field label="Họ và tên (Yêu cầu)" error={errors.fullName}>
           {(p) => <input {...p} value={values.fullName} onChange={set('fullName')} autoComplete="name" />}
         </Field>
-        <Field label="Số điện thoại (Yêu cầu)" error={errors.phone}>
+        <Field label="Số điện thoại (Tùy chọn)" error={errors.phone}>
           {(p) => <input {...p} type="tel" value={values.phone} onChange={set('phone')} autoComplete="tel" />}
         </Field>
         <Field label="Email" hint="Email dùng để đăng nhập nên không thể thay đổi.">
@@ -363,7 +363,7 @@ const PasswordForm = () => {
       setStatus(data?.message || 'Đổi mật khẩu thành công.');
       setStatusType('success');
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Không thể đổi mật khẩu, vui lòng thử lại.';
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || 'Không thể đổi mật khẩu, vui lòng thử lại.';
       setStatus(msg);
       setStatusType('error');
     } finally {

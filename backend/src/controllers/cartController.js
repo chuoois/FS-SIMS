@@ -6,19 +6,31 @@ const {
   removeCartItem,
 } = require('../models/CartModel');
 const { toProductDTO } = require('../utils/productValidator');
+const { ApiError } = require('../utils/ApiError');
+const { buildSuccessResponse } = require('../utils/successResponse');
 
 function getCustomerAccountId(req) {
   const customerAccountId = Number(req.user?.sub);
   if (!Number.isInteger(customerAccountId) || customerAccountId <= 0) {
-    const error = new Error('Tài khoản khách hàng không hợp lệ.');
-    error.statusCode = 401;
-    throw error;
+    throw new ApiError(401, 'Tài khoản khách hàng không hợp lệ.');
   }
   return customerAccountId;
 }
 
 function getActor(req) {
   return req.user?.email || `USER:${req.user.sub}`;
+}
+
+function getErrorForNext(error, detail) {
+  if (error instanceof ApiError) return error;
+
+  if (Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+    return new ApiError(error.statusCode, error.message);
+  }
+
+  const apiError = new ApiError(500, detail);
+  apiError.cause = error;
+  return apiError;
 }
 
 async function buildCartResponse(cart) {
@@ -42,30 +54,30 @@ async function buildCartResponse(cart) {
   };
 }
 
-async function getCart(req, res) {
+async function getCart(req, res, next) {
   try {
     const cart = await findOrCreateCart(getCustomerAccountId(req), getActor(req));
-    return res.status(200).json({
+    const data = await buildCartResponse(cart);
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Lấy giỏ hàng thành công',
-      data: await buildCartResponse(cart),
-    });
+      data,
+      req,
+    }));
   } catch (error) {
-    console.error('[cartController.getCart]', error);
-    return res.status(error.statusCode || 500).json({
-      message: error.statusCode ? error.message : 'Lỗi máy chủ khi lấy giỏ hàng',
-    });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy giỏ hàng'));
   }
 }
 
-async function addItem(req, res) {
+async function addItem(req, res, next) {
   try {
-    const productId = Number(req.body.productId);
-    const quantity = req.body.quantity === undefined ? 1 : Number(req.body.quantity);
+    const productId = Number(req.body?.productId);
+    const quantity = req.body?.quantity === undefined ? 1 : Number(req.body.quantity);
     if (!Number.isInteger(productId) || productId <= 0) {
-      return res.status(400).json({ message: 'Mã sản phẩm không hợp lệ.' });
+      throw new ApiError(400, 'Mã sản phẩm không hợp lệ.');
     }
     if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 99) {
-      return res.status(400).json({ message: 'Số lượng phải là số nguyên từ 1 đến 99.' });
+      throw new ApiError(400, 'Số lượng phải là số nguyên từ 1 đến 99.');
     }
 
     const customerAccountId = getCustomerAccountId(req);
@@ -73,78 +85,78 @@ async function addItem(req, res) {
       customerAccountId,
       productId,
       quantity,
-      getActor(req)
+      getActor(req),
     );
-    return res.status(200).json({
+    const data = await buildCartResponse(cart);
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Đã thêm sản phẩm vào giỏ hàng',
-      data: await buildCartResponse(cart),
-    });
+      data,
+      req,
+    }));
   } catch (error) {
-    console.error('[cartController.addItem]', error);
-    return res.status(error.statusCode || 500).json({
-      message: error.statusCode ? error.message : 'Lỗi máy chủ khi thêm sản phẩm vào giỏ hàng',
-    });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi thêm sản phẩm vào giỏ hàng'));
   }
 }
 
-async function updateItem(req, res) {
+async function updateItem(req, res, next) {
   try {
     const productId = Number(req.params.productId);
-    const quantity = Number(req.body.quantity);
+    const quantity = Number(req.body?.quantity);
     if (!Number.isInteger(productId) || productId <= 0) {
-      return res.status(400).json({ message: 'Mã sản phẩm không hợp lệ.' });
+      throw new ApiError(400, 'Mã sản phẩm không hợp lệ.');
     }
     if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 99) {
-      return res.status(400).json({ message: 'Số lượng phải là số nguyên từ 1 đến 99.' });
+      throw new ApiError(400, 'Số lượng phải là số nguyên từ 1 đến 99.');
     }
 
     const cart = await updateCartItemQuantity(
       getCustomerAccountId(req),
       productId,
       quantity,
-      getActor(req)
+      getActor(req),
     );
     if (!cart) {
-      return res.status(404).json({ message: 'Sản phẩm không có trong giỏ hàng.' });
+      throw new ApiError(404, 'Sản phẩm không có trong giỏ hàng.');
     }
 
-    return res.status(200).json({
+    const data = await buildCartResponse(cart);
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Cập nhật số lượng thành công',
-      data: await buildCartResponse(cart),
-    });
+      data,
+      req,
+    }));
   } catch (error) {
-    console.error('[cartController.updateItem]', error);
-    return res.status(error.statusCode || 500).json({
-      message: error.statusCode ? error.message : 'Lỗi máy chủ khi cập nhật giỏ hàng',
-    });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi cập nhật giỏ hàng'));
   }
 }
 
-async function deleteItem(req, res) {
+async function deleteItem(req, res, next) {
   try {
     const productId = Number(req.params.productId);
     if (!Number.isInteger(productId) || productId <= 0) {
-      return res.status(400).json({ message: 'Mã sản phẩm không hợp lệ.' });
+      throw new ApiError(400, 'Mã sản phẩm không hợp lệ.');
     }
 
     const cart = await removeCartItem(
       getCustomerAccountId(req),
       productId,
-      getActor(req)
+      getActor(req),
     );
     if (!cart) {
-      return res.status(404).json({ message: 'Sản phẩm không có trong giỏ hàng.' });
+      throw new ApiError(404, 'Sản phẩm không có trong giỏ hàng.');
     }
 
-    return res.status(200).json({
+    const data = await buildCartResponse(cart);
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Đã xóa sản phẩm khỏi giỏ hàng',
-      data: await buildCartResponse(cart),
-    });
+      data,
+      req,
+    }));
   } catch (error) {
-    console.error('[cartController.deleteItem]', error);
-    return res.status(error.statusCode || 500).json({
-      message: error.statusCode ? error.message : 'Lỗi máy chủ khi xóa sản phẩm khỏi giỏ hàng',
-    });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi xóa sản phẩm khỏi giỏ hàng'));
   }
 }
 

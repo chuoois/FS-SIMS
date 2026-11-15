@@ -100,6 +100,7 @@ export const StaffLoginPage = () => {
       navigate(redirectTarget, { replace: true });
     } catch (err) {
       const msg =
+        err?.response?.data?.detail ||
         err?.response?.data?.message ||
         err?.message ||
         'Đăng nhập thất bại. Vui lòng kiểm tra lại email hoặc mật khẩu.';
