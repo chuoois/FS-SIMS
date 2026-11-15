@@ -16,11 +16,14 @@ const {
   getStaffLeaders,
   assignLeader,
   inspectOrder,
+} = require('../controllers/orderManagementController');
+
+const {
   getLeaderOrders,
   leaderAccept,
   leaderProgress,
   leaderSubmit,
-} = require('../controllers/orderManagementController');
+} = require('../controllers/leaderStaffController');
 
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 const upload = require('../middlewares/uploadMiddleware');
