@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS user_account (
     password_hash   VARCHAR(255) NOT NULL,
     status          VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
     full_name       VARCHAR(150) NOT NULL,
-    phone_number    VARCHAR(20)  NOT NULL,
+    phone_number    VARCHAR(20)  NULL,
     dob             DATE         NULL,
     gender          VARCHAR(10)  NULL,
     address         VARCHAR(255) NULL,

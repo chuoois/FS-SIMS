@@ -39,7 +39,7 @@ const LinkList = ({ links }) => (
 export const Footer = () => {
   return (
     <footer id="lien-he" className="relative text-white">
-      {/* Kêu gọi hành động */}
+      {/* Kêu gọi hành động  */}
       <section className="flex min-h-[461px] flex-col items-center justify-end bg-[#232226] px-5 pb-[37px] text-center">
         <h2 className="text-4xl font-bold tracking-tight sm:text-5xl">Xem, chạm và cảm nhận</h2>
         <a

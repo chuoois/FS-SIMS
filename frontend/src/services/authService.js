@@ -6,7 +6,6 @@
 import api from './api';
 
 /**
- * Đăng nhập - trả về { accessToken, user }
  * Refresh token được lưu tự động qua httpOnly cookie
  */
 export async function loginUser({ email, password }) {

@@ -1,9 +1,8 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Heart,
   Search,
   SlidersHorizontal,
   X,
@@ -137,7 +136,7 @@ const Banner = ({ banner, total }) => (
   </section>
 );
 
-const ProductCard = ({ product, liked, onToggle }) => (
+const ProductCard = ({ product }) => (
   <article className="group relative flex flex-col">
     <div className="relative overflow-hidden bg-stone-100">
       <a href={`/san-pham/${product.id}`} aria-label={product.name} className="block">
@@ -157,23 +156,6 @@ const ProductCard = ({ product, liked, onToggle }) => (
           </span>
         )}
       </div>
-
-      {/* Nút yêu thích */}
-      <button
-        type="button"
-        onClick={() => onToggle(product.id)}
-        aria-pressed={liked}
-        aria-label={`Yêu thích ${product.name}`}
-        className={`absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-white/90 text-stone-600 shadow-sm transition hover:bg-white hover:text-red-600 ${focusRing}`}
-      >
-        <Heart
-          className="size-4"
-          strokeWidth={1.6}
-          fill={liked ? '#dc2626' : 'none'}
-          stroke={liked ? '#dc2626' : 'currentColor'}
-          aria-hidden="true"
-        />
-      </button>
     </div>
 
     <a href={`/san-pham/${product.id}`} className="mt-4 flex flex-col">
@@ -426,7 +408,6 @@ export const ProductPage = () => {
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const [liked, setLiked] = useState(() => new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const gridTopRef = useRef(null);
@@ -493,7 +474,7 @@ export const ProductPage = () => {
         const list = Array.isArray(res?.data) ? res.data : [];
         setProducts(list.map(normalizeProduct));
 
-        const pg = res?.pagination || {};
+        const pg = res?.meta || {};
         setTotalPages(Math.max(1, Number(pg.totalPages) || 1));
         const total = pg.total ?? pg.totalItems ?? pg.totalProducts;
         setTotalItems(total !== undefined && total !== null ? Number(total) : null);
@@ -539,15 +520,6 @@ export const ProductPage = () => {
     setPage(p);
     gridTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-
-  const toggleLike = useCallback((id) => {
-    setLiked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
 
   const hasActiveFilters = category !== 'ALL' || room !== 'ALL' || Boolean(search);
   const activeCategoryName = useMemo(
@@ -726,7 +698,7 @@ export const ProductPage = () => {
               <>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-10 xl:grid-cols-3">
                   {products.map((p) => (
-                    <ProductCard key={p.id} product={p} liked={liked.has(p.id)} onToggle={toggleLike} />
+                    <ProductCard key={p.id} product={p} />
                   ))}
                 </div>
                 <Pagination page={page} total={totalPages} onChange={goTo} />

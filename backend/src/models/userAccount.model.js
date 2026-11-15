@@ -45,7 +45,7 @@ const UserAccount = sequelize.define(
 
     phone_number: {
       type: DataTypes.STRING(20),
-      allowNull: false,
+      allowNull: true,
     },
 
     dob: {

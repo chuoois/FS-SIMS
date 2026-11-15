@@ -18,16 +18,17 @@ const {
   createRefreshToken,
   findValidRefreshToken,
   deleteRefreshToken,
-  deleteTokensByAccountId,
 } = require('../models/refreshToken.model');
 const {
   validateLoginInput,
   validateRegistrationInput,
 } = require('../utils/validators');
 const { sendNewPasswordEmail } = require('../services/mailService');
+const { ApiError } = require('../utils/ApiError');
+const { buildSuccessResponse } = require('../utils/successResponse');
 
-const ACCESS_TOKEN_EXPIRES = '30s';
-const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
+const ACCESS_TOKEN_EXPIRES = '15m';
+const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isDuplicateEmailError(error) {
   return error?.name === 'SequelizeUniqueConstraintError'
@@ -39,7 +40,6 @@ function generateAccessToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES });
 }
 
-// Role code của nhân sự nội bộ (không được đăng nhập cổng khách hàng)
 const STAFF_ROLE_CODES = ['OWNER', 'SALES', 'LEADERSTAFF'];
 
 let cachedStaffRoleIds = null;
@@ -56,30 +56,25 @@ async function getStaffRoleIds() {
   return ids;
 }
 
-// =========================================================
-// POST /api/auth/register
-// =========================================================
-async function register(req, res) {
-  // Frontend gửi { fullName, email, phone, password }
-  const { fullName, email, phone: phoneNumber, password } = req.body;
-
-  const validationError = validateRegistrationInput({ email, password, fullName, phoneNumber });
-  if (validationError) {
-    return res.status(400).json({ message: validationError });
-  }
-
-  const normalizedEmail = email.trim().toLowerCase();
-  const normalizedFullName = fullName.trim();
+async function register(req, res, next) {
+  const { fullName, email, phone: phoneNumber, password } = req.body || {};
 
   try {
+    const validationError = validateRegistrationInput({ email, password, fullName, phoneNumber });
+    if (validationError) {
+      throw new ApiError(400, validationError);
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedFullName = fullName.trim();
     const existingAccount = await findUserAccountByEmail(normalizedEmail);
     if (existingAccount) {
-      return res.status(409).json({ message: 'Email đã được sử dụng' });
+      throw new ApiError(409, 'Email đã được sử dụng');
     }
 
     const customerRole = await findUserRoleByCode('CUSTOMER');
     if (!customerRole) {
-      return res.status(500).json({ message: 'Chưa cấu hình vai trò CUSTOMER' });
+      throw new ApiError(500, 'Chưa cấu hình vai trò CUSTOMER');
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -92,53 +87,56 @@ async function register(req, res) {
       createBy: 'SYSTEM',
     });
 
-    return res.status(201).json({
+    return res.status(201).json(buildSuccessResponse({
+      status: 201,
       message: 'Đăng ký tài khoản thành công',
-      user,
-    });
+      data: {
+        email: user?.email || normalizedEmail,
+        fullName: user?.full_name || normalizedFullName,
+      },
+      req,
+    }));
   } catch (error) {
     if (isDuplicateEmailError(error)) {
-      return res.status(409).json({ message: 'Email đã được sử dụng' });
+      return next(new ApiError(409, 'Email đã được sử dụng'));
     }
 
-    console.error('[authController.register]', error);
-    return res.status(500).json({ message: 'Không thể tạo tài khoản' });
+    if (error instanceof ApiError) {
+      return next(error);
+    }
+
+    const apiError = new ApiError(500, 'Không thể tạo tài khoản');
+    apiError.cause = error;
+    return next(apiError);
   }
 }
 
-// =========================================================
-// POST /api/auth/login
-// =========================================================
-async function login(req, res) {
-  const validationError = validateLoginInput(req.body);
-  if (validationError) {
-    return res.status(400).json({ message: validationError });
-  }
-
-  const email = req.body.email.trim().toLowerCase();
-  const { password } = req.body;
-
+async function login(req, res, next) {
   try {
+    const validationError = validateLoginInput(req.body);
+    if (validationError) {
+      throw new ApiError(400, validationError);
+    }
+
+    const email = req.body.email.trim().toLowerCase();
+    const { password } = req.body;
     const account = await findUserAccountByEmail(email);
     if (!account) {
-      return res.status(404).json({ message: 'Tài khoản không tồn tại' });
+      throw new ApiError(404, 'Tài khoản không tồn tại');
     }
 
     if (account.status !== 'ACTIVE') {
-      return res.status(403).json({ message: 'Tài khoản đã bị vô hiệu hóa' });
+      throw new ApiError(403, 'Tài khoản đã bị vô hiệu hóa');
     }
 
-    // ── Kiểm tra role: tài khoản nhân viên không được đăng nhập tại cổng Khách hàng ──
     const staffRoleIds = await getStaffRoleIds();
     if (staffRoleIds.includes(Number(account.role_id))) {
-      return res.status(403).json({
-        message: 'Tài khoản này không được cấp quyền truy cập.Vui lòng liên hệ quản trị viên',
-      });
+      throw new ApiError(403, 'Tài khoản này không được cấp quyền truy cập. Vui lòng liên hệ quản trị viên');
     }
 
     const isPasswordValid = await bcrypt.compare(password, account.password_hash);
     if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Email hoặc mật khẩu không đúng' });
+      throw new ApiError(401, 'Email hoặc mật khẩu không đúng');
     }
 
     const tokenPayload = {
@@ -148,8 +146,6 @@ async function login(req, res) {
     };
 
     const accessToken = generateAccessToken(tokenPayload);
-
-    // Tạo refresh token ngẫu nhiên bằng crypto
     const rawRefreshToken = randomBytes(64).toString('hex');
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRES_MS);
 
@@ -160,7 +156,6 @@ async function login(req, res) {
       createBy: `USER:${account.user_account_id}`,
     });
 
-    // Gửi refresh token qua httpOnly cookie (bảo mật hơn)
     res.cookie('refreshToken', rawRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -168,43 +163,41 @@ async function login(req, res) {
       maxAge: REFRESH_TOKEN_EXPIRES_MS,
     });
 
-
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Đăng nhập thành công',
-      accessToken,
-      user: {
-        userAccountId: account.user_account_id,
-        email: account.email,
-        fullName: account.full_name,
-        roleId: account.role_id,
-        avatarUrl: account.avatar_url || null,
+      data: {
+        accessToken,
+        user: {
+          userAccountId: account.user_account_id,
+          email: account.email,
+          fullName: account.full_name,
+          roleId: account.role_id,
+          avatarUrl: account.avatar_url || null,
+        },
       },
-    });
+      req,
+    }));
   } catch (error) {
-    console.error('[authController.login]', error);
-    return res.status(500).json({ message: 'Lỗi máy chủ, vui lòng thử lại' });
+    return next(error instanceof ApiError ? error : new ApiError(500, 'Lỗi máy chủ, vui lòng thử lại'));
   }
 }
 
-// =========================================================
-// POST /api/auth/refresh
-// =========================================================
-async function refreshToken(req, res) {
-  const token = req.cookies?.refreshToken;
-  if (!token) {
-    return res.status(401).json({ message: 'Không tìm thấy refresh token' });
-  }
-
+async function refreshToken(req, res, next) {
   try {
-    const stored = await findValidRefreshToken(token);
-    if (!stored) {
-      return res.status(401).json({ message: 'Refresh token không hợp lệ hoặc đã hết hạn' });
+    const token = req.cookies?.refreshToken;
+    if (!token) {
+      throw new ApiError(401, 'Không tìm thấy refresh token');
     }
 
-    // Dùng user_account_id (không phải email — bảng refresh_token không có cột email)
+    const stored = await findValidRefreshToken(token);
+    if (!stored) {
+      throw new ApiError(401, 'Refresh token không hợp lệ hoặc đã hết hạn');
+    }
+
     const account = await findUserAccountById(stored.user_account_id);
     if (!account) {
-      return res.status(401).json({ message: 'Tài khoản không tồn tại' });
+      throw new ApiError(401, 'Tài khoản không tồn tại');
     }
 
     const tokenPayload = {
@@ -215,86 +208,88 @@ async function refreshToken(req, res) {
 
     const newAccessToken = generateAccessToken(tokenPayload);
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Làm mới token thành công',
-      accessToken: newAccessToken,
-    });
+      data: { accessToken: newAccessToken },
+      req,
+    }));
   } catch (error) {
-    console.error('[authController.refreshToken]', error);
-    return res.status(500).json({ message: 'Lỗi máy chủ' });
+    return next(error instanceof ApiError ? error : new ApiError(500, 'Lỗi máy chủ'));
   }
 }
 
-// =========================================================
-// POST /api/auth/logout
-// =========================================================
-async function logout(req, res) {
-  const token = req.cookies?.refreshToken;
-
-  if (token) {
-    try {
-      await deleteRefreshToken(token);
-    } catch (error) {
-      console.error('[authController.logout] delete token error:', error.message);
-    }
-  }
-
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-  });
-
-  return res.status(200).json({ message: 'Đăng xuất thành công' });
-}
-
-// =========================================================
-// POST /api/auth/forgot-password
-// =========================================================
-async function forgotPassword(req, res) {
-  const email = req.body?.email?.trim().toLowerCase();
-  if (!email) {
-    return res.status(400).json({ message: 'Vui lòng cung cấp địa chỉ email.' });
-  }
-
-  // Phản hồi chung — không tiết lộ email có tồn tại hay không (tránh user enumeration)
-  const genericOk = {
-    message: 'Nếu email đã được đăng ký, mật khẩu mới sẽ được gửi đến hộp thư của bạn.',
-  };
-
+async function logout(req, res, next) {
   try {
+    const token = req.cookies?.refreshToken;
+
+    if (token) {
+      try {
+        await deleteRefreshToken(token);
+      } catch (error) {
+        console.error('[authController.logout] delete token error:', error.message);
+      }
+    }
+
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
+      message: 'Đăng xuất thành công',
+      data: null,
+      req,
+    }));
+  } catch (error) {
+    return next(error instanceof ApiError ? error : new ApiError(500, 'Lỗi máy chủ'));
+  }
+}
+
+async function forgotPassword(req, res, next) {
+  try {
+    const email = req.body?.email?.trim().toLowerCase();
+    if (!email) {
+      throw new ApiError(400, 'Vui lòng cung cấp địa chỉ email.');
+    }
+
+    const genericMessage = 'Nếu email đã được đăng ký, mật khẩu mới sẽ được gửi đến hộp thư của bạn.';
     const account = await findUserAccountByEmail(email);
-    if (!account) {
-      // Trả 200 để không lộ thông tin
-      return res.status(200).json(genericOk);
+
+    if (!account || account.status !== 'ACTIVE') {
+      return res.status(200).json(buildSuccessResponse({
+        status: 200,
+        message: genericMessage,
+        data: null,
+        req,
+      }));
     }
 
-    if (account.status !== 'ACTIVE') {
-      return res.status(200).json(genericOk);
-    }
-
-    // Tạo mật khẩu mới ngẫu nhiên: 10 ký tự gồm chữ hoa, chữ thường và số
     const newPassword = randomBytes(8)
       .toString('base64')
       .replace(/[^a-zA-Z0-9]/g, '')
       .slice(0, 10)
       .padEnd(10, 'A');
 
-    // Hash và lưu vào DB
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await updateUserPassword(account.user_account_id, passwordHash);
 
-    // Gửi mail (không await để không block response nếu mail chậm)
     sendNewPasswordEmail(
       account.email,
       account.full_name || 'bạn',
       newPassword,
     ).catch((err) => console.error('[forgotPassword] sendMail error:', err.message));
 
-    return res.status(200).json(genericOk);
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
+      message: genericMessage,
+      data: null,
+      req,
+    }));
   } catch (error) {
-    console.error('[authController.forgotPassword]', error);
-    return res.status(500).json({ message: 'Lỗi máy chủ, vui lòng thử lại.' });
+    return next(error instanceof ApiError ? error : new ApiError(500, 'Lỗi máy chủ, vui lòng thử lại.'));
   }
 }
 

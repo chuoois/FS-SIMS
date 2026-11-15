@@ -522,35 +522,60 @@ async function getCustomerOrdersWithPagination(customerAccountId, { page = 1, li
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (pageNum - 1) * limitNum;
+  const rowsNeeded = offset + limitNum;
 
-  const { rows, count } = await CustomerOrder.findAndCountAll({
-    where: { customer_account_id: customerAccountId },
-    include: [
-      {
-        model: Contract,
-        as: 'contract',
-        attributes: ['contract_id', 'contract_code'],
+  const [ordersResult, requestsResult] = await Promise.all([
+    CustomerOrder.findAndCountAll({
+      where: { customer_account_id: customerAccountId },
+      include: [
+        {
+          model: Contract,
+          as: 'contract',
+          attributes: ['contract_id', 'contract_code'],
+        },
+        {
+          model: CustomerOrderItem,
+          as: 'items',
+          include: [
+            {
+              model: Product,
+              as: 'product',
+              attributes: ['product_id', 'product_code', 'product_name', 'image_url'],
+            },
+          ],
+        },
+      ],
+      order: [['createdate', 'DESC'], ['order_id', 'DESC']],
+      limit: rowsNeeded,
+      offset: 0,
+      distinct: true,
+    }),
+    OrderRequest.findAndCountAll({
+      where: {
+        customer_account_id: customerAccountId,
+        status: { [Op.ne]: 'CONVERTED' },
       },
-      {
-        model: CustomerOrderItem,
-        as: 'items',
-        include: [
-          {
-            model: Product,
-            as: 'product',
-            attributes: ['product_id', 'product_code', 'product_name', 'image_url'],
-          },
-        ],
-      },
-    ],
-    order: [['order_id', 'DESC']],
-    limit: limitNum,
-    offset,
-    distinct: true,
+      include: [{ model: OrderRequestItem, as: 'items' }],
+      order: [['createdate', 'DESC'], ['request_id', 'DESC']],
+      limit: rowsNeeded,
+      offset: 0,
+      distinct: true,
+    }),
+  ]);
+
+  const records = [
+    ...ordersResult.rows.map((record) => ({ recordType: 'ORDER', record })),
+    ...requestsResult.rows.map((record) => ({ recordType: 'REQUEST', record })),
+  ].sort((a, b) => {
+    const dateDifference =
+      new Date(b.record.createdate).getTime() - new Date(a.record.createdate).getTime();
+    if (dateDifference !== 0) return dateDifference;
+    return String(b.recordType).localeCompare(String(a.recordType));
   });
+  const count = ordersResult.count + requestsResult.count;
 
   return {
-    orders: rows,
+    orders: records.slice(offset, offset + limitNum),
     totalItems: count,
     totalPages: Math.ceil(count / limitNum) || 1,
     currentPage: pageNum,
@@ -586,6 +611,17 @@ async function findCustomerOrderById(orderId, customerAccountId) {
         attributes: ['user_account_id', 'full_name'],
       },
     ],
+  });
+}
+
+async function findCustomerOrderRequestById(requestId, customerAccountId) {
+  return OrderRequest.findOne({
+    where: {
+      request_id: requestId,
+      customer_account_id: customerAccountId,
+      status: { [Op.ne]: 'CONVERTED' },
+    },
+    include: [{ model: OrderRequestItem, as: 'items' }],
   });
 }
 
@@ -1005,6 +1041,7 @@ module.exports = {
   getOrdersWithPagination,
   getCustomerOrdersWithPagination,
   findCustomerOrderById,
+  findCustomerOrderRequestById,
   cancelOrder,
   updateOrderStatus,
   VALID_STATUSES,

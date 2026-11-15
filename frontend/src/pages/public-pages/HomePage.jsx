@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Heart } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getProducts } from '../../services/productService';
 
 const IN_STORE_PARAMS = { page: 1, limit: 8 };
@@ -134,7 +134,7 @@ const SectionHeading = ({ id, eyebrow, children, href = '/products', linkText = 
   </div>
 );
 
-const ProductCard = ({ product, liked, onToggle }) => (
+const ProductCard = ({ product }) => (
   <article className="group relative flex flex-col">
     <div className="relative overflow-hidden bg-stone-100">
       <a href={`/products/${product.id}`} aria-label={product.name} className="block">
@@ -158,22 +158,6 @@ const ProductCard = ({ product, liked, onToggle }) => (
           </span>
         )}
       </div>
-
-      <button
-        type="button"
-        onClick={() => onToggle(product.id)}
-        aria-pressed={liked}
-        aria-label={`Yêu thích ${product.name}`}
-        className="absolute right-2 top-2 grid size-8 place-items-center rounded-full bg-white/90 text-stone-600 shadow-sm transition hover:bg-white hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
-      >
-        <Heart
-          className="size-4"
-          strokeWidth={1.6}
-          fill={liked ? '#dc2626' : 'none'}
-          stroke={liked ? '#dc2626' : 'currentColor'}
-          aria-hidden="true"
-        />
-      </button>
     </div>
 
     <a href={`/products/${product.id}`} className="mt-4 flex flex-col">
@@ -294,7 +278,7 @@ const Hero = () => {
 };
 
 /* ---------- Mục sản phẩm (dùng cho cả 2 nhóm) ---------- */
-const ProductSection = ({ id, anchor, eyebrow, title, params, count, cols, liked, onToggle, emptyText }) => {
+const ProductSection = ({ id, anchor, eyebrow, title, params, count, cols, emptyText }) => {
   const { items, loading, error, retry } = useProductList(params);
 
   return (
@@ -325,7 +309,7 @@ const ProductSection = ({ id, anchor, eyebrow, title, params, count, cols, liked
       {!loading && !error && items.length > 0 && (
         <div className={`mt-8 grid grid-cols-2 gap-x-6 gap-y-10 ${cols}`}>
           {items.map((p) => (
-            <ProductCard key={p.id} product={p} liked={liked.has(p.id)} onToggle={onToggle} />
+            <ProductCard key={p.id} product={p} />
           ))}
         </div>
       )}
@@ -360,48 +344,32 @@ const Story = () => (
 );
 
 /* ---------- Trang Home ---------- */
-export const HomePage = () => {
-  const [liked, setLiked] = useState(() => new Set());
-  const toggleLike = useCallback((id) => {
-    setLiked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+export const HomePage = () => (
+  <>
+    <Hero />
+    <div className="mx-auto max-w-[1500px] space-y-16 px-5 py-14 lg:space-y-24 lg:px-[4vw]">
+      <ProductSection
+        id="dang-ban"
+        anchor="products"
+        eyebrow="Tại cửa hàng"
+        title="Sản phẩm đang bán"
+        params={IN_STORE_PARAMS}
+        count={IN_STORE_PARAMS.limit}
+        cols="md:grid-cols-3 xl:grid-cols-4"
+        emptyText="Hiện chưa có sản phẩm nào đang bán."
+      />
 
-  return (
-    <>
-      <Hero />
-      <div className="mx-auto max-w-[1500px] space-y-16 px-5 py-14 lg:space-y-24 lg:px-[4vw]">
-        <ProductSection
-          id="dang-ban"
-          anchor="products"
-          eyebrow="Tại cửa hàng"
-          title="Sản phẩm đang bán"
-          params={IN_STORE_PARAMS}
-          count={IN_STORE_PARAMS.limit}
-          cols="md:grid-cols-3 xl:grid-cols-4"
-          liked={liked}
-          onToggle={toggleLike}
-          emptyText="Hiện chưa có sản phẩm nào đang bán."
-        />
+      <Story />
 
-        <Story />
-
-        <ProductSection
-          id="hang-moi"
-          eyebrow="Mới cập nhật"
-          title="Sản phẩm mới về"
-          params={NEW_ARRIVAL_PARAMS}
-          count={NEW_ARRIVAL_PARAMS.limit}
-          cols="md:grid-cols-4"
-          liked={liked}
-          onToggle={toggleLike}
-          emptyText="Chưa có sản phẩm mới về."
-        />
-      </div>
-    </>
-  );
-};
+      <ProductSection
+        id="hang-moi"
+        eyebrow="Mới cập nhật"
+        title="Sản phẩm mới về"
+        params={NEW_ARRIVAL_PARAMS}
+        count={NEW_ARRIVAL_PARAMS.limit}
+        cols="md:grid-cols-4"
+        emptyText="Chưa có sản phẩm mới về."
+      />
+    </div>
+  </>
+);

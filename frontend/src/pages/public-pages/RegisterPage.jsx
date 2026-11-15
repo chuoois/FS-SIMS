@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { registerUser, loginUser } from '../../services/authService';
-import { useAuth } from '../../context/AuthContext';
+import { registerUser } from '../../services/authService';
 
 const inputClass =
   'h-11 w-full border border-stone-300 bg-white px-3 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-2 focus:outline-stone-900';
@@ -21,7 +20,6 @@ export const RegisterPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
@@ -36,7 +34,6 @@ export const RegisterPage = () => {
 
     setLoading(true);
     try {
-      // 1. Đăng ký tài khoản
       await registerUser({
         fullName: form.fullName.trim(),
         email: form.email.trim(),
@@ -44,14 +41,14 @@ export const RegisterPage = () => {
         password: form.password,
       });
 
-      // 2. Tự động đăng nhập luôn sau khi đăng ký thành công
-      await login({ email: form.email.trim(), password: form.password });
-
-      toast.success('Tạo tài khoản thành công! Chào mừng bạn.');
-      navigate('/home', { replace: true });
+      toast.success('Tạo tài khoản thành công! Vui lòng đăng nhập.');
+      navigate('/login', { replace: true });
     } catch (err) {
       const msg =
-        err?.response?.data?.message || err?.message || 'Đăng ký thất bại, vui lòng thử lại.';
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.detail ||
+        'Đăng ký thất bại, vui lòng thử lại.';
       setError(msg);
     } finally {
       setLoading(false);
@@ -170,4 +167,4 @@ export const RegisterPage = () => {
       </p>
     </div>
   );
-}
+};

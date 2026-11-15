@@ -28,6 +28,7 @@ export const ForgotPasswordPage = () => {
       setSent(true);
     } catch (err) {
       const msg =
+        err?.response?.data?.detail ||
         err?.response?.data?.message ||
         err?.message ||
         'Không gửi được yêu cầu, vui lòng thử lại.';

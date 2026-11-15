@@ -18,7 +18,7 @@ const { findUserRoleByCode } = require('../models/userRole.model');
 const { createRefreshToken } = require('../models/refreshToken.model');
 const { validateLoginInput } = require('../utils/validators');
 
-const ACCESS_TOKEN_EXPIRES = '30s';
+const ACCESS_TOKEN_EXPIRES = '15m'; // 15 phút
 const REFRESH_TOKEN_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
 // Role code được phép đăng nhập qua cổng nhân sự

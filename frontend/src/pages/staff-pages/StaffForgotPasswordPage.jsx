@@ -68,6 +68,7 @@ export const StaffForgotPasswordPage = () => {
       setSent(true);
     } catch (err) {
       const msg =
+        err?.response?.data?.detail ||
         err?.response?.data?.message ||
         err?.message ||
         'Không thể gửi yêu cầu khôi phục, vui lòng thử lại sau.';
