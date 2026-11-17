@@ -802,7 +802,7 @@ export const ManageProductsPage = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-            Quản lý Sản phẩm (Kho thành phẩm)
+            Quản Lý Sản Phẩm
           </h1>
           <p className="mt-1 text-sm text-stone-500">
             Thêm mới sản phẩm, cập nhật tồn kho, hình ảnh và kiểm tra tình trạng hàng hóa của xưởng.

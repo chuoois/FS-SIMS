@@ -2,9 +2,10 @@
 // ContractsPage.jsx
 // Danh sách hợp đồng bán hàng dành cho nhân viên kinh doanh (Role Sale)
 // Sử dụng saleOrderService (Controller riêng biệt)
+// Hỗ trợ In / Xuất file bản giấy và Xác nhận đã ký ngoài bằng bút mực
 // =========================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -17,8 +18,9 @@ import {
   XCircle,
   Package,
   X,
-  ShieldCheck,
   ArrowRight,
+  Printer,
+  Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -28,6 +30,7 @@ import {
   createOrderFromContract,
 } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
+import { PrintContractModal } from '../../components/common/PrintContractModal';
 
 const formatVND = (val) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(val || 0);
@@ -69,19 +72,56 @@ export const ContractsPage = () => {
   const [contracts, setContracts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [searchBy, setSearchBy] = useState('ALL'); // 'ALL' | 'CONTRACT_CODE' | 'CUSTOMER_NAME' | 'PHONE'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [pagination, setPagination] = useState({ totalItems: 0, totalPages: 1, currentPage: 1, itemsPerPage: 10 });
 
   const [selectedContract, setSelectedContract] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
 
+  // States hỗ trợ in hợp đồng bản giấy
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [contractToPrint, setContractToPrint] = useState(null);
+  const [paperFileUrl, setPaperFileUrl] = useState('');
+
+  // Đếm số lượng bộ lọc đang kích hoạt
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (search.trim()) count += 1;
+    if (statusFilter !== 'ALL') count += 1;
+    return count;
+  }, [search, statusFilter]);
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setSearchBy('ALL');
+    setStatusFilter('ALL');
+    setPage(1);
+  };
+
   const fetchContractsList = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { page, limit: 10 };
-      if (search.trim()) params.search = search.trim();
+      const params = { page, limit };
+
+      if (search.trim()) {
+        const keyword = search.trim();
+        if (searchBy === 'CONTRACT_CODE') {
+          params.contract_code = keyword;
+        } else if (searchBy === 'CUSTOMER_NAME') {
+          params.customer_name = keyword;
+        } else if (searchBy === 'PHONE') {
+          params.search = keyword;
+          params.search_by = 'PHONE';
+        } else {
+          params.search = keyword;
+          params.search_by = 'ALL';
+        }
+      }
+
       if (statusFilter !== 'ALL') params.status = statusFilter;
 
       const res = await getContracts(params);
@@ -93,10 +133,13 @@ export const ContractsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter]);
+  }, [page, limit, search, searchBy, statusFilter]);
 
   useEffect(() => {
-    fetchContractsList();
+    const timer = setTimeout(() => {
+      fetchContractsList();
+    }, 300);
+    return () => clearTimeout(timer);
   }, [fetchContractsList]);
 
   const handleViewDetail = async (contract) => {
@@ -110,14 +153,31 @@ export const ContractsPage = () => {
     }
   };
 
+  const handleOpenPrint = async (contract) => {
+    try {
+      let full = contract;
+      if (!contract.items || contract.items.length === 0) {
+        const res = await getContractById(contract.contractId);
+        if (res.data) full = res.data;
+      }
+      setContractToPrint(full);
+      setPrintModalOpen(true);
+    } catch (err) {
+      console.error('Lỗi khi mở bản in hợp đồng:', err);
+      toast.error('Không thể tải chi tiết hợp đồng để in');
+    }
+  };
+
   const handleSign = async () => {
     if (!selectedContract) return;
     try {
       setLoadingAction(true);
-      const res = await signContract(selectedContract.contractId);
+      const res = await signContract(selectedContract.contractId, {
+        contract_file_url: paperFileUrl.trim() || null,
+      });
       if (res.data) {
         setSelectedContract(res.data);
-        toast.success('Ký hợp đồng thành công!');
+        toast.success('Xác nhận khách đã ký bản giấy thành công!');
         fetchContractsList();
       }
     } catch (err) {
@@ -155,7 +215,7 @@ export const ContractsPage = () => {
           <div>
             <h1 className="text-xl font-bold text-stone-900">Danh Sách Hợp Đồng</h1>
             <p className="text-xs text-stone-500">
-              Biên bản hợp đồng ký kết tại quầy và trực tuyến
+              Biên bản hợp đồng bán hàng tại quầy (ký ngoài bản giấy) và trực tuyến
             </p>
           </div>
         </div>
@@ -178,36 +238,114 @@ export const ContractsPage = () => {
         </div>
       </div>
 
-      {/* Bộ lọc */}
-      <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-          <input
-            type="text"
-            placeholder="Tìm theo mã hợp đồng, tên khách hàng, số điện thoại..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs text-stone-900 focus:border-amber-500 focus:outline-none"
-          />
+      {/* ── Khu vực Tìm kiếm & Bộ lọc (Search & Filters) ────────── */}
+      <div className="flex flex-col gap-3.5 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+        {/* Hàng 1: Thanh Tìm kiếm với Dropdown chọn tiêu chí */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-52">
+            <select
+              aria-label="Tiêu chí tìm kiếm hợp đồng"
+              value={searchBy}
+              onChange={(e) => {
+                setSearchBy(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-3 pr-8 text-xs font-semibold text-stone-800 focus:border-amber-500 focus:bg-white focus:outline-none"
+            >
+              <option value="ALL">🔍 Tất cả tiêu chí</option>
+              <option value="CUSTOMER_NAME">👤 Tên khách hàng</option>
+              <option value="CONTRACT_CODE">📄 Mã hợp đồng</option>
+              <option value="PHONE">📞 Số điện thoại</option>
+            </select>
+          </div>
+
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+            <input
+              type="text"
+              placeholder={
+                searchBy === 'CUSTOMER_NAME'
+                  ? 'Nhập họ tên khách hàng cần tìm...'
+                  : searchBy === 'CONTRACT_CODE'
+                  ? 'Nhập mã hợp đồng (ví dụ: HD-...)...'
+                  : searchBy === 'PHONE'
+                  ? 'Nhập số điện thoại khách hàng...'
+                  : 'Tìm theo mã hợp đồng, tên khách hàng hoặc số điện thoại...'
+              }
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-8 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setPage(1);
+                }}
+                className="absolute right-2.5 top-2.5 rounded p-0.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+                title="Xóa tìm kiếm"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="w-full sm:w-56">
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="w-full rounded-lg border border-stone-200 py-2 px-3 text-xs text-stone-900 focus:border-amber-500 focus:outline-none"
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="DRAFT">Biên bản chờ ký</option>
-            <option value="SIGNED">Đã ký kết</option>
-            <option value="CANCELLED">Đã hủy</option>
-          </select>
+        {/* Hàng 2: Bộ lọc trạng thái & Nút đặt lại */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-stone-100 pt-3">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-600 mr-1">
+              <Filter className="h-3.5 w-3.5 text-amber-700" />
+              <span>Trạng thái:</span>
+            </div>
+            <select
+              aria-label="Lọc trạng thái hợp đồng"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+              className="rounded-lg border border-stone-200 py-1.5 px-3 text-xs text-stone-800 focus:border-amber-500 focus:outline-none"
+            >
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="DRAFT">Biên bản chờ ký</option>
+              <option value="SIGNED">Đã ký kết</option>
+              <option value="CANCELLED">Đã hủy</option>
+            </select>
+          </div>
+
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="flex items-center gap-1 rounded-lg border border-stone-300 bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition"
+            >
+              <X className="h-3.5 w-3.5 text-stone-500" />
+              <span>Đặt lại bộ lọc</span>
+              <span className="ml-1 rounded-full bg-amber-800 px-1.5 py-0.2 text-[10px] text-white">
+                {activeFilterCount}
+              </span>
+            </button>
+          )}
+        </div>
+
+        {/* Tóm tắt kết quả */}
+        <div className="flex items-center justify-between text-[11px] text-stone-500 pt-1">
+          <span>
+            Tìm thấy <strong className="font-bold text-stone-900">{pagination.totalItems}</strong> hợp đồng
+            {search.trim() && (
+              <span> cho từ khóa &ldquo;<strong className="text-amber-900">{search.trim()}</strong>&rdquo;</span>
+            )}
+          </span>
+          {pagination.totalPages > 1 && (
+            <span>
+              Trang {pagination.currentPage} / {pagination.totalPages}
+            </span>
+          )}
         </div>
       </div>
 
@@ -261,13 +399,24 @@ export const ContractsPage = () => {
                     </td>
                     <td className="px-4 py-3 text-center">{getContractBadge(c.status)}</td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => handleViewDetail(c)}
-                        className="inline-flex items-center gap-1 rounded border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
-                      >
-                        <Eye className="h-3 w-3 text-stone-500" />
-                        Xem & Ký
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleViewDetail(c)}
+                          className="inline-flex items-center gap-1 rounded border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
+                          title="Xem chi tiết biên bản hợp đồng"
+                        >
+                          <Eye className="h-3 w-3 text-stone-500" />
+                          Chi tiết
+                        </button>
+                        <button
+                          onClick={() => handleOpenPrint(c)}
+                          className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100 transition"
+                          title="In / Xuất hợp đồng bản giấy khổ A4"
+                        >
+                          <Printer className="h-3 w-3 text-amber-700" />
+                          In HĐ
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -276,23 +425,35 @@ export const ContractsPage = () => {
           </table>
         </div>
 
-        {pagination.totalPages > 1 && (
-          <div className="border-t border-stone-200 p-3">
-            <TablePagination
-              currentPage={pagination.currentPage}
-              totalPages={pagination.totalPages}
-              totalItems={pagination.totalItems}
-              itemsPerPage={pagination.itemsPerPage}
-              onPageChange={(p) => setPage(p)}
-            />
-          </div>
-        )}
+        <TablePagination
+          currentPage={pagination.currentPage || page}
+          totalPages={pagination.totalPages || 1}
+          totalItems={pagination.totalItems}
+          currentCount={contracts.length}
+          itemsPerPage={limit}
+          pageSizeOptions={[5, 10, 20, 50]}
+          onPageChange={(p) => setPage(p)}
+          onPageSizeChange={(newLimit) => {
+            setLimit(newLimit);
+            setPage(1);
+          }}
+          itemLabel="hợp đồng"
+          loading={loading}
+        />
       </div>
+
+      {/* Modal In hợp đồng bản giấy A4 */}
+      <PrintContractModal
+        isOpen={printModalOpen}
+        onClose={() => setPrintModalOpen(false)}
+        contract={contractToPrint}
+      />
 
       {/* Modal chi tiết & thao tác hợp đồng */}
       {modalOpen && selectedContract && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            {/* Header Modal */}
             <div className="flex items-center justify-between border-b border-stone-200 bg-stone-900 px-5 py-3.5 text-white">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-amber-400" />
@@ -300,15 +461,63 @@ export const ContractsPage = () => {
                   Biên bản hợp đồng #{selectedContract.contractCode}
                 </h3>
               </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenPrint(selectedContract)}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-amber-800 transition"
+                  title="In bản giấy để ký ngoài bằng bút mực"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  In bản giấy (A4)
+                </button>
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
+            {/* Thân Modal */}
             <div className="overflow-y-auto p-5 text-xs text-stone-800">
+              {/* Banner hướng dẫn ký ngoài bản giấy */}
+              <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-3.5 mb-4 text-xs text-amber-950">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-amber-900">
+                    <Printer className="h-4 w-4 text-amber-700" />
+                    <span>Ký hợp đồng ngoài quầy (Bản giấy in bằng bút mực)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPrint(selectedContract)}
+                    className="flex items-center gap-1 rounded bg-amber-800 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-amber-900"
+                  >
+                    <Printer className="h-3 w-3" />
+                    In ngay
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-stone-600">
+                  Hợp đồng mua bán được in ra giấy để hai bên ký bút mực trực tiếp, không sử dụng chữ ký số.
+                </p>
+                {selectedContract.status === 'DRAFT' && (
+                  <div className="mt-2.5 border-t border-amber-200/80 pt-2">
+                    <label className="block text-[11px] font-semibold text-stone-700 mb-1">
+                      Link ảnh scan/chụp hợp đồng giấy đã ký (tùy chọn):
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://... (đường dẫn lưu trữ file scan hợp đồng giấy)"
+                      value={paperFileUrl}
+                      onChange={(e) => setPaperFileUrl(e.target.value)}
+                      className="w-full rounded border border-stone-300 bg-white px-2 py-1 text-xs text-stone-800 placeholder-stone-400 focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Trạng thái & Khách hàng */}
               <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 p-3 mb-4">
                 <div>
                   <span className="text-stone-500">Trạng thái:</span>
@@ -320,6 +529,7 @@ export const ContractsPage = () => {
                 </div>
               </div>
 
+              {/* Danh sách sản phẩm */}
               <h4 className="font-bold text-stone-900 mb-2">Danh sách sản phẩm:</h4>
               <div className="rounded-lg border border-stone-200 overflow-hidden mb-4">
                 <table className="w-full text-left">
@@ -361,23 +571,36 @@ export const ContractsPage = () => {
               </div>
             </div>
 
+            {/* Modal Footer */}
             <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50 px-5 py-3">
-              <button
-                onClick={() => setModalOpen(false)}
-                className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
-              >
-                Đóng
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenPrint(selectedContract)}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition"
+                >
+                  <Printer className="h-4 w-4 text-amber-700" />
+                  In / Xuất bản giấy
+                </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 {selectedContract.status === 'DRAFT' && (
                   <button
                     disabled={loadingAction}
                     onClick={handleSign}
+                    title="Xác nhận khách hàng đã ký tên bằng bút mực trên bản giấy"
                     className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
                   >
-                    <ShieldCheck className="h-4 w-4" />
-                    Chốt & Ký hợp đồng
+                    <CheckCircle2 className="h-4 w-4" />
+                    Xác nhận đã ký bản giấy
                   </button>
                 )}
                 {selectedContract.status === 'SIGNED' && (

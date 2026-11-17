@@ -33,7 +33,10 @@ export const LoginPage = () => {
       navigate(from, { replace: true });
     } catch (err) {
       const msg =
-        err?.response?.data?.message || err?.message || 'Đăng nhập thất bại, vui lòng thử lại.';
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Đăng nhập thất bại, vui lòng thử lại.';
       setError(msg);
     } finally {
       setLoading(false);
@@ -109,17 +112,6 @@ export const LoginPage = () => {
           Đăng ký
         </Link>
       </p>
-
-      <div className="mt-8 border-t border-stone-200 pt-6 text-center">
-        <Link
-          to="/staff/login"
-          id="link-to-staff-login"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-500 transition-colors hover:text-orange-700"
-        >
-          <span>Dành cho nhân sự: Cổng Đăng Nhập Quản Trị</span>
-          <span aria-hidden="true">→</span>
-        </Link>
-      </div>
     </div>
   );
 };

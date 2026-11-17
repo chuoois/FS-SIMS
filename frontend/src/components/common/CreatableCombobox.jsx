@@ -88,7 +88,7 @@ export const CreatableCombobox = ({
   const handleInputFocus = () => {
     if (disabled) return;
     setIsOpen(true);
-    setQuery(selectedItem ? selectedItem[labelKey] : '');
+    if (!isOpen) setQuery(selectedItem ? selectedItem[labelKey] : '');
   };
 
   const handleSelectOption = (opt) => {
@@ -199,7 +199,7 @@ export const CreatableCombobox = ({
             setHighlightedIndex(0);
           }}
           onKeyDown={handleKeyDown}
-          className={`w-full rounded-lg border border-stone-200 py-2.5 text-xs text-stone-900 transition-colors focus:border-stone-900 focus:outline-none disabled:bg-stone-100 disabled:text-stone-400 ${
+          className={`w-full rounded-lg border border-stone-200 bg-white py-2.5 text-xs text-stone-900 transition-colors focus:border-stone-900 focus:outline-none disabled:bg-stone-100 disabled:text-stone-400 ${
             isColor && selectedItem && !isOpen ? 'pl-8 pr-16' : 'px-3 pr-16'
           }`}
         />

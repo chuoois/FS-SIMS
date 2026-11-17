@@ -1,67 +1,89 @@
-
 const {
-    getProductsWithPagination,
-    getProductMetadata: getProductMetadataModel,
+  getProductsWithPagination,
+  findProductById,
+  getProductMetadata: getProductMetadataModel,
 } = require('../models/ProductModel');
-
 const {
-    validateProductQueryParams,
-    toProductDTO,
+  validateProductQueryParams,
+  toProductDTO,
 } = require('../utils/productValidator');
+const { ApiError } = require('../utils/ApiError');
+const { buildSuccessResponse } = require('../utils/successResponse');
 
-/**
- * GET /api/products
- * Lấy danh sách sản phẩm (tìm kiếm, lọc theo danh mục, phòng, chất liệu, màu sắc, tồn kho, phân trang)
- */
-async function getProducts(req, res) {
-    try {
-        const params = validateProductQueryParams(req.query);
-        const queryParams = {
-            ...params,
-            status: params.status || 'ACTIVE',
-        };
-        const result = await getProductsWithPagination(queryParams);
+function getErrorForNext(error, detail) {
+  if (error instanceof ApiError) return error;
 
-        return res.status(200).json({
-            message: 'Lấy danh sách sản phẩm thành công',
-            data: (result.products || []).map(toProductDTO),
-            pagination: {
-                totalItems: result.totalItems,
-                totalPages: result.totalPages,
-                currentPage: result.currentPage,
-                itemsPerPage: result.itemsPerPage,
-            },
-        });
-    } catch (error) {
-        console.error('[productController.getProducts]', error);
-        return res.status(500).json({
-            message: 'Lỗi máy chủ khi lấy danh sách sản phẩm',
-            error: error.message,
-        });
-    }
+  const apiError = new ApiError(500, detail);
+  apiError.cause = error;
+  return apiError;
 }
 
-/**
- * GET /api/products/metadata
- * Lấy danh mục, phòng, chất liệu, màu sắc cho bộ lọc khách hàng
- */
-async function getProductMetadata(req, res) {
-    try {
-        const metadata = await getProductMetadataModel();
-        return res.status(200).json({
-            message: 'Lấy metadata sản phẩm thành công',
-            data: metadata,
-        });
-    } catch (error) {
-        console.error('[productController.getProductMetadata]', error);
-        return res.status(500).json({
-            message: 'Lỗi máy chủ khi lấy metadata sản phẩm',
-            error: error.message,
-        });
+async function getProducts(req, res, next) {
+  try {
+    const params = validateProductQueryParams(req.query);
+    const queryParams = {
+      ...params,
+      status: params.status || 'ACTIVE',
+    };
+    const result = await getProductsWithPagination(queryParams);
+
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
+      message: 'Lấy danh sách sản phẩm thành công',
+      data: (result.products || []).map(toProductDTO),
+      meta: {
+        page: result.currentPage,
+        limit: result.itemsPerPage,
+        total: result.totalItems,
+        totalPages: result.totalPages,
+      },
+      req,
+    }));
+  } catch (error) {
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy danh sách sản phẩm'));
+  }
+}
+
+async function getProductById(req, res, next) {
+  try {
+    const productId = Number(req.params.id);
+    if (!Number.isInteger(productId) || productId <= 0) {
+      throw new ApiError(400, 'Mã sản phẩm không hợp lệ.');
     }
+
+    const product = await findProductById(productId);
+    const data = toProductDTO(product);
+    if (!data || data.status !== 'ACTIVE') {
+      throw new ApiError(404, 'Không tìm thấy sản phẩm yêu cầu.');
+    }
+
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
+      message: 'Lấy chi tiết sản phẩm thành công',
+      data,
+      req,
+    }));
+  } catch (error) {
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy chi tiết sản phẩm'));
+  }
+}
+
+async function getProductMetadata(req, res, next) {
+  try {
+    const metadata = await getProductMetadataModel();
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
+      message: 'Lấy metadata sản phẩm thành công',
+      data: metadata,
+      req,
+    }));
+  } catch (error) {
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy metadata sản phẩm'));
+  }
 }
 
 module.exports = {
-    getProducts,
-    getProductMetadata,
+  getProducts,
+  getProductById,
+  getProductMetadata,
 };

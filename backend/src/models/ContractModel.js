@@ -46,10 +46,10 @@ if (!Contract.associations || !Contract.associations.items) {
   ContractItem.belongsTo(Contract, { foreignKey: 'contract_id', as: 'contract' });
 }
 if (!Contract.associations || !Contract.associations.signer) {
-  Contract.belongsTo(UserAccount, { foreignKey: 'signed_by', as: 'signer' });
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') Contract.belongsTo(UserAccount, { foreignKey: 'signed_by', as: 'signer' });
 }
 if (!ContractItem.associations || !ContractItem.associations.product) {
-  ContractItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
+  if (typeof Product === 'function' && typeof Product.belongsTo === 'function') ContractItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
 }
 
 /**
@@ -189,7 +189,7 @@ async function createOfflineContract({
 /**
  * Ký và chốt hợp đồng (Chuyển trạng thái sang SIGNED)
  */
-async function signContract(contractId, { signedPlace, signedBy, modifieBy } = {}) {
+async function signContract(contractId, { signedPlace, signedBy, modifieBy, contractFileUrl } = {}) {
   const contract = await Contract.findByPk(contractId);
   if (!contract) {
     return null;
@@ -206,7 +206,8 @@ async function signContract(contractId, { signedPlace, signedBy, modifieBy } = {
   contract.signed_date = today;
   if (signedPlace) contract.signed_place = signedPlace;
   if (signedBy) contract.signed_by = signedBy;
-  if (modifieBy) contract.modifieby = modifieBy;
+    if (modifieBy) contract.modifieby = modifieBy;
+  if (contractFileUrl) contract.contract_file_url = contractFileUrl;
 
   await contract.save();
   return findContractById(contractId);
@@ -264,7 +265,15 @@ async function findContractByCode(contractCode) {
 /**
  * Lấy danh sách hợp đồng có tìm kiếm, lọc và phân trang
  */
-async function getContractsWithPagination({ page = 1, limit = 10, status, search } = {}) {
+async function getContractsWithPagination({
+  page = 1,
+  limit = 10,
+  status,
+  search,
+  search_by,
+  customer_name,
+  contract_code,
+} = {}) {
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (pageNum - 1) * limitNum;
@@ -273,13 +282,27 @@ async function getContractsWithPagination({ page = 1, limit = 10, status, search
   if (status && status !== 'ALL') {
     whereClause.status = status;
   }
-  if (search && search.trim()) {
+  if (contract_code && contract_code.trim()) {
+    whereClause.contract_code = { [Op.like]: `%${contract_code.trim()}%` };
+  }
+  if (customer_name && customer_name.trim()) {
+    whereClause.customer_name = { [Op.like]: `%${customer_name.trim()}%` };
+  }
+  if (search && search.trim() && !contract_code && !customer_name) {
     const trimmed = search.trim();
-    whereClause[Op.or] = [
-      { contract_code: { [Op.like]: `%${trimmed}%` } },
-      { customer_name: { [Op.like]: `%${trimmed}%` } },
-      { customer_phone: { [Op.like]: `%${trimmed}%` } },
-    ];
+    if (search_by === 'CONTRACT_CODE') {
+      whereClause.contract_code = { [Op.like]: `%${trimmed}%` };
+    } else if (search_by === 'CUSTOMER_NAME') {
+      whereClause.customer_name = { [Op.like]: `%${trimmed}%` };
+    } else if (search_by === 'PHONE') {
+      whereClause.customer_phone = { [Op.like]: `%${trimmed}%` };
+    } else {
+      whereClause[Op.or] = [
+        { contract_code: { [Op.like]: `%${trimmed}%` } },
+        { customer_name: { [Op.like]: `%${trimmed}%` } },
+        { customer_phone: { [Op.like]: `%${trimmed}%` } },
+      ];
+    }
   }
 
   const { rows, count } = await Contract.findAndCountAll({

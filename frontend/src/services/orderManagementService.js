@@ -1,6 +1,6 @@
 // =========================================================
 // orderManagementService.js
-// Tất cả lời gọi API cho Quản lý Đơn hàng & Nghiệm thu (Owner & Leader)
+// Tất cả lời gọi API cho Quản lý Đơn hàng (Owner)
 // Tuân thủ convention: Mọi API call qua services/api.js
 // =========================================================
 
@@ -43,86 +43,122 @@ export async function updateOrderStatus(id, data) {
   return response.data;
 }
 
+
 /**
- * Owner lấy danh sách yêu cầu đơn hàng từ Sales
+ * 5. Lấy danh sách yêu cầu thiết kế / may đo (Owner quản lý & thẩm định)
  */
 export async function getOwnerRequests(params = {}) {
-  const response = await api.get('/order-management/requests', { params });
-  return response.data;
+  const response = await api.get('/order-management/owner/requests', { params });
+  const raw = response.data || {};
+  const list = raw.data || raw.requests || [];
+  return {
+    ...raw,
+    data: list,
+    requests: list,
+  };
 }
 
 /**
- * Owner lấy chi tiết 1 yêu cầu đơn hàng
+ * 6. Lấy chi tiết yêu cầu thiết kế theo ID (Owner)
  */
 export async function getOwnerRequestById(id) {
-  const response = await api.get(`/order-management/requests/${id}`);
+  const response = await api.get(`/order-management/owner/requests/${id}`);
   return response.data;
 }
 
 /**
- * Owner duyệt, chốt thiết kế, yêu cầu sửa, hoặc từ chối
- * @param {number|string} id
- * @param {{ action: 'APPROVE' | 'FINALIZE_DESIGN' | 'REQUEST_CHANGE' | 'REJECT', reason?: string, note?: string }} payload
+ * 7. Owner thẩm định yêu cầu: REQUEST_CHANGE, REJECT, APPROVE, FINALIZE_DESIGN
  */
 export async function reviewOwnerRequest(id, payload) {
-  const response = await api.post(`/order-management/requests/${id}/review`, payload);
+  const response = await api.post(`/order-management/owner/requests/${id}/review`, payload);
   return response.data;
 }
 
 /**
- * Owner lấy danh sách tài khoản Tổ trưởng (LeaderStaff)
+ * 8. Lấy danh sách Tổ trưởng xưởng (LEADERSTAFF)
  */
 export async function getStaffLeaders() {
   const response = await api.get('/order-management/leaders');
-  return response.data;
+  const d = response.data;
+  const list = d?.data || d?.leaders || (Array.isArray(d) ? d : []);
+  return {
+    ...d,
+    data: list,
+    leaders: d?.leaders || list,
+    staff: d?.staff || list,
+    allStaff: d?.allStaff || list,
+  };
 }
 
 /**
- * Owner phân công Tổ trưởng phụ trách đơn hàng
+ * 9. Owner phân công Tổ trưởng sản xuất đơn hàng
  */
-export async function assignLeaderToOrder(orderId, leaderId) {
-  const response = await api.post(`/order-management/${orderId}/assign-leader`, { leaderId });
+export async function assignLeaderToOrder(orderId, payload) {
+  const response = await api.post(`/order-management/orders/${orderId}/assign-leader`, payload);
   return response.data;
 }
 
 /**
- * Owner nghiệm thu đơn hàng: PASSED hoặc FAILED
- * @param {number|string} orderId
- * @param {{ result: 'PASSED' | 'FAILED', reason?: string, note?: string }} payload
+ * 10. Owner nghiệm thu sản phẩm (ĐẠT / KHÔNG ĐẠT)
  */
 export async function inspectOrder(orderId, payload) {
-  const response = await api.post(`/order-management/${orderId}/inspection`, payload);
+  const response = await api.post(`/order-management/orders/${orderId}/inspect`, payload);
   return response.data;
 }
 
 /**
- * Leader xem danh sách đơn hàng được phân công cho mình
+ * 11. Tổ trưởng xem danh sách đơn hàng được giao
  */
 export async function getLeaderOrders(params = {}) {
   const response = await api.get('/order-management/leader/orders', { params });
-  return response.data;
+  const d = response.data;
+  const list = d?.data || d?.orders || (Array.isArray(d) ? d : []);
+  return {
+    ...d,
+    data: list,
+    orders: list,
+  };
 }
 
 /**
- * Leader xác nhận tiếp nhận đơn hàng sản xuất
+ * 12. Tổ trưởng tiếp nhận đơn hàng sản xuất
  */
-export async function leaderAcceptOrder(orderId) {
-  const response = await api.post(`/order-management/leader/orders/${orderId}/accept`);
+export async function leaderAcceptOrder(orderId, payload = {}) {
+  const response = await api.post(`/order-management/leader/orders/${orderId}/accept`, payload);
   return response.data;
 }
 
 /**
- * Leader cập nhật tiến độ / ghi chú sản xuất
+ * 13. Tổ trưởng cập nhật tiến độ sản xuất
  */
 export async function leaderUpdateProgress(orderId, payload = {}) {
-  const response = await api.patch(`/order-management/leader/orders/${orderId}/progress`, payload);
+  const response = await api.post(`/order-management/leader/orders/${orderId}/progress`, payload);
   return response.data;
 }
 
 /**
- * Leader gửi yêu cầu nghiệm thu lên Owner
+ * 14. Tổ trưởng gửi yêu cầu nghiệm thu lên Owner
  */
 export async function leaderSubmitInspection(orderId, payload = {}) {
   const response = await api.post(`/order-management/leader/orders/${orderId}/submit-inspection`, payload);
+  return response.data;
+}
+
+
+/**
+ * 15. Upload hình ảnh nghiệm thu sản phẩm lên server / Cloudinary
+ */
+export async function uploadInspectionImages(files) {
+  const formData = new FormData();
+  if (Array.isArray(files)) {
+    files.forEach((file) => formData.append('images', file));
+  } else if (files instanceof FileList) {
+    Array.from(files).forEach((file) => formData.append('images', file));
+  } else if (files) {
+    formData.append('images', files);
+  }
+  const response = await api.post('/order-management/upload-inspection-image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return response.data;
 }

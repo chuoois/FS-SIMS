@@ -75,7 +75,7 @@ export const TablePagination = ({
 
         {onPageSizeChange && (
           <div className="flex items-center gap-1.5 pl-0 sm:pl-2 sm:border-l sm:border-stone-200">
-            <span className="text-stone-500">Hiển thị:</span>
+            <span className="text-stone-500">Mỗi trang:</span>
             <select
               aria-label={`Số ${itemLabel} mỗi trang`}
               value={itemsPerPage}
@@ -120,14 +120,14 @@ export const TablePagination = ({
                 </span>
               ) : (
                 <button
-                  key={p}
+                  key={`page-${p}`}
                   type="button"
                   onClick={() => handleSelectPage(p)}
                   disabled={loading}
-                  className={`inline-flex h-8 min-w-8 px-2.5 items-center justify-center rounded-lg text-xs font-medium transition active:scale-95 ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition active:scale-95 ${
                     p === validCurrentPage
-                      ? 'bg-stone-900 text-white font-semibold shadow-xs'
-                      : 'border border-stone-300 bg-white text-stone-700 shadow-sm hover:bg-stone-50'
+                      ? 'bg-amber-800 text-white shadow-sm'
+                      : 'border border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                   }`}
                 >
                   {p}
@@ -137,10 +137,10 @@ export const TablePagination = ({
           </div>
         )}
 
-        {/* Nhãn Trang hiện tại / Tổng trang (giữ đồng bộ cho mobile và hỗ trợ test/screen readers) */}
-        <span className="px-2 font-semibold text-stone-800">
+        {/* Thông tin trang hiện tại (cho mobile) */}
+        <div className="sm:hidden text-stone-500 font-medium">
           Trang {validCurrentPage} / {validTotalPages}
-        </span>
+        </div>
 
         {/* Nút Sau */}
         <button
@@ -157,5 +157,3 @@ export const TablePagination = ({
     </div>
   );
 };
-
-export default TablePagination;

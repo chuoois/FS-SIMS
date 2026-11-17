@@ -5,6 +5,12 @@ import { ManageStaffAccountsPage } from "../../pages/owner-pages/ManageStaffAcco
 import { ManageSuppliersPage } from "../../pages/owner-pages/ManageSuppliersPage";
 import { ManageProductsPage } from "../../pages/owner-pages/ManageProductsPage";
 import { ManageMaterialsPage } from "../../pages/owner-pages/ManageMaterialsPage";
+import { ManagePurchaseReceiptsPage } from "../../pages/owner-pages/ManagePurchaseReceiptsPage";
+import { ManageMaterialExportPage } from "../../pages/owner-pages/ManageMaterialExportPage";
+import { ManageProductionOrdersPage } from "../../pages/owner-pages/ManageProductionOrdersPage";
+import { ManageOrdersPage } from "../../pages/owner-pages/ManageOrdersPage";
+import { ManageFinancialReportsPage } from "../../pages/owner-pages/ManageFinancialReportsPage";
+import { ManageCustomerRequestsPage } from "../../pages/owner-pages/ManageCustomerRequestsPage";
 
 export const OwnerRouter = {
   path: "/owner",
@@ -42,12 +48,36 @@ export const OwnerRouter = {
           element: <ManageMaterialsPage />,
         },
         {
+          path: "purchase-receipts",
+          element: <ManagePurchaseReceiptsPage />,
+        },
+        {
+          path: "material-exports",
+          element: <ManageMaterialExportPage />,
+        },
+        {
+          path: "production-orders",
+          element: <ManageProductionOrdersPage />,
+        },
+        {
+          path: "orders",
+          element: <ManageOrdersPage />,
+        },
+        {
+          path: "requests",
+          element: <ManageOrdersPage defaultTab="REQUESTS" />,
+        },
+        {
+          path: "financial-reports",
+          element: <ManageFinancialReportsPage />,
+        },
+        {
+          path: "customer-requests",
+          element: <ManageCustomerRequestsPage />,
+        },
+        {
           path: "analytics",
-          element: (
-            <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold text-stone-900">Báo cáo & Phân tích</h2>
-            </div>
-          ),
+          element: <ManageFinancialReportsPage />,
         },
       ],
     },

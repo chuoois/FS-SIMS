@@ -15,11 +15,11 @@ export const StaffLeaderRouter = {
           element: <LeaderOrdersPage />,
         },
         {
-          path: "production",
+          path: "orders",
           element: <LeaderOrdersPage />,
         },
         {
-          path: "orders",
+          path: "production",
           element: <LeaderOrdersPage />,
         },
       ],

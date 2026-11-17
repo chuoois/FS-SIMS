@@ -1,6 +1,6 @@
 // =========================================================
 // SaleRequestModel.js
-// Model / Repository dành cho Sale & Owner quản lý Order Requests
+// Model / Repository dành cho Sale quản lý Order Requests từ khách hàng
 // MVC: Logic truy vấn DB nằm ở Model, không đưa vào Controller
 // =========================================================
 
@@ -12,120 +12,35 @@ const { OrderRequestImage } = require('./OrderRequestImageModel');
 const { UserAccount } = require('./userAccount.model');
 const { Contract } = require('./ContractModel');
 const { ContractItem } = require('./ContractItemModel');
-const { ProductCategory } = require('./ProductCategoryModel');
-const { ProductRoom } = require('./ProductRoomModel');
-const { ProductMaterial } = require('./ProductMaterialModel');
-const { ProductColor } = require('./ProductColorModel');
-const { Product } = require('./ProductModel');
 
 // Setup associations (guard to avoid re-define)
 if (!OrderRequest.associations || !OrderRequest.associations.items) {
-  OrderRequest.hasMany(OrderRequestItem, { foreignKey: 'request_id', as: 'items' });
-  OrderRequestItem.belongsTo(OrderRequest, { foreignKey: 'request_id', as: 'request' });
+  if (typeof OrderRequest === 'function' && typeof OrderRequest.hasMany === 'function') {
+    OrderRequest.hasMany(OrderRequestItem, { foreignKey: 'request_id', as: 'items' });
+    OrderRequestItem.belongsTo(OrderRequest, { foreignKey: 'request_id', as: 'request' });
+  }
+}
+if (!OrderRequestItem.associations || !OrderRequestItem.associations.images) {
+  if (typeof OrderRequestItem === 'function' && typeof OrderRequestItem.hasMany === 'function') {
+    OrderRequestItem.hasMany(OrderRequestImage, { foreignKey: 'request_item_id', as: 'images' });
+  }
+  if (typeof OrderRequestImage === 'function' && typeof OrderRequestImage.belongsTo === 'function') {
+    OrderRequestImage.belongsTo(OrderRequestItem, { foreignKey: 'request_item_id', as: 'item' });
+  }
 }
 if (!OrderRequest.associations || !OrderRequest.associations.images) {
-  OrderRequest.hasMany(OrderRequestImage, { foreignKey: 'request_id', as: 'images' });
+  if (typeof OrderRequest === 'function' && typeof OrderRequest.hasMany === 'function') {
+    OrderRequest.hasMany(OrderRequestImage, { foreignKey: 'request_id', as: 'images' });
+  }
 }
 if (!OrderRequest.associations || !OrderRequest.associations.customer) {
-  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') {
-    OrderRequest.belongsTo(UserAccount, { foreignKey: 'customer_account_id', as: 'customer' });
-  }
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') OrderRequest.belongsTo(UserAccount, { foreignKey: 'customer_account_id', as: 'customer' });
 }
 if (!OrderRequest.associations || !OrderRequest.associations.assignee) {
-  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') {
-    OrderRequest.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'assignee' });
-  }
+  if (typeof UserAccount === 'function' && typeof UserAccount.belongsTo === 'function') OrderRequest.belongsTo(UserAccount, { foreignKey: 'assigned_to', as: 'assignee' });
 }
 if (!OrderRequest.associations || !OrderRequest.associations.contract) {
-  if (typeof Contract === 'function' && typeof Contract.belongsTo === 'function') {
-    OrderRequest.hasOne(Contract, { foreignKey: 'request_id', as: 'contract' });
-  }
-}
-
-// Associations for OrderRequestItem
-if (!OrderRequestItem.associations || !OrderRequestItem.associations.category) {
-  if (typeof ProductCategory === 'function' && typeof ProductCategory.belongsTo === 'function') {
-    OrderRequestItem.belongsTo(ProductCategory, { foreignKey: 'category_id', as: 'category' });
-  }
-}
-if (!OrderRequestItem.associations || !OrderRequestItem.associations.room) {
-  if (typeof ProductRoom === 'function' && typeof ProductRoom.belongsTo === 'function') {
-    OrderRequestItem.belongsTo(ProductRoom, { foreignKey: 'room_id', as: 'room' });
-  }
-}
-if (!OrderRequestItem.associations || !OrderRequestItem.associations.material) {
-  if (typeof ProductMaterial === 'function' && typeof ProductMaterial.belongsTo === 'function') {
-    OrderRequestItem.belongsTo(ProductMaterial, { foreignKey: 'material_id', as: 'material' });
-  }
-}
-if (!OrderRequestItem.associations || !OrderRequestItem.associations.color) {
-  if (typeof ProductColor === 'function' && typeof ProductColor.belongsTo === 'function') {
-    OrderRequestItem.belongsTo(ProductColor, { foreignKey: 'color_id', as: 'color' });
-  }
-}
-if (!OrderRequestItem.associations || !OrderRequestItem.associations.product) {
-  if (typeof Product === 'function' && typeof Product.belongsTo === 'function') {
-    OrderRequestItem.belongsTo(Product, { foreignKey: 'product_id', as: 'product' });
-  }
-}
-
-/**
- * Tự động sinh mã OrderRequest tiếp theo (vd RQ-20261106-0001)
- */
-async function generateNextRequestCode() {
-  const today = new Date();
-  const dateStr =
-    today.getFullYear().toString() +
-    String(today.getMonth() + 1).padStart(2, '0') +
-    String(today.getDate()).padStart(2, '0');
-  const prefix = `RQ-${dateStr}-`;
-
-  const latest = await OrderRequest.findOne({
-    where: { request_code: { [Op.like]: `${prefix}%` } },
-    order: [['request_id', 'DESC']],
-    attributes: ['request_code'],
-    raw: true,
-  });
-
-  if (!latest || !latest.request_code) {
-    return `${prefix}0001`;
-  }
-
-  const parts = latest.request_code.split('-');
-  const seq = parseInt(parts[parts.length - 1], 10);
-  const nextSeq = isNaN(seq) ? 1 : seq + 1;
-  return `${prefix}${String(nextSeq).padStart(4, '0')}`;
-}
-
-/**
- * Lấy danh sách khách hàng phục vụ dropdown trong form tạo đơn của Sales
- */
-async function getCustomersForSales({ search } = {}) {
-  const { UserRole } = require('./userRole.model');
-  const whereClause = { status: 'ACTIVE' };
-  if (search && search.trim()) {
-    const trimmed = search.trim();
-    whereClause[Op.or] = [
-      { full_name: { [Op.like]: `%${trimmed}%` } },
-      { phone_number: { [Op.like]: `%${trimmed}%` } },
-      { email: { [Op.like]: `%${trimmed}%` } },
-    ];
-  }
-
-  return UserAccount.findAll({
-    where: whereClause,
-    attributes: ['user_account_id', 'full_name', 'email', 'phone_number', 'address'],
-    include: [
-      {
-        model: UserRole,
-        as: 'role',
-        where: { role_code: 'CUSTOMER' },
-        attributes: ['role_id', 'role_code', 'role_name'],
-        required: true,
-      },
-    ],
-    order: [['full_name', 'ASC']],
-  });
+  if (typeof Contract === 'function' && typeof Contract.belongsTo === 'function') OrderRequest.hasOne(Contract, { foreignKey: 'request_id', as: 'contract' });
 }
 
 /**
@@ -138,7 +53,6 @@ async function getRequestsWithPagination({
   search,
   search_by,
   order_type,
-  assigned_to,
 } = {}) {
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
@@ -151,9 +65,6 @@ async function getRequestsWithPagination({
   }
   if (order_type && order_type !== 'ALL') {
     whereClause.order_type = order_type;
-  }
-  if (assigned_to) {
-    whereClause.assigned_to = assigned_to;
   }
   if (search && search.trim()) {
     const trimmed = search.trim();
@@ -191,16 +102,17 @@ async function getRequestsWithPagination({
         as: 'items',
         required: false,
         include: [
-          { model: ProductCategory, as: 'category', attributes: ['category_id', 'category_name'], required: false },
-          { model: ProductRoom, as: 'room', attributes: ['room_id', 'room_name'], required: false },
-          { model: ProductMaterial, as: 'material', attributes: ['material_id', 'material_name'], required: false },
-          { model: ProductColor, as: 'color', attributes: ['color_id', 'color_name', 'hex_value'], required: false },
-          { model: Product, as: 'product', attributes: ['product_id', 'product_code', 'product_name', 'image_url'], required: false },
+          {
+            model: OrderRequestImage,
+            as: 'images',
+            required: false,
+          },
         ],
       },
       {
         model: OrderRequestImage,
         as: 'images',
+        where: { request_item_id: null },
         required: false,
       },
       {
@@ -246,16 +158,17 @@ async function findRequestById(requestId) {
         as: 'items',
         required: false,
         include: [
-          { model: ProductCategory, as: 'category', attributes: ['category_id', 'category_name'], required: false },
-          { model: ProductRoom, as: 'room', attributes: ['room_id', 'room_name'], required: false },
-          { model: ProductMaterial, as: 'material', attributes: ['material_id', 'material_name'], required: false },
-          { model: ProductColor, as: 'color', attributes: ['color_id', 'color_name', 'hex_value'], required: false },
-          { model: Product, as: 'product', attributes: ['product_id', 'product_code', 'product_name', 'image_url'], required: false },
+          {
+            model: OrderRequestImage,
+            as: 'images',
+            required: false,
+          },
         ],
       },
       {
         model: OrderRequestImage,
         as: 'images',
+        where: { request_item_id: null },
         required: false,
       },
       {
@@ -269,327 +182,13 @@ async function findRequestById(requestId) {
 }
 
 /**
- * Tạo Order Request bởi Sales từ form Đặt hàng mới
- */
-async function createSalesOrderRequest({
-  customerAccountId,
-  contactName,
-  contactPhone,
-  contactEmail,
-  deliveryAddress,
-  title,
-  description,
-  expectedDate,
-  budgetMin,
-  budgetMax,
-  items = [],
-  images = [],
-  assignedTo,
-  createBy,
-}) {
-  const transaction = await sequelize.transaction();
-  try {
-    let finalCustomerAccountId = customerAccountId;
-
-    if (!finalCustomerAccountId) {
-      const existingCustomer = await UserAccount.findOne({
-        where: { phone_number: contactPhone },
-        transaction,
-      });
-      if (existingCustomer) {
-        finalCustomerAccountId = existingCustomer.user_account_id;
-      } else {
-        const { findUserRoleByCode } = require('./userRole.model');
-        const custRole = await findUserRoleByCode('CUSTOMER');
-        const roleId = custRole ? custRole.role_id : 4;
-        const newCustomer = await UserAccount.create(
-          {
-            role_id: roleId,
-            email: contactEmail || `customer_${Date.now()}@fssims.local`,
-            password_hash: '$2a$10$REPLACE_WITH_REAL_BCRYPT_HASH',
-            full_name: contactName,
-            phone_number: contactPhone,
-            address: deliveryAddress || null,
-            status: 'ACTIVE',
-            createby: createBy,
-          },
-          { transaction }
-        );
-        finalCustomerAccountId = newCustomer.user_account_id;
-      }
-    }
-
-    const requestCode = await generateNextRequestCode();
-    const isSet = items && items.length > 1;
-
-    const request = await OrderRequest.create(
-      {
-        request_code: requestCode,
-        order_type: 'CUSTOM',
-        request_type: isSet ? 'SET' : 'SINGLE',
-        customer_account_id: finalCustomerAccountId,
-        contact_name: contactName,
-        contact_phone: contactPhone,
-        contact_email: contactEmail || null,
-        delivery_address: deliveryAddress || null,
-        title: title || `Đơn đặt hàng ${contactName} (${requestCode})`,
-        description: description || null,
-        budget_min: budgetMin || null,
-        budget_max: budgetMax || null,
-        expected_date: expectedDate || null,
-        status: 'PENDING',
-        assigned_to: assignedTo || null,
-        createby: createBy || null,
-      },
-      { transaction }
-    );
-
-    if (Array.isArray(items) && items.length > 0) {
-      const itemRecords = items.map((it) => ({
-        request_id: request.request_id,
-        product_id: it.productId || it.product_id || null,
-        item_name: it.itemName || it.item_name || 'Sản phẩm đặt làm',
-        category_id: it.categoryId || it.category_id || null,
-        room_id: it.roomId || it.room_id || null,
-        material_id: it.materialId || it.material_id || null,
-        color_id: it.colorId || it.color_id || null,
-        length_cm: it.lengthCm != null ? Number(it.lengthCm) : (it.length_cm != null ? Number(it.length_cm) : null),
-        width_cm: it.widthCm != null ? Number(it.widthCm) : (it.width_cm != null ? Number(it.width_cm) : null),
-        height_cm: it.heightCm != null ? Number(it.heightCm) : (it.height_cm != null ? Number(it.height_cm) : null),
-        quantity: Math.max(1, Number(it.quantity) || 1),
-        unit_price: it.unitPrice != null ? Number(it.unitPrice) : (it.unit_price != null ? Number(it.unit_price) : null),
-        description: it.description || null,
-        createby: createBy,
-      }));
-
-      const createdItems = await OrderRequestItem.bulkCreate(itemRecords, { transaction });
-
-      if (Array.isArray(images) && images.length > 0) {
-        const imageRecords = images
-          .map((img, idx) => {
-            const imgUrl = typeof img === 'string' ? img : (img.imageUrl || img.image_url || img.url);
-            let itemRefId = null;
-            if (typeof img === 'object' && img.itemIndex != null && createdItems[img.itemIndex]) {
-              itemRefId = createdItems[img.itemIndex].request_item_id;
-            } else if (typeof img === 'object' && img.requestItemId) {
-              itemRefId = img.requestItemId;
-            }
-            return {
-              request_id: request.request_id,
-              request_item_id: itemRefId,
-              image_url: imgUrl,
-              sort_order: (typeof img === 'object' && img.sortOrder != null) ? img.sortOrder : idx,
-              createby: createBy,
-            };
-          })
-          .filter((r) => Boolean(r.image_url));
-
-        if (imageRecords.length > 0) {
-          await OrderRequestImage.bulkCreate(imageRecords, { transaction });
-        }
-      }
-    }
-
-    await transaction.commit();
-    return findRequestById(request.request_id);
-  } catch (error) {
-    await transaction.rollback();
-    throw error;
-  }
-}
-
-/**
- * Cập nhật Order Request bởi Sales (khi PENDING hoặc khi Owner yêu cầu REQUEST_CHANGE)
- */
-async function updateSalesOrderRequest(
-  requestId,
-  {
-    contactName,
-    contactPhone,
-    contactEmail,
-    deliveryAddress,
-    title,
-    description,
-    expectedDate,
-    budgetMin,
-    budgetMax,
-    items,
-    images,
-    updatedBy,
-    userRole,
-    userId,
-  }
-) {
-  const transaction = await sequelize.transaction();
-  try {
-    const request = await OrderRequest.findByPk(requestId, {
-      transaction,
-      lock: transaction.LOCK.UPDATE,
-    });
-    if (!request) {
-      const err = new Error('Không tìm thấy yêu cầu đặt hàng.');
-      err.statusCode = 404;
-      throw err;
-    }
-
-    // Owner đã chốt thiết kế -> Cấm Sales / Leader tự ý sửa
-    if (request.status === 'DESIGN_FINALIZED') {
-      const err = new Error('Thiết kế đã được Chủ xưởng chốt, không thể chỉnh sửa.');
-      err.statusCode = 400;
-      throw err;
-    }
-    if (['CONVERTED', 'CONTRACT_SIGNED', 'REJECTED', 'CANCELLED'].includes(request.status)) {
-      const err = new Error('Không thể chỉnh sửa đơn ở trạng thái hiện tại.');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    // Kiểm tra quyền sở hữu đơn nếu role là Sales
-    if (userRole && userRole !== 'OWNER' && request.assigned_to && Number(request.assigned_to) !== Number(userId)) {
-      const err = new Error('Bạn không có quyền chỉnh sửa đơn hàng của nhân viên khác.');
-      err.statusCode = 403;
-      throw err;
-    }
-
-    // Nếu đơn trước đó bị Owner yêu cầu sửa -> chuyển lại về PENDING để Owner duyệt lại
-    if (request.status === 'REQUEST_CHANGE') {
-      request.status = 'PENDING';
-      request.staff_note = `Sales đã cập nhật lại theo phản hồi: ${request.staff_note || ''}`;
-    }
-
-    if (contactName) request.contact_name = contactName;
-    if (contactPhone) request.contact_phone = contactPhone;
-    if (contactEmail !== undefined) request.contact_email = contactEmail;
-    if (deliveryAddress !== undefined) request.delivery_address = deliveryAddress;
-    if (title) request.title = title;
-    if (description !== undefined) request.description = description;
-    if (expectedDate !== undefined) request.expected_date = expectedDate;
-    if (budgetMin !== undefined) request.budget_min = budgetMin;
-    if (budgetMax !== undefined) request.budget_max = budgetMax;
-    request.modifieby = updatedBy;
-
-    if (Array.isArray(items) && items.length > 0) {
-      request.request_type = items.length > 1 ? 'SET' : 'SINGLE';
-      await OrderRequestItem.destroy({ where: { request_id: requestId }, transaction });
-
-      const itemRecords = items.map((it) => ({
-        request_id: requestId,
-        product_id: it.productId || it.product_id || null,
-        item_name: it.itemName || it.item_name || 'Sản phẩm đặt làm',
-        category_id: it.categoryId || it.category_id || null,
-        room_id: it.roomId || it.room_id || null,
-        material_id: it.materialId || it.material_id || null,
-        color_id: it.colorId || it.color_id || null,
-        length_cm: it.lengthCm != null ? Number(it.lengthCm) : (it.length_cm != null ? Number(it.length_cm) : null),
-        width_cm: it.widthCm != null ? Number(it.widthCm) : (it.width_cm != null ? Number(it.width_cm) : null),
-        height_cm: it.heightCm != null ? Number(it.heightCm) : (it.height_cm != null ? Number(it.height_cm) : null),
-        quantity: Math.max(1, Number(it.quantity) || 1),
-        unit_price: it.unitPrice != null ? Number(it.unitPrice) : (it.unit_price != null ? Number(it.unit_price) : null),
-        description: it.description || null,
-        createby: updatedBy,
-        modifieby: updatedBy,
-      }));
-
-      const createdItems = await OrderRequestItem.bulkCreate(itemRecords, { transaction });
-
-      if (Array.isArray(images)) {
-        await OrderRequestImage.destroy({ where: { request_id: requestId }, transaction });
-
-        const imageRecords = images
-          .map((img, idx) => {
-            const imgUrl = typeof img === 'string' ? img : (img.imageUrl || img.image_url || img.url);
-            let itemRefId = null;
-            if (typeof img === 'object' && img.itemIndex != null && createdItems[img.itemIndex]) {
-              itemRefId = createdItems[img.itemIndex].request_item_id;
-            } else if (typeof img === 'object' && img.requestItemId) {
-              itemRefId = img.requestItemId;
-            }
-            return {
-              request_id: requestId,
-              request_item_id: itemRefId,
-              image_url: imgUrl,
-              sort_order: (typeof img === 'object' && img.sortOrder != null) ? img.sortOrder : idx,
-              createby: updatedBy,
-            };
-          })
-          .filter((r) => Boolean(r.image_url));
-
-        if (imageRecords.length > 0) {
-          await OrderRequestImage.bulkCreate(imageRecords, { transaction });
-        }
-      }
-    }
-
-    await request.save({ transaction });
-    await transaction.commit();
-    return findRequestById(requestId);
-  } catch (error) {
-    await transaction.rollback();
-    throw error;
-  }
-}
-
-/**
- * Owner xem xét yêu cầu: Yêu cầu sửa / Từ chối / Duyệt thiết kế / Chốt thiết kế cuối cùng
- */
-async function reviewOrderRequest(requestId, action, { reason, note, reviewedBy } = {}) {
-  const request = await OrderRequest.findByPk(requestId);
-  if (!request) {
-    const err = new Error('Không tìm thấy yêu cầu đặt hàng.');
-    err.statusCode = 404;
-    throw err;
-  }
-
-  const normalizedAction = (action || '').toUpperCase();
-  if (normalizedAction === 'REQUEST_CHANGE') {
-    if (!reason && !note) {
-      const err = new Error('Vui lòng nhập lý do hoặc nội dung yêu cầu chỉnh sửa.');
-      err.statusCode = 400;
-      throw err;
-    }
-    request.status = 'REQUEST_CHANGE';
-    request.staff_note = note || reason;
-    request.reject_reason = reason || null;
-    request.modifieby = reviewedBy;
-  } else if (normalizedAction === 'REJECT') {
-    if (!reason) {
-      const err = new Error('Vui lòng nhập lý do từ chối yêu cầu.');
-      err.statusCode = 400;
-      throw err;
-    }
-    request.status = 'REJECTED';
-    request.reject_reason = reason;
-    request.modifieby = reviewedBy;
-  } else if (normalizedAction === 'APPROVE') {
-    request.status = 'APPROVED';
-    request.approved_at = new Date();
-    request.modifieby = reviewedBy;
-    if (note) request.staff_note = note;
-  } else if (normalizedAction === 'FINALIZE_DESIGN') {
-    // OWNER LÀ NGƯỜI DUY NHẤT CÓ QUYỀN CHỐT THIẾT KẾ CUỐI CÙNG
-    request.status = 'DESIGN_FINALIZED';
-    request.approved_at = new Date();
-    request.modifieby = reviewedBy;
-    request.staff_note = note || 'Chủ xưởng đã chốt thiết kế cuối cùng.';
-  } else {
-    const err = new Error(
-      `Hành động "${action}" không hợp lệ. Cho phép: APPROVE, FINALIZE_DESIGN, REQUEST_CHANGE, REJECT.`
-    );
-    err.statusCode = 400;
-    throw err;
-  }
-
-  await request.save();
-  return findRequestById(requestId);
-}
-
-/**
  * Chuyển đổi request thành hợp đồng (DRAFT).
- * Sau khi Owner chốt thiết kế:
- * - Sales nhận lại đơn
- * - Tạo contract mới với source = 'ONLINE', request_id = request.request_id
- * - Tạo ContractItem từ các OrderRequestItem đã chốt
- * - Cập nhật request: status → 'CONVERTED'
+ * - Cho phép sale điền/sửa thông tin khách hàng (tên, SĐT, địa chỉ giao hàng)
+ * - Cho phép sale chỉnh sửa giỏ hàng (số lượng, đơn giá)
+ * - Tạo contract mới với source = 'ONLINE', contract_type = order_type của request
+ * - Tạo ContractItem từ các OrderRequestItem / items cập nhật
+ * - Cập nhật request: bổ sung địa chỉ, tên, SĐT và status → 'CONVERTED'
+ * - Gắn request_id vào contract
  */
 async function convertRequestToContract({
   requestId,
@@ -628,16 +227,10 @@ async function convertRequestToContract({
       err.statusCode = 409;
       throw err;
     }
-    // Với đơn CUSTOM, phải được duyệt và chốt thiết kế trước khi lập hợp đồng
-    if (request.order_type === 'CUSTOM' && request.status !== 'DESIGN_FINALIZED' && request.status !== 'APPROVED') {
-      const err = new Error(
-        `Chỉ có thể lập hợp đồng sau khi Chủ xưởng duyệt và chốt thiết kế (Trạng thái hiện tại: ${request.status}).`
-      );
-      err.statusCode = 400;
-      throw err;
-    }
 
-    const itemsToProcess = Array.isArray(items) && items.length > 0 ? items : request.items || [];
+    const itemsToProcess = (Array.isArray(items) && items.length > 0)
+      ? items
+      : (request.items || []);
 
     if (itemsToProcess.length === 0) {
       const err = new Error('Yêu cầu không có sản phẩm nào, không thể tạo hợp đồng.');
@@ -645,7 +238,7 @@ async function convertRequestToContract({
       throw err;
     }
 
-    // Kiểm tra contract đã tồn tại chưa
+    // Kiểm tra contract đã tồn tại chưa (unique constraint request_id)
     const existingContract = await Contract.findOne({
       where: { request_id: requestId },
       transaction,
@@ -656,72 +249,91 @@ async function convertRequestToContract({
       throw err;
     }
 
-    // Tính tổng tiền
+    // Tính tổng tiền từ các item
     const totalAmount = itemsToProcess.reduce((sum, item) => {
       const price = Number(item.unit_price ?? item.unitPrice) || 0;
       const qty = Number(item.quantity) || 1;
       return sum + price * qty;
     }, 0);
 
+    // Quy tắc đặt cọc
     const minDeposit = totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0;
-    const finalDeposit = depositAmount !== null && depositAmount !== undefined ? Number(depositAmount) : minDeposit;
+    const finalDeposit = depositAmount !== null && depositAmount !== undefined
+      ? Number(depositAmount)
+      : minDeposit;
 
+    // Thông tin khách hàng (ưu tiên thông tin sale vừa điền/sửa)
     const finalCustomerName = (customerName && String(customerName).trim()) || request.contact_name;
     const finalCustomerPhone = (customerPhone && String(customerPhone).trim()) || request.contact_phone;
     const finalCustomerAddress = (customerAddress && String(customerAddress).trim()) || request.delivery_address || null;
 
+    // Sinh mã hợp đồng
     const { generateNextContractCode } = require('./ContractModel');
     const contractCode = await generateNextContractCode();
 
-    const contract = await Contract.create(
-      {
-        contract_code: contractCode,
-        source: 'ONLINE',
-        contract_type: request.order_type || 'CUSTOM',
-        request_id: requestId,
-        customer_account_id: request.customer_account_id || null,
-        customer_name: finalCustomerName,
-        customer_phone: finalCustomerPhone,
-        customer_address: finalCustomerAddress,
-        total_amount: totalAmount,
-        deposit_amount: finalDeposit,
-        status: 'DRAFT',
-        signed_place: signedPlace || 'Cửa hàng Góc Nhà',
-        delivery_date: deliveryDate || request.expected_date || null,
-        terms: terms || null,
-        signed_by: signedBy || null,
-        note: note || null,
-        createby: createBy,
-      },
-      { transaction }
-    );
+    // Tạo contract
+    const contract = await Contract.create({
+      contract_code: contractCode,
+      source: 'ONLINE',
+      contract_type: request.order_type || 'READY',
+      request_id: requestId,
+      customer_account_id: request.customer_account_id || null,
+      customer_name: finalCustomerName,
+      customer_phone: finalCustomerPhone,
+      customer_address: finalCustomerAddress,
+      total_amount: totalAmount,
+      deposit_amount: finalDeposit,
+      status: 'DRAFT',
+      signed_place: signedPlace || 'Cửa hàng Góc Nhà',
+      delivery_date: deliveryDate || request.expected_date || null,
+      terms: terms || null,
+      signed_by: signedBy || null,
+      note: note || null,
+      createby: createBy,
+    }, { transaction });
 
+    // Tạo contract items
     const contractItemsData = itemsToProcess.map((item) => {
       const productId = item.product_id || item.productId || null;
       const hasProductId = Boolean(productId);
       const reqItemId = item.request_item_id || item.requestItemId || null;
+
+      // Tìm thông tin gốc từ order_request_item nếu có
+      const orig = (request.items || []).find((ri) => {
+        const riId = ri.request_item_id || ri.requestItemId;
+        const riPid = ri.product_id || ri.productId;
+        return (reqItemId && String(riId) === String(reqItemId)) ||
+               (productId && String(riPid) === String(productId));
+      });
+
+      const len = item.length_cm ?? item.lengthCm ?? orig?.length_cm ?? orig?.lengthCm ?? null;
+      const wid = item.width_cm ?? item.widthCm ?? orig?.width_cm ?? orig?.widthCm ?? null;
+      const hei = item.height_cm ?? item.heightCm ?? orig?.height_cm ?? orig?.heightCm ?? null;
+
       return {
         contract_id: contract.contract_id,
         product_id: hasProductId ? productId : null,
         request_item_id: hasProductId ? null : reqItemId,
-        item_name: item.item_name || item.itemName || 'Sản phẩm',
-        category_id: item.category_id || item.categoryId || null,
-        room_id: item.room_id || item.roomId || null,
-        material_id: item.material_id || item.materialId || null,
-        color_id: item.color_id || item.colorId || null,
-        length_cm: item.length_cm || item.lengthCm || null,
-        width_cm: item.width_cm || item.widthCm || null,
-        height_cm: item.height_cm || item.heightCm || null,
+        item_name: item.item_name || item.itemName || orig?.item_name || orig?.itemName || 'Sản phẩm',
+        category_id: item.category_id || item.categoryId || orig?.category_id || orig?.categoryId || null,
+        room_id: item.room_id || item.roomId || orig?.room_id || orig?.roomId || null,
+        material_id: item.material_id || item.materialId || orig?.material_id || orig?.materialId || null,
+        color_id: item.color_id || item.colorId || orig?.color_id || orig?.colorId || null,
+        length_cm: len != null ? Number(len) : null,
+        width_cm: wid != null ? Number(wid) : null,
+        height_cm: hei != null ? Number(hei) : null,
         quantity: Number(item.quantity) || 1,
         unit_price: Number(item.unit_price ?? item.unitPrice) || 0,
-        description: item.description || null,
+        description: item.description || orig?.description || null,
         createby: createBy,
       };
     });
 
     await ContractItem.bulkCreate(contractItemsData, { transaction });
 
+    // Cập nhật trạng thái và thông tin bổ sung cho request
     request.status = 'CONVERTED';
+    request.approved_at = new Date();
     request.modifieby = createBy;
     if (finalCustomerAddress) request.delivery_address = finalCustomerAddress;
     if (finalCustomerName) request.contact_name = finalCustomerName;
@@ -730,6 +342,7 @@ async function convertRequestToContract({
 
     await transaction.commit();
 
+    // Trả về contract đã tạo (không eager load ở đây, sẽ load lại ở controller)
     return {
       contractId: contract.contract_id,
       contractCode: contract.contract_code,
@@ -743,6 +356,387 @@ async function convertRequestToContract({
   }
 }
 
+
+/**
+ * Tự động sinh mã Order Request tiếp theo (RQ-YYYYMMDD-0001)
+ */
+async function generateNextRequestCode() {
+  const today = new Date();
+  const dateStr =
+    today.getFullYear().toString() +
+    String(today.getMonth() + 1).padStart(2, '0') +
+    String(today.getDate()).padStart(2, '0');
+  const prefix = `RQ-${dateStr}-`;
+
+  const latest = await OrderRequest.findOne({
+    where: { request_code: { [Op.like]: `${prefix}%` } },
+    order: [['request_id', 'DESC']],
+    attributes: ['request_code'],
+    raw: true,
+  });
+
+  if (!latest || !latest.request_code) {
+    return `${prefix}0001`;
+  }
+
+  const parts = latest.request_code.split('-');
+  const seq = parseInt(parts[parts.length - 1], 10);
+  const nextSeq = isNaN(seq) ? 1 : seq + 1;
+  return `${prefix}${String(nextSeq).padStart(4, '0')}`;
+}
+
+/**
+ * Lấy danh sách khách hàng (Role CUSTOMER) phục vụ dropdown/autocomplete cho Sales
+ */
+async function getCustomersForSales({ search } = {}) {
+  const { UserRole } = require('./userRole.model');
+  const customerRole = await UserRole.findOne({ where: { role_code: 'CUSTOMER' } });
+  const roleId = customerRole ? customerRole.role_id : 4;
+
+  const whereClause = {
+    role_id: roleId,
+    status: 'ACTIVE',
+  };
+
+  if (search && search.trim()) {
+    const trimmed = search.trim();
+    whereClause[Op.or] = [
+      { full_name: { [Op.like]: `%${trimmed}%` } },
+      { phone_number: { [Op.like]: `%${trimmed}%` } },
+      { email: { [Op.like]: `%${trimmed}%` } },
+    ];
+  }
+
+  return UserAccount.findAll({
+    where: whereClause,
+    attributes: ['user_account_id', 'full_name', 'phone_number', 'email', 'address'],
+    order: [['full_name', 'ASC']],
+    limit: 50,
+  });
+}
+
+/**
+ * Sales tạo đơn đặt hàng may đo & thiết kế (Order Request)
+ */
+async function createSalesOrderRequest({
+  customerAccountId,
+  contactName,
+  contactPhone,
+  contactEmail,
+  deliveryAddress,
+  title,
+  description,
+  budgetMin,
+  budgetMax,
+  expectedDate,
+  orderType = 'CUSTOM',
+  items = [],
+  images = [],
+  createdBy,
+}) {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const requestCode = await generateNextRequestCode();
+    const finalTitle = title || (items.length > 0 ? (items[0].itemName || items[0].item_name || 'Yêu cầu may đo nội thất') : 'Yêu cầu thiết kế may đo');
+
+    // Tạo OrderRequest
+    const orderRequest = await OrderRequest.create({
+      request_code: requestCode,
+      order_type: orderType || 'CUSTOM',
+      request_type: 'SINGLE',
+      customer_account_id: customerAccountId || 4,
+      contact_name: contactName,
+      contact_phone: contactPhone,
+      contact_email: contactEmail || null,
+      delivery_address: deliveryAddress || null,
+      title: finalTitle,
+      description: description || null,
+      budget_min: budgetMin || null,
+      budget_max: budgetMax || null,
+      expected_date: expectedDate || null,
+      status: 'PENDING',
+      createby: createdBy || 'Sales',
+    }, { transaction });
+
+    // Tạo OrderRequestItems
+    const createdItems = [];
+    if (items && items.length > 0) {
+      for (const it of items) {
+        const itemRecord = await OrderRequestItem.create({
+          request_id: orderRequest.request_id,
+          product_id: it.productId || it.product_id || null,
+          item_name: it.itemName || it.item_name || 'Món đồ nội thất',
+          category_id: it.categoryId || it.category_id || null,
+          room_id: it.roomId || it.room_id || null,
+          material_id: it.materialId || it.material_id || null,
+          color_id: it.colorId || it.color_id || null,
+          length_cm: it.lengthCm || it.length_cm || null,
+          width_cm: it.widthCm || it.width_cm || null,
+          height_cm: it.heightCm || it.height_cm || null,
+          quantity: Number(it.quantity) || 1,
+          unit_price: Number(it.unitPrice ?? it.unit_price) || 0,
+          description: it.description || it.technicalNotes || it.technical_notes || null,
+          createby: createdBy || 'Sales',
+        }, { transaction });
+        createdItems.push(itemRecord);
+      }
+    }
+
+    // Tạo OrderRequestImages (từ images riêng của từng item hoặc mảng images tổng)
+    const allImagesToCreate = [];
+
+    // 1. Lấy ảnh từ từng item (nếu có it.images)
+    if (items && items.length > 0) {
+      items.forEach((it, idx) => {
+        const targetItemId = createdItems[idx] ? createdItems[idx].request_item_id : null;
+        if (it.images && Array.isArray(it.images)) {
+          it.images.forEach((img, imgIdx) => {
+            const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+            if (url && typeof url === 'string' && url.trim()) {
+              allImagesToCreate.push({
+                request_id: orderRequest.request_id,
+                request_item_id: targetItemId,
+                image_url: url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim(),
+                sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : imgIdx,
+                createby: createdBy || 'Sales',
+              });
+            }
+          });
+        }
+      });
+    }
+
+    // 2. Lấy ảnh từ mảng images cấp cao nhất (nếu có)
+    if (images && images.length > 0) {
+      images.forEach((img, idx) => {
+        const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+        if (!url || typeof url !== 'string' || !url.trim()) return;
+
+        let targetItemId = null;
+        if (typeof img === 'object') {
+          if (img.itemIndex !== undefined && createdItems[img.itemIndex]) {
+            targetItemId = createdItems[img.itemIndex].request_item_id;
+          } else if (img.requestItemId || img.request_item_id) {
+            targetItemId = img.requestItemId || img.request_item_id;
+          }
+        }
+
+        const cleanUrl = url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim();
+        const alreadyAdded = allImagesToCreate.some(
+          (ex) => ex.image_url === cleanUrl && ex.request_item_id === targetItemId
+        );
+        if (!alreadyAdded) {
+          allImagesToCreate.push({
+            request_id: orderRequest.request_id,
+            request_item_id: targetItemId,
+            image_url: cleanUrl,
+            sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : idx,
+            createby: createdBy || 'Sales',
+          });
+        }
+      });
+    }
+
+    if (allImagesToCreate.length > 0) {
+      await OrderRequestImage.bulkCreate(allImagesToCreate, { transaction });
+    }
+
+    await transaction.commit();
+    return findRequestById(orderRequest.request_id);
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * Sales cập nhật đơn đặt hàng thiết kế (khi Owner yêu cầu sửa REQUEST_CHANGE hoặc PENDING)
+ */
+async function updateSalesOrderRequest(requestId, {
+  contactName,
+  contactPhone,
+  contactEmail,
+  deliveryAddress,
+  title,
+  description,
+  budgetMin,
+  budgetMax,
+  expectedDate,
+  items,
+  images,
+  updatedBy,
+}) {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const request = await OrderRequest.findByPk(requestId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!request) {
+      throw new Error('Không tìm thấy yêu cầu thiết kế.');
+    }
+
+    if (request.status !== 'PENDING' && request.status !== 'REQUEST_CHANGE') {
+      throw new Error(`Không thể chỉnh sửa yêu cầu ở trạng thái "${request.status}". Chỉ cho phép sửa khi Chờ duyệt (PENDING) hoặc Cần chỉnh sửa (REQUEST_CHANGE).`);
+    }
+
+    // Cập nhật thông tin chính và đổi lại PENDING để Owner duyệt lại
+    await request.update({
+      contact_name: contactName || request.contact_name,
+      contact_phone: contactPhone || request.contact_phone,
+      contact_email: contactEmail !== undefined ? contactEmail : request.contact_email,
+      delivery_address: deliveryAddress !== undefined ? deliveryAddress : request.delivery_address,
+      title: title || request.title,
+      description: description !== undefined ? description : request.description,
+      budget_min: budgetMin !== undefined ? budgetMin : request.budget_min,
+      budget_max: budgetMax !== undefined ? budgetMax : request.budget_max,
+      expected_date: expectedDate !== undefined ? expectedDate : request.expected_date,
+      status: 'PENDING',
+      reject_reason: null,
+      modifieby: updatedBy || null,
+    }, { transaction });
+
+    // Cập nhật items nếu truyền lên
+    const createdItems = [];
+    if (items && Array.isArray(items)) {
+      await OrderRequestItem.destroy({ where: { request_id: requestId }, transaction });
+      for (const it of items) {
+        const itemRecord = await OrderRequestItem.create({
+          request_id: requestId,
+          product_id: it.productId || it.product_id || null,
+          item_name: it.itemName || it.item_name || 'Món đồ nội thất',
+          category_id: it.categoryId || it.category_id || null,
+          room_id: it.roomId || it.room_id || null,
+          material_id: it.materialId || it.material_id || null,
+          color_id: it.colorId || it.color_id || null,
+          length_cm: it.lengthCm || it.length_cm || null,
+          width_cm: it.widthCm || it.width_cm || null,
+          height_cm: it.heightCm || it.height_cm || null,
+          quantity: Number(it.quantity) || 1,
+          unit_price: Number(it.unitPrice ?? it.unit_price) || 0,
+          description: it.description || it.technicalNotes || it.technical_notes || null,
+          createby: updatedBy || 'Sales',
+        }, { transaction });
+        createdItems.push(itemRecord);
+      }
+    }
+
+    // Cập nhật images nếu truyền lên
+    if ((images && Array.isArray(images)) || (items && Array.isArray(items))) {
+      await OrderRequestImage.destroy({ where: { request_id: requestId }, transaction });
+
+      const allImagesToCreate = [];
+
+      // 1. Lấy ảnh từ từng item (nếu có it.images)
+      if (items && Array.isArray(items)) {
+        items.forEach((it, idx) => {
+          const targetItemId = createdItems[idx] ? createdItems[idx].request_item_id : null;
+          if (it.images && Array.isArray(it.images)) {
+            it.images.forEach((img, imgIdx) => {
+              const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+              if (url && typeof url === 'string' && url.trim()) {
+                allImagesToCreate.push({
+                  request_id: requestId,
+                  request_item_id: targetItemId,
+                  image_url: url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim(),
+                  sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : imgIdx,
+                  createby: updatedBy || 'Sales',
+                });
+              }
+            });
+          }
+        });
+      }
+
+      // 2. Lấy ảnh từ mảng images cấp cao nhất (nếu có)
+      if (images && Array.isArray(images)) {
+        images.forEach((img, idx) => {
+          const url = typeof img === 'string' ? img : (img.imageUrl || img.image_url);
+          if (!url || typeof url !== 'string' || !url.trim()) return;
+
+          let targetItemId = null;
+          if (typeof img === 'object') {
+            if (img.itemIndex !== undefined && createdItems[img.itemIndex]) {
+              targetItemId = createdItems[img.itemIndex].request_item_id;
+            } else if (img.requestItemId || img.request_item_id) {
+              targetItemId = img.requestItemId || img.request_item_id;
+            }
+          }
+
+          const cleanUrl = url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim();
+          const alreadyAdded = allImagesToCreate.some(
+            (ex) => ex.image_url === cleanUrl && ex.request_item_id === targetItemId
+          );
+          if (!alreadyAdded) {
+            allImagesToCreate.push({
+              request_id: requestId,
+              request_item_id: targetItemId,
+              image_url: cleanUrl,
+              sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : idx,
+              createby: updatedBy || 'Sales',
+            });
+          }
+        });
+      }
+
+      if (allImagesToCreate.length > 0) {
+        await OrderRequestImage.bulkCreate(allImagesToCreate, { transaction });
+      }
+    }
+
+    await transaction.commit();
+    return findRequestById(requestId);
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * Owner đánh giá / duyệt / chốt thiết kế
+ * - action = 'REQUEST_CHANGE': yêu cầu Sales chỉnh sửa lại bản vẽ/thông số
+ * - action = 'REJECT': từ chối yêu cầu
+ * - action = 'APPROVE': duyệt sơ bộ
+ * - action = 'FINALIZE_DESIGN': CHỐT THIẾT KẾ CUỐI CÙNG (Khóa bản vẽ, đủ điều kiện lập hợp đồng)
+ */
+async function reviewOrderRequest(requestId, action, { reason, note, reviewedBy } = {}) {
+  const request = await OrderRequest.findByPk(requestId);
+  if (!request) {
+    throw new Error('Không tìm thấy yêu cầu thiết kế.');
+  }
+
+  const validActions = ['REQUEST_CHANGE', 'REJECT', 'APPROVE', 'FINALIZE_DESIGN'];
+  if (!validActions.includes(action)) {
+    throw new Error(`Hành động "${action}" không hợp lệ. Các hành động hợp lệ: ${validActions.join(', ')}.`);
+  }
+
+  const updateData = { modifieby: reviewedBy || null };
+
+  if (action === 'REQUEST_CHANGE') {
+    if (!reason || !String(reason).trim()) {
+      throw new Error('Vui lòng cung cấp lý do yêu cầu chỉnh sửa để Sales nắm thông tin.');
+    }
+    updateData.status = 'REQUEST_CHANGE';
+    updateData.reject_reason = String(reason).trim();
+    if (note) updateData.staff_note = note;
+  } else if (action === 'REJECT') {
+    if (!reason || !String(reason).trim()) {
+      throw new Error('Vui lòng cung cấp lý do từ chối yêu cầu.');
+    }
+    updateData.status = 'REJECTED';
+    updateData.reject_reason = String(reason).trim();
+  } else if (action === 'APPROVE') {
+    updateData.status = 'APPROVED';
+    if (note) updateData.staff_note = note;
+  } else if (action === 'FINALIZE_DESIGN') {
+    updateData.status = 'DESIGN_FINALIZED';
+    updateData.approved_at = new Date();
+    if (note) updateData.staff_note = note;
+  }
+
+  await request.update(updateData);
+  return findRequestById(requestId);
+}
+
 module.exports = {
   getRequestsWithPagination,
   findRequestById,
@@ -752,4 +746,140 @@ module.exports = {
   createSalesOrderRequest,
   updateSalesOrderRequest,
   reviewOrderRequest,
+  updateDesignFile,
+  deleteDesignImage,
 };
+
+/**
+ * Cập nhật bản thiết kế & mô tả kỹ thuật cho 1 yêu cầu CUSTOM:
+ * - Hỗ trợ cập nhật cho từng sản phẩm (order_request_item) qua requestItemId:
+ *   + Ảnh lưu vào bảng order_request_image (với request_item_id = requestItemId)
+ *   + Ghi chú/mô tả lưu vào trường description của order_request_item
+ * - Hoặc cập nhật cấp yêu cầu (toàn bộ đơn) khi không có requestItemId:
+ *   + Ảnh lưu vào bảng order_request_image (với request_item_id = NULL)
+ *   + Ghi chú/mô tả lưu vào trường description của order_request
+ * Chỉ OWNER mới được gọi hàm này
+ */
+async function updateDesignFile(requestId, { requestItemId, description, imageUrl, updatedBy }) {
+  const request = await OrderRequest.findByPk(requestId);
+  if (!request) {
+    const err = new Error('Không tìm thấy yêu cầu.');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (request.order_type !== 'CUSTOM') {
+    const err = new Error('Chỉ có thể gửi bản thiết kế cho đơn đặt theo yêu cầu (CUSTOM).');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  let targetItem = null;
+  if (requestItemId) {
+    targetItem = await OrderRequestItem.findOne({
+      where: {
+        request_item_id: requestItemId,
+        request_id: requestId,
+      },
+    });
+    if (!targetItem) {
+      const err = new Error('Không tìm thấy sản phẩm trong yêu cầu này.');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // 1. Cập nhật mô tả kỹ thuật cho từng sản phẩm
+    if (description !== undefined && description !== null && description.trim() !== '') {
+      targetItem.description = description.trim();
+    }
+    targetItem.modifieby = updatedBy || null;
+    await targetItem.save();
+
+    // 2. Lưu ảnh thiết kế gắn trực tiếp với sản phẩm này
+    if (imageUrl) {
+      const maxSort = (await OrderRequestImage.max('sort_order', {
+        where: {
+          request_id: requestId,
+          request_item_id: requestItemId,
+        },
+      })) || 0;
+      await OrderRequestImage.create({
+        request_id: requestId,
+        request_item_id: requestItemId,
+        image_url: imageUrl,
+        sort_order: (maxSort || 0) + 1,
+        createby: updatedBy || null,
+      });
+    }
+  } else {
+    // Cập nhật chung ở cấp yêu cầu
+    if (description !== undefined && description !== null && description.trim() !== '') {
+      request.description = description.trim();
+    }
+
+    if (imageUrl) {
+      const maxSort = (await OrderRequestImage.max('sort_order', {
+        where: {
+          request_id: requestId,
+          request_item_id: null,
+        },
+      })) || 0;
+      await OrderRequestImage.create({
+        request_id: requestId,
+        request_item_id: null,
+        image_url: imageUrl,
+        sort_order: (maxSort || 0) + 1,
+        createby: updatedBy || null,
+      });
+    }
+  }
+
+  request.modifieby = updatedBy || null;
+  await request.save();
+
+  // Trả về request đầy đủ chi tiết sau khi cập nhật
+  return findRequestById(requestId);
+}
+
+/**
+ * Xóa 1 ảnh bản vẽ thiết kế khỏi yêu cầu CUSTOM (chỉ OWNER được phép xóa)
+ * - Chỉ cho phép xóa ảnh thuộc loại OWNER_DESIGN để tránh xóa nhầm ảnh mẫu của khách
+ */
+async function deleteDesignImage(requestId, imageId, deletedBy) {
+  const { classifyRequestImage } = require('../utils/saleOrderValidator');
+  const request = await OrderRequest.findByPk(requestId);
+  if (!request) {
+    const err = new Error('Không tìm thấy yêu cầu.');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (request.order_type !== 'CUSTOM') {
+    const err = new Error('Chỉ có thể chỉnh sửa bản thiết kế cho đơn đặt theo yêu cầu (CUSTOM).');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const targetImage = await OrderRequestImage.findOne({
+    where: {
+      request_image_id: imageId,
+      request_id: requestId,
+    },
+  });
+  if (!targetImage) {
+    const err = new Error('Không tìm thấy ảnh bản thiết kế cần xóa.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const classified = classifyRequestImage(targetImage);
+  if (!classified || !classified.isOwnerDesign) {
+    const err = new Error('Không thể xóa ảnh mẫu tham khảo của khách hàng.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  await targetImage.destroy();
+  request.modifieby = deletedBy || null;
+  await request.save();
+
+  return findRequestById(requestId);
+}

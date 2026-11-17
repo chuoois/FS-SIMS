@@ -9,6 +9,14 @@ export async function getProducts(params = {}) {
 }
 
 /**
+ * Lấy chi tiết một sản phẩm công khai
+ */
+export async function getProductById(productId) {
+    const response = await api.get(`/products/${productId}`);
+    return response.data;
+}
+
+/**
  * Lấy metadata (danh mục, không gian phòng...) phục vụ bộ lọc
  */
 export async function getProductMetadata() {

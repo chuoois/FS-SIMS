@@ -13,7 +13,7 @@ export const DashboardSidebar = ({ roleLabel, items, open, onClose, onLogout }) 
     <aside
       id="sidebar"
       aria-label={`Menu ${roleLabel}`}
-      className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col bg-[#232226] text-white transition-[transform,visibility] duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+      className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col overflow-hidden bg-[#232226] text-white transition-[transform,visibility] duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
         open ? 'translate-x-0' : '-translate-x-full max-lg:invisible'
       }`}
     >
@@ -30,13 +30,17 @@ export const DashboardSidebar = ({ roleLabel, items, open, onClose, onLogout }) 
         </button>
       </div>
 
-      <div className="px-5 pb-2 pt-6">
+      <div className="shrink-0 px-5 pb-2 pt-6">
         <p className="text-[11px] font-bold uppercase tracking-wide text-stone-500">Khu vực</p>
         <p className="mt-1 text-sm font-bold text-white">{roleLabel}</p>
         <span className="mt-3 block h-px w-6 bg-stone-500" aria-hidden="true" />
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Điều hướng chính">
+      <nav
+        className="flex-1 overflow-y-auto px-3 py-3 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        aria-label="Điều hướng chính"
+      >
         <ul className="grid gap-1">
           {items.map(({ label, to, end, icon: Icon, key }) => {
             const isPending = to === '#';

@@ -17,6 +17,7 @@ const { Contract } = require('./ContractModel');
 const { ContractItem } = require('./ContractItemModel');
 const { CustomerOrder } = require('./CustomerOrderModel');
 const { CustomerOrderItem } = require('./CustomerOrderItemModel');
+const { CustomerOrderImage } = require('./CustomerOrderImageModel');
 const { Supplier } = require('./SupplierModel');
 const { RawMaterial } = require('./RawMaterialModel');
 const { MaterialReceipt } = require('./MaterialReceiptModel');
@@ -110,6 +111,10 @@ CustomerOrderItem.belongsTo(ProductMaterial, { foreignKey: 'material_id', as: 'c
 ProductMaterial.hasMany(CustomerOrderItem, { foreignKey: 'material_id', as: 'customerOrderItemMaterialIdRecords' });
 CustomerOrderItem.belongsTo(ProductColor, { foreignKey: 'color_id', as: 'customerOrderItemColorId' });
 ProductColor.hasMany(CustomerOrderItem, { foreignKey: 'color_id', as: 'customerOrderItemColorIdRecords' });
+CustomerOrderImage.belongsTo(CustomerOrder, { foreignKey: 'order_id', as: 'customerOrderImageOrderId' });
+CustomerOrder.hasMany(CustomerOrderImage, { foreignKey: 'order_id', as: 'customerOrderImageOrderIdRecords' });
+CustomerOrderImage.belongsTo(CustomerOrderItem, { foreignKey: 'order_item_id', as: 'customerOrderImageOrderItemId' });
+CustomerOrderItem.hasMany(CustomerOrderImage, { foreignKey: 'order_item_id', as: 'customerOrderImageOrderItemIdRecords' });
 RawMaterial.belongsTo(ProductMaterial, { foreignKey: 'material_id', as: 'rawMaterialMaterialId' });
 ProductMaterial.hasMany(RawMaterial, { foreignKey: 'material_id', as: 'rawMaterialMaterialIdRecords' });
 MaterialReceipt.belongsTo(Supplier, { foreignKey: 'supplier_id', as: 'materialReceiptSupplierId' });
@@ -147,4 +152,4 @@ FinishedGoodsReceipt.hasMany(FinishedGoodsReceiptItem, { foreignKey: 'fg_receipt
 FinishedGoodsReceiptItem.belongsTo(Product, { foreignKey: 'product_id', as: 'finishedGoodsReceiptItemProductId' });
 Product.hasMany(FinishedGoodsReceiptItem, { foreignKey: 'product_id', as: 'finishedGoodsReceiptItemProductIdRecords' });
 
-module.exports = { UserRole, UserAccount, RefreshToken, ProductCategory, ProductRoom, ProductMaterial, ProductColor, Product, ProductSetItem, Cart, CartItem, OrderRequest, OrderRequestItem, OrderRequestImage, Contract, ContractItem, CustomerOrder, CustomerOrderItem, Supplier, RawMaterial, MaterialReceipt, MaterialReceiptItem, ProductionOrder, ProductionOrderItem, MaterialIssue, MaterialIssueItem, FinishedGoodsReceipt, FinishedGoodsReceiptItem };
+module.exports = { UserRole, UserAccount, RefreshToken, ProductCategory, ProductRoom, ProductMaterial, ProductColor, Product, ProductSetItem, Cart, CartItem, OrderRequest, OrderRequestItem, OrderRequestImage, Contract, ContractItem, CustomerOrder, CustomerOrderItem, CustomerOrderImage, Supplier, RawMaterial, MaterialReceipt, MaterialReceiptItem, ProductionOrder, ProductionOrderItem, MaterialIssue, MaterialIssueItem, FinishedGoodsReceipt, FinishedGoodsReceiptItem };

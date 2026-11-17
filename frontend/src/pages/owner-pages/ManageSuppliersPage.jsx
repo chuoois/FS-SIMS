@@ -280,11 +280,8 @@ export const ManageSuppliersPage = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-stone-900 text-white shadow-sm">
-              <Building2 className="h-5 w-5" />
-            </div>
             <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-              Quản lý Nhà cung cấp
+              Quản Lý Nhà Cung Cấp
             </h1>
           </div>
           <p className="mt-1 text-sm text-stone-600">

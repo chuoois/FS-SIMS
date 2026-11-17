@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BrowserRouter } from 'react-router-dom';
 import { LeaderOrdersPage } from '../pages/staff-pages/LeaderOrdersPage';
-import * as orderManagementService from '../services/orderManagementService';
+import * as leaderStaffService from '../services/leaderStaffService';
 import toast from 'react-hot-toast';
 
-vi.mock('../services/orderManagementService');
+vi.mock('../services/leaderStaffService');
 vi.mock('react-hot-toast', () => ({
   default: {
     success: vi.fn(),
@@ -18,140 +17,229 @@ describe('LeaderOrdersPage Component', () => {
   const mockOrders = [
     {
       orderId: 1,
-      orderCode: 'ORD-202611-001',
-      contractCode: 'CTR-202611-001',
-      contactName: 'Nguyễn Văn A',
-      contactPhone: '0912345678',
+      orderCode: 'ORD-20261114-0001',
+      orderType: 'CUSTOM',
+      orderTypeLabel: 'Đặt theo yêu cầu',
+      contactName: 'Nguyễn Văn Khách',
+      contactPhone: '0901234567',
+      deliveryAddress: '123 Đường Xưởng Mộc',
+      contractCode: 'CON-20261114-0001',
       status: 'CONFIRMED',
-      deliveryDate: '2026-12-01',
-      productionNote: '',
+      statusLabel: 'Chờ tiếp nhận',
+      expectedDate: '2026-12-01',
+      isProductionCompleted: false,
+      rejectReason: null,
       items: [
         {
-          orderItemId: 11,
-          productName: 'Bàn ăn gỗ sồi may đo',
-          materialName: 'Gỗ sồi Nga',
-          colorName: 'Màu tự nhiên',
+          orderItemId: 101,
+          productName: 'Bàn ăn gỗ sồi 6 ghế',
           lengthCm: 180,
           widthCm: 90,
           heightCm: 75,
           quantity: 1,
-          customRequirements: 'Bo tròn 4 góc mép bàn',
-        },
-      ],
-      images: [
-        {
-          imageUrl: 'https://example.com/ban-an.jpg',
-          imageType: 'OVERALL',
+          materialName: 'Gỗ Sồi Nga',
+          colorName: 'Tự nhiên',
+          colorHex: '#D2B48C',
+          description: 'Sơn PU 3 lớp mờ 50%',
         },
       ],
     },
     {
       orderId: 2,
-      orderCode: 'ORD-202611-002',
-      contractCode: 'CTR-202611-002',
-      contactName: 'Trần Thị B',
-      contactPhone: '0987654321',
+      orderCode: 'ORD-20261114-0002',
+      orderType: 'CUSTOM',
+      orderTypeLabel: 'Đặt theo yêu cầu',
+      contactName: 'Trần Gia Công',
+      contactPhone: '0908888888',
+      deliveryAddress: '456 Phố Nội Thất',
+      contractCode: 'CON-20261114-0002',
       status: 'IN_PRODUCTION',
-      deliveryDate: '2026-12-15',
-      productionNote: 'Đang tiến hành xẻ gỗ và chà nhám',
+      statusLabel: 'Đang gia công',
+      expectedDate: '2026-12-10',
+      isProductionCompleted: true,
+      rejectReason: null,
       items: [],
-      images: [],
+    },
+    {
+      orderId: 3,
+      orderCode: 'ORD-20261114-0003',
+      orderType: 'CUSTOM',
+      orderTypeLabel: 'Đặt theo yêu cầu',
+      contactName: 'Lê Cần Làm Lại',
+      contactPhone: '0907777777',
+      deliveryAddress: '789 Xưởng Khắc Phục',
+      contractCode: 'CON-20261114-0003',
+      status: 'IN_PRODUCTION',
+      statusLabel: 'Đang gia công',
+      expectedDate: '2026-12-15',
+      isProductionCompleted: false,
+      rejectReason: 'Mối ghép chân bàn bị hở, sơn chưa đều góc khuất',
+      items: [],
     },
   ];
 
+  const mockPagination = {
+    totalItems: 3,
+    totalPages: 1,
+    currentPage: 1,
+    itemsPerPage: 10,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    orderManagementService.getLeaderOrders.mockResolvedValue({
-      data: mockOrders,
-      pagination: { totalItems: 2, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+    leaderStaffService.getLeaderOrders.mockResolvedValue({
+      orders: mockOrders,
+      pagination: mockPagination,
     });
-    orderManagementService.leaderAcceptOrder.mockResolvedValue({ success: true });
-    orderManagementService.leaderUpdateProgress.mockResolvedValue({ success: true });
-    orderManagementService.leaderSubmitInspection.mockResolvedValue({ success: true });
+    leaderStaffService.getLeaderOrderDetail.mockResolvedValue({
+      order: mockOrders[0],
+    });
+    leaderStaffService.leaderAcceptOrder.mockResolvedValue({
+      message: 'Tiếp nhận đơn hàng vào sản xuất thành công',
+      order: { ...mockOrders[0], status: 'IN_PRODUCTION' },
+    });
+    leaderStaffService.leaderUpdateProgress.mockResolvedValue({
+      message: 'Cập nhật tiến độ thành công',
+      order: { ...mockOrders[1], isProductionCompleted: true },
+    });
+    leaderStaffService.leaderSubmitInspection.mockResolvedValue({
+      message: 'Đã gửi yêu cầu nghiệm thu lên Chủ xưởng thành công',
+      order: { ...mockOrders[1], status: 'UNDER_INSPECTION' },
+    });
   });
 
-  const renderComponent = () =>
-    render(
-      <BrowserRouter>
-        <LeaderOrdersPage />
-      </BrowserRouter>
-    );
-
-  it('Hiển thị danh sách đơn hàng được giao cho Tổ trưởng', async () => {
-    renderComponent();
-
-    expect(screen.getByText(/Quản Lý Đơn Hàng & Tiến Độ Sản Xuất/i)).toBeInTheDocument();
-
+  // ─── 1. Render cơ bản & tiêu đề ──────────────────────────────────
+  it('hiển thị tiêu đề trang và badge Tổ Trưởng Xưởng', async () => {
+    render(<LeaderOrdersPage />);
     await waitFor(() => {
-      expect(screen.getByText('ORD-202611-001')).toBeInTheDocument();
-      expect(screen.getByText('ORD-202611-002')).toBeInTheDocument();
-      expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
-      expect(screen.getByText('Trần Thị B')).toBeInTheDocument();
+      expect(screen.getByText(/quản lý sản xuất đơn hàng/i)).toBeInTheDocument();
+      expect(screen.getByText('Tổ Trưởng Xưởng')).toBeInTheDocument();
     });
-
-    expect(screen.getAllByText('Chờ tiếp nhận')[0]).toBeInTheDocument();
-    expect(screen.getAllByText('Đang gia công')[0]).toBeInTheDocument();
   });
 
-  it('Tổ trưởng bấm "Tiếp nhận sản xuất" cho đơn CONFIRMED', async () => {
-    const user = userEvent.setup();
+  // ─── 2. Danh sách đơn hàng & Cảnh báo nghiệm thu thất bại ─────────
+  it('hiển thị danh sách đơn hàng được phân công cho Tổ trưởng', async () => {
+    render(<LeaderOrdersPage />);
+    await waitFor(() => {
+      expect(screen.getByText('ORD-20261114-0001')).toBeInTheDocument();
+      expect(screen.getByText('ORD-20261114-0002')).toBeInTheDocument();
+      expect(screen.getByText('ORD-20261114-0003')).toBeInTheDocument();
+      expect(screen.getByText('Nguyễn Văn Khách')).toBeInTheDocument();
+      expect(screen.getByText('Trần Gia Công')).toBeInTheDocument();
+    });
+  });
+
+  it('hiển thị banner cảnh báo khi có đơn nghiệm thu CHƯA ĐẠT cần khắc phục', async () => {
+    render(<LeaderOrdersPage />);
+    await waitFor(() => {
+      expect(screen.getByText(/nghiệm thu CHƯA ĐẠT — cần khắc phục và gửi lại/i)).toBeInTheDocument();
+      expect(screen.getByText('Làm lại (Nghiệm thu chưa đạt)')).toBeInTheDocument();
+    });
+  });
+
+  it('hiển thị tiến độ nội bộ (Đã hoàn thành / Đang làm)', async () => {
+    render(<LeaderOrdersPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Đã hoàn thành')).toBeInTheDocument();
+      expect(screen.getByText('Đang làm')).toBeInTheDocument();
+    });
+  });
+
+  // ─── 3. Tiếp nhận sản xuất ───────────────────────────────────────
+  it('cho phép Tổ trưởng bấm tiếp nhận đơn hàng đang ở trạng thái CONFIRMED', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    renderComponent();
+    const user = userEvent.setup();
 
+    render(<LeaderOrdersPage />);
     await waitFor(() => {
-      expect(screen.getByText('ORD-202611-001')).toBeInTheDocument();
+      expect(screen.getByText('Tiếp nhận')).toBeInTheDocument();
     });
 
-    const acceptBtn = screen.getByRole('button', { name: /Tiếp nhận sản xuất/i });
+    const acceptBtn = screen.getByText('Tiếp nhận');
     await user.click(acceptBtn);
 
+    expect(leaderStaffService.leaderAcceptOrder).toHaveBeenCalledWith(1);
     await waitFor(() => {
-      expect(orderManagementService.leaderAcceptOrder).toHaveBeenCalledWith(1);
-      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Đã tiếp nhận sản xuất/i));
+      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/tiếp nhận sản xuất/i));
     });
   });
 
-  it('Tổ trưởng mở modal xem bản vẽ đã khóa của Chủ xưởng (chống sửa đổi)', async () => {
+  // ─── 4. Xem chi tiết bản vẽ & thông số kỹ thuật ──────────────────
+  it('mở modal chi tiết khi nhấn Xem chi tiết và hiển thị thông số D x R x C cm', async () => {
     const user = userEvent.setup();
-    renderComponent();
+    render(<LeaderOrdersPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('ORD-202611-001')).toBeInTheDocument();
+      const viewButtons = screen.getAllByText('Xem chi tiết');
+      expect(viewButtons.length).toBeGreaterThan(0);
     });
 
-    const viewDetailBtns = screen.getAllByRole('button', { name: /Bản vẽ đã chốt/i });
-    await user.click(viewDetailBtns[0]);
+    const firstViewBtn = screen.getAllByText('Xem chi tiết')[0];
+    await user.click(firstViewBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/Bản Vẽ & Thông Số Kỹ Thuật Đã Chốt/i)).toBeInTheDocument();
-      expect(screen.getByText(/Bản vẽ thiết kế đã được Owner chốt và khóa chống sửa đổi/i)).toBeInTheDocument();
-      expect(screen.getByText('Bàn ăn gỗ sồi may đo')).toBeInTheDocument();
-      expect(screen.getByText('180 x 90 x 75 cm')).toBeInTheDocument();
-      expect(screen.getByText('Gỗ sồi Nga')).toBeInTheDocument();
+      expect(screen.getByText(/bản vẽ kỹ thuật & thông số gia công/i)).toBeInTheDocument();
+      expect(screen.getByText(/bản vẽ đã khóa/i)).toBeInTheDocument();
+      expect(screen.getByText('180 × 90 × 75 cm')).toBeInTheDocument();
+      expect(screen.getByText('Gỗ Sồi Nga')).toBeInTheDocument();
+      expect(screen.getByText('Tự nhiên')).toBeInTheDocument();
     });
   });
 
-  it('Tổ trưởng bấm "Gửi nghiệm thu" lên Chủ xưởng khi hoàn thành sản xuất', async () => {
+  // ─── 5. Cập nhật tiến độ sản xuất ────────────────────────────────
+  it('mở modal cập nhật tiến độ và cho phép toggle Hoàn thành / Chưa hoàn thành', async () => {
     const user = userEvent.setup();
-    renderComponent();
+    render(<LeaderOrdersPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('ORD-202611-002')).toBeInTheDocument();
+      const progressBtns = screen.getAllByText('Tiến độ');
+      expect(progressBtns.length).toBeGreaterThan(0);
     });
 
-    const inspectBtn = screen.getByRole('button', { name: /Gửi nghiệm thu/i });
+    // Bấm nút Tiến độ của đơn hàng thứ 2
+    const progressBtn = screen.getAllByText('Tiến độ')[0];
+    await user.click(progressBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/cập nhật tiến độ gia công/i)).toBeInTheDocument();
+      expect(screen.getByText('Chưa hoàn thành')).toBeInTheDocument();
+      expect(screen.getByText('Đã hoàn thành')).toBeInTheDocument();
+    });
+
+    // Bấm nút lưu tiến độ
+    const saveBtn = screen.getByText('Lưu tiến độ');
+    await user.click(saveBtn);
+
+    expect(leaderStaffService.leaderUpdateProgress).toHaveBeenCalledWith(2, expect.objectContaining({
+      isCompleted: true,
+    }));
+  });
+
+  // ─── 6. Gửi nghiệm thu lên Chủ xưởng ─────────────────────────────
+  it('mở modal nghiệm thu và gửi yêu cầu nghiệm thu lên Chủ xưởng', async () => {
+    const user = userEvent.setup();
+    render(<LeaderOrdersPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Nghiệm thu')).toBeInTheDocument();
+    });
+
+    const inspectBtn = screen.getByText('Nghiệm thu');
     await user.click(inspectBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/Gửi nghiệm thu chất lượng: #ORD-202611-002/i)).toBeInTheDocument();
+      expect(screen.getByText(/nộp nghiệm thu sản phẩm/i)).toBeInTheDocument();
     });
 
-    const confirmSubmitBtn = screen.getByRole('button', { name: /Xác nhận Gửi Nghiệm Thu/i });
-    await user.click(confirmSubmitBtn);
+    const submitBtn = screen.getByText('Xác nhận nộp nghiệm thu');
+    await user.click(submitBtn);
 
+    expect(leaderStaffService.leaderSubmitInspection).toHaveBeenCalledWith(2, expect.objectContaining({
+      images: [],
+    }));
     await waitFor(() => {
-      expect(orderManagementService.leaderSubmitInspection).toHaveBeenCalledWith(2, expect.any(String));
-      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Đã gửi yêu cầu nghiệm thu/i));
+      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/nghiệm thu/i));
     });
   });
 });
+

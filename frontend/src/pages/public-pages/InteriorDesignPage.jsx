@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { ChevronDown, ChevronUp, Phone } from 'lucide-react';
+import bannerImg from '../../../public/images/design-banner.png';
 
-/* ---------- Dữ liệu (thay ảnh bằng URL thật ở trường image) ---------- */
 const PHONE = '0969011078';
 
 const hero = {
@@ -9,7 +9,7 @@ const hero = {
   title: 'Thiết Kế',
   accent: 'Nội Thất',
   text: 'Liên hệ trực tiếp với xưởng Góc Nhà để được tư vấn giải pháp nội thất phù hợp với ngôi nhà và ngân sách của bạn.',
-  image: '',
+  image: bannerImg,
 };
 
 const reasons = [
@@ -17,21 +17,21 @@ const reasons = [
     title: 'Thực tế giống với 3D',
     heading: 'Hình dung rõ trước khi thi công',
     text: 'Bản vẽ 3D được dựng dựa trên số đo thực tế tại nhà bạn. Chúng tôi trao đổi cụ thể về vật liệu và kích thước để thành phẩm sát với bản thiết kế đã duyệt.',
-    image: '',
+    image: '/images/reason-3d.png',
     tone: 'bg-[#232226]',
   },
   {
     title: 'Luôn cá nhân hóa',
     heading: 'Làm theo nhu cầu',
     text: 'Bạn muốn một mẫu thiết kế dành riêng cho căn nhà của mình? Hãy cho Góc Nhà biết nhu cầu, sở thích và ngân sách, chúng tôi sẽ cùng bạn chọn phương án phù hợp với phong cách riêng của bạn.',
-    image: '',
+    image: '/images/reason-personalized.png', // Ảnh bảng mẫu vật liệu, màu sắc, bản phác thảo trên bàn
     tone: 'bg-[#323139]',
   },
   {
     title: 'Tư vấn tận tâm',
     heading: 'Làm việc trực tiếp, rõ ràng',
     text: 'Bạn trao đổi trực tiếp với người làm ra sản phẩm và được tư vấn rõ ràng về chi phí, thời gian hoàn thiện. Sau khi bàn giao, Góc Nhà hỗ trợ bảo hành và sửa chữa nếu có vấn đề phát sinh.',
-    image: '',
+    image: '/images/reason-consulting.png', // Ảnh thợ/nhà thiết kế trao đổi trực tiếp với khách
     tone: 'bg-stone-600',
   },
 ];
@@ -46,9 +46,30 @@ const steps = [
 ].map((s, i) => ({ ...s, no: String(i + 1).padStart(2, '0') }));
 
 const stepRows = [
-  { steps: steps.slice(0, 2), image: '', tone: 'bg-stone-400', imageSide: 'right', cols: 'md:grid-cols-[24fr_76fr]', alt: 'Bếp nội thất gỗ' },
-  { steps: steps.slice(2, 4), image: '', tone: 'bg-stone-300', imageSide: 'left', cols: 'md:grid-cols-[76fr_24fr]', alt: 'Phòng khách và bếp mở' },
-  { steps: steps.slice(4, 6), image: '', tone: 'bg-stone-500', imageSide: 'right', cols: 'md:grid-cols-[33fr_67fr]', alt: 'Phòng ngủ' },
+  {
+    steps: steps.slice(0, 2),
+    image: '/images/step-kitchen.png', // Ảnh bếp nội thất gỗ (tủ bếp, đảo bếp)
+    tone: 'bg-stone-400',
+    imageSide: 'right',
+    cols: 'md:grid-cols-[24fr_76fr]',
+    alt: 'Bếp nội thất gỗ',
+  },
+  {
+    steps: steps.slice(2, 4),
+    image: '/images/step-living.png', // Ảnh phòng khách liền bếp mở
+    tone: 'bg-stone-300',
+    imageSide: 'left',
+    cols: 'md:grid-cols-[76fr_24fr]',
+    alt: 'Phòng khách và bếp mở',
+  },
+  {
+    steps: steps.slice(4, 6),
+    image: '/images/step-bedroom.png', // Ảnh phòng ngủ hoàn thiện (giường, tủ áo gỗ)
+    tone: 'bg-stone-500',
+    imageSide: 'right',
+    cols: 'md:grid-cols-[33fr_67fr]',
+    alt: 'Phòng ngủ',
+  },
 ];
 
 /* ---------- Thành phần dùng chung ---------- */
