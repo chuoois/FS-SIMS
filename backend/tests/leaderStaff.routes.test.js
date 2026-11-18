@@ -75,6 +75,7 @@ jest.mock('../src/models/OrderRequestImageModel', () => ({
 
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
+const { findUserRoleByCode } = require('../src/models/userRole.model');
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
 const app = require('../src/app');
@@ -153,6 +154,11 @@ describe('Leader Staff API (/api/leader-staff)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    findUserRoleByCode.mockImplementation(async (code) => {
+      if (code === 'LEADERSTAFF') return { role_id: 3, role_code: 'LEADERSTAFF' };
+      if (code === 'OWNER') return { role_id: 1, role_code: 'OWNER' };
+      return null;
+    });
   });
 
   // ── 1. Kiểm tra xác thực & phân quyền ────────────────────────

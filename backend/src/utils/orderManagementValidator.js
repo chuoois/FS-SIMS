@@ -84,12 +84,26 @@ function toOrderManagementDTO(raw) {
   let inspectionImages = [];
   let inspectionNote = null;
 
-  // 1. Ưu tiên lấy từ bảng customer_order_image
+  // 1. Ưu tiên lấy từ bảng customer_order_image (lọc rõ image_type = INSPECTION)
   const tableImages = order.inspectionImages || order.customerOrderImages || order.customerOrderImageOrderIdRecords;
   if (Array.isArray(tableImages) && tableImages.length > 0) {
     inspectionImages = tableImages
+      .filter((img) => !img.image_type || img.image_type === 'INSPECTION')
       .map((img) => (typeof img === 'string' ? img : img.image_url))
       .filter(Boolean);
+
+    // Gộp thêm ảnh thiết kế lưu từ customer_order_image (nếu có) vào designContext.images
+    const extraDesignImages = tableImages
+      .filter((img) => img.image_type === 'DESIGN')
+      .map((img) => (typeof img === 'string' ? img : img.image_url))
+      .filter(Boolean);
+    if (extraDesignImages.length > 0) {
+      extraDesignImages.forEach((url) => {
+        if (!designContext.images.some((d) => (d.imageUrl || d.image_url) === url)) {
+          designContext.images.push({ imageUrl: url, isOwnerDesign: true });
+        }
+      });
+    }
   }
 
   // 2. Fallback đọc từ note cũ nếu bảng chưa có ảnh (tương thích ngược đơn cũ)

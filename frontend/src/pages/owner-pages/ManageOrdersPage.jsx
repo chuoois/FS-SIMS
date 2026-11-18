@@ -48,7 +48,6 @@ import {
   updateOrderStatus as updateOrderStatusApi,
   getStaffLeaders,
   assignLeaderToOrder,
-  inspectOrder,
 } from '../../services/orderManagementService';
 import { TablePagination } from '../../components/common/TablePagination';
 
@@ -658,7 +657,6 @@ export function ManageOrdersPage() {
   // Filters & Phân trang
   const [search, setSearch] = useState('');
   const [searchBy, setSearchBy] = useState('ALL'); // 'ALL' | 'CUSTOMER_NAME' | 'ORDER_CODE' | 'PHONE'
-  const [zoomImage, setZoomImage] = useState(null);
   const [leadersLoading, setLeadersLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [orderTypeFilter, setOrderTypeFilter] = useState('ALL');
@@ -753,40 +751,6 @@ export function ManageOrdersPage() {
       toast.error(err.response?.data?.message || err.message || 'Không thể phân công Tổ trưởng.');
     } finally {
       setAssignLoading(false);
-    }
-  };
-
-  // Modal Nghiệm thu chất lượng
-  const [inspectTarget, setInspectTarget] = useState(null);
-  const [inspectResult, setInspectResult] = useState('PASSED');
-  const [inspectReason, setInspectReason] = useState('');
-  const [inspectLoading, setInspectLoading] = useState(false);
-
-  const handleConfirmInspect = async (e) => {
-    e.preventDefault();
-    if (!inspectTarget) return;
-    if (inspectResult === 'FAILED' && !inspectReason.trim()) {
-      toast.error('Vui lòng cung cấp lý do không đạt để xưởng khắc phục.');
-      return;
-    }
-    try {
-      setInspectLoading(true);
-      await inspectOrder(inspectTarget.orderId, {
-        result: inspectResult,
-        reason: inspectReason.trim() || undefined,
-      });
-      toast.success(
-        inspectResult === 'PASSED'
-          ? 'Nghiệm thu ĐẠT! Đơn hàng #' + inspectTarget.orderCode + ' chuyển sang trạng thái Sẵn sàng giao hàng.'
-          : 'Đã trả lại đơn hàng #' + inspectTarget.orderCode + ' cho xưởng sản xuất lại.'
-      );
-      setInspectTarget(null);
-      setInspectReason('');
-      fetchOrders();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Không thể hoàn tất nghiệm thu.');
-    } finally {
-      setInspectLoading(false);
     }
   };
 
@@ -1189,32 +1153,16 @@ export function ManageOrdersPage() {
                       {/* Thao tác */}
                       <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
                         <div className="inline-flex items-center justify-center gap-1.5">
-                          {/* Nút Nghiệm thu chất lượng khi UNDER_INSPECTION */}
-                          {order.status === 'UNDER_INSPECTION' && (
-                            <button
-                              onClick={() => {
-                                setInspectTarget(order);
-                                setInspectResult('PASSED');
-                                setInspectReason('');
-                              }}
-                              className="inline-flex items-center gap-1 rounded-md bg-purple-700 px-2.5 py-1 text-xs font-bold text-white shadow-sm hover:bg-purple-800 transition active:scale-95 animate-pulse"
-                              title="Xem ảnh thành phẩm và đánh giá nghiệm thu"
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              <span>Thẩm định nghiệm thu</span>
-                            </button>
-                          )}
-
-                          {/* Nút Giao việc -> Chuyển sang trang Quản Lý Lệnh Gia Công (chỉ áp dụng cho đơn đặt làm CUSTOM đang ở trạng thái Đang xử lý - IN_PRODUCTION) */}
+                          {/* Nút Lệnh gia công -> Chuyển sang trang Quản Lý Lệnh Gia Công cho đơn đặt làm CUSTOM */}
                           {(order.orderType === 'CUSTOM' || order.order_type === 'CUSTOM') &&
-                            order.status === 'IN_PRODUCTION' && (
+                            (order.status === 'CONFIRMED' || order.status === 'IN_PRODUCTION' || order.status === 'UNDER_INSPECTION') && (
                             <button
                               onClick={() => handleGoToProductionOrders(order)}
                               className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
-                              title="Chuyển sang trang Quản lý lệnh gia công để giao việc"
+                              title="Chuyển sang trang Quản lý lệnh gia công để theo dõi gia công và duyệt nghiệm thu"
                             >
                               <Hammer className="h-3.5 w-3.5" />
-                              <span>Giao việc</span>
+                              <span>{order.status === 'UNDER_INSPECTION' ? 'Lệnh gia công' : 'Giao việc'}</span>
                             </button>
                           )}
 
@@ -1410,184 +1358,6 @@ export function ManageOrdersPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal Nghiệm thu chất lượng & Xem ảnh thành phẩm ── */}
-      {inspectTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-stone-100 mb-4">
-              <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-purple-700" />
-                Thẩm định & Nghiệm thu sản phẩm #{inspectTarget.orderCode}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setInspectTarget(null)}
-                className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Thông tin nộp từ Tổ trưởng */}
-            <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 mb-4 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-purple-900">
-                  Tổ trưởng phụ trách: {inspectTarget.staffName || inspectTarget.leaderName || 'Xưởng gia công'}
-                </span>
-                <span className="rounded bg-purple-200/70 px-2 py-0.5 text-[10px] font-bold text-purple-800">
-                  Chờ Chủ xưởng duyệt
-                </span>
-              </div>
-              {inspectTarget.inspectionNote && (
-                <div className="text-stone-700">
-                  <span className="font-semibold text-purple-900">Ghi chú tự kiểm: </span>
-                  {inspectTarget.inspectionNote}
-                </div>
-              )}
-            </div>
-
-            {/* Thư viện ảnh thành phẩm Leader đã gửi */}
-            <div className="mb-4">
-              <label className="block font-semibold text-stone-800 text-xs mb-2">
-                📸 Hình ảnh thành phẩm thực tế từ xưởng:{' '}
-                {inspectTarget.inspectionImages && inspectTarget.inspectionImages.length > 0 ? (
-                  <span className="text-purple-700 font-bold">
-                    ({inspectTarget.inspectionImages.length} ảnh)
-                  </span>
-                ) : (
-                  <span className="text-stone-400 font-normal">(Chưa có ảnh)</span>
-                )}
-              </label>
-
-              {inspectTarget.inspectionImages && inspectTarget.inspectionImages.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2.5 max-h-48 overflow-y-auto p-1">
-                  {inspectTarget.inspectionImages.map((imgUrl, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => setZoomImage(imgUrl)}
-                      className="group relative cursor-pointer overflow-hidden rounded-lg border border-stone-200 bg-stone-100 aspect-video shadow-xs hover:border-purple-600 hover:shadow-md transition"
-                      title="Bấm để phóng to xem chi tiết"
-                    >
-                      <img
-                        src={imgUrl}
-                        alt={`Ảnh thành phẩm ${idx + 1}`}
-                        className="h-full w-full object-cover group-hover:scale-105 transition duration-300"
-                      />
-                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                        <Eye className="h-5 w-5 text-white drop-shadow" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed border-stone-200 p-3 text-center text-xs text-stone-400">
-                  Tổ trưởng chưa đính kèm ảnh sản phẩm.
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handleConfirmInspect} className="space-y-4 text-xs pt-2 border-t border-stone-100">
-              <div>
-                <label className="block font-semibold text-stone-700 mb-2">
-                  Đánh giá nghiệm thu của Chủ xưởng: <span className="text-rose-500">*</span>
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label
-                    className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer font-bold transition ${
-                      inspectResult === 'PASSED'
-                        ? 'border-emerald-500 bg-emerald-50/60 text-emerald-900 shadow-xs'
-                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="inspectRes"
-                      value="PASSED"
-                      checked={inspectResult === 'PASSED'}
-                      onChange={() => setInspectResult('PASSED')}
-                      className="text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span>✅ ĐẠT (Chuyển giao hàng)</span>
-                  </label>
-                  <label
-                    className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer font-bold transition ${
-                      inspectResult === 'FAILED'
-                        ? 'border-rose-500 bg-rose-50/60 text-rose-900 shadow-xs'
-                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="inspectRes"
-                      value="FAILED"
-                      checked={inspectResult === 'FAILED'}
-                      onChange={() => setInspectResult('FAILED')}
-                      className="text-rose-600 focus:ring-rose-500"
-                    />
-                    <span>❌ KHÔNG ĐẠT (Trả xưởng sửa)</span>
-                  </label>
-                </div>
-              </div>
-
-              {inspectResult === 'FAILED' && (
-                <div>
-                  <label className="block font-semibold text-stone-700 mb-1">
-                    Lý do không đạt (để Tổ trưởng khắc phục): <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    rows="3"
-                    required
-                    value={inspectReason}
-                    onChange={(e) => setInspectReason(e.target.value)}
-                    placeholder="VD: Nước sơn cạnh đáy chưa đều, cánh cửa tủ bị cọ 2mm, cần chà nhám và phun lại..."
-                    className="w-full rounded-lg border border-red-300 p-2.5 text-xs focus:border-red-600 focus:outline-none"
-                  />
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setInspectTarget(null)}
-                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
-                >
-                  Đóng
-                </button>
-                <button
-                  type="submit"
-                  disabled={inspectLoading}
-                  className="rounded-lg bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 disabled:opacity-50 transition shadow-sm"
-                >
-                  {inspectLoading ? 'Đang lưu...' : 'Xác nhận nghiệm thu'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal Phóng to ảnh (Lightbox) ── */}
-      {zoomImage && (
-        <div
-          onClick={() => setZoomImage(null)}
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4 cursor-zoom-out"
-        >
-          <div className="relative max-w-4xl max-h-[90vh]">
-            <img
-              src={zoomImage}
-              alt="Phóng to ảnh nghiệm thu"
-              className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl"
-            />
-            <button
-              onClick={() => setZoomImage(null)}
-              className="absolute -top-3 -right-3 rounded-full bg-white p-1.5 text-stone-800 shadow-lg hover:bg-stone-100"
-            >
-              <X className="h-5 w-5" />
-            </button>
           </div>
         </div>
       )}

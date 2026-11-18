@@ -6,6 +6,8 @@
 // 2. Tạo lệnh gia công cho đơn hàng CONFIRMED + CUSTOM
 // 3. Phân công trưởng nhóm sản xuất (Staff Leader)
 // 4. Hủy lệnh gia công (đơn hàng liên kết trở về trạng thái CONFIRMED)
+// 5. Upload ảnh thiết kế / bản vẽ mẫu gửi thợ tham khảo
+// 6. Xem ảnh nghiệm thu từ thợ gửi lên + Duyệt / Từ chối
 // =========================================================
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -27,16 +29,31 @@ import {
   User,
   Eye,
   Package,
+  Image,
+  Upload,
+  CheckCheck,
+  ThumbsDown,
+  Camera,
+  Trash2,
+  ZoomIn,
+  Ruler,
+  ChevronRight,
+  ArrowRight,
+  ExternalLink,
+  Sparkles,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import {
   getProductionOrders,
+  getProductionOrderDetail,
   getEligibleOrders,
   getStaffLeaders,
   createProductionOrder,
   assignLeader,
   cancelProductionOrder,
+  uploadProductionDesignImages,
+  inspectProductionOrder,
 } from '../../services/productionOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
 
@@ -124,10 +141,41 @@ export const ManageProductionOrdersPage = () => {
   const [isCancelOpen, setIsCancelOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailOrder, setDetailOrder] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
-  const handleOpenDetailModal = (order) => {
+  // ── States cho ảnh thiết kế & nghiệm thu ─────────────────
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [imageModalOrder, setImageModalOrder] = useState(null);
+  const [designImages, setDesignImages] = useState([]);      // ảnh Chủ gửi thợ
+  const [inspectionImages, setInspectionImages] = useState([]); // ảnh thợ gửi Chủ
+  const [uploadingDesign, setUploadingDesign] = useState(false);
+  const [newDesignUrl, setNewDesignUrl] = useState('');
+  const [pendingDesignFiles, setPendingDesignFiles] = useState([]);
+  const [pendingDesignPreviews, setPendingDesignPreviews] = useState([]);
+  const [selectedUploadItemId, setSelectedUploadItemId] = useState(null); // ID sản phẩm muốn tải ảnh riêng
+  const [activeImageTab, setActiveImageTab] = useState('ALL'); // 'ALL' | order_item_id
+
+  // ── States cho Modal Nghiệm Thu ───────────────────────────
+  const [isInspectOpen, setIsInspectOpen] = useState(false);
+  const [inspectOrder, setInspectOrder] = useState(null);
+  const [inspectNote, setInspectNote] = useState('');
+  const [lightboxSrc, setLightboxSrc] = useState(null); // xem ảnh phóng to
+
+  const handleOpenDetailModal = async (order) => {
     setDetailOrder(order);
     setIsDetailOpen(true);
+    setDetailLoading(true);
+    try {
+      const res = await getProductionOrderDetail(order.production_id);
+      const full = res?.productionOrder;
+      if (full) {
+        setDetailOrder((prev) => ({ ...prev, ...full }));
+      }
+    } catch (err) {
+      console.warn('Không thể tải chi tiết lệnh gia công:', err.message);
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   // Đối tượng đang chọn & Loading
@@ -345,6 +393,141 @@ export const ManageProductionOrdersPage = () => {
     } catch (err) {
       console.error('Lỗi khi hủy lệnh gia công:', err);
       toast.error(err.response?.data?.message || 'Không thể hủy lệnh gia công');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Mở Modal Ảnh Thiết Kế & Nghiệm Thu ───────────────────────
+  const handleOpenImageModal = async (order, targetItemId = null) => {
+    setImageModalOrder(order);
+    setDesignImages([]);
+    setInspectionImages([]);
+    setPendingDesignFiles([]);
+    setPendingDesignPreviews([]);
+    setNewDesignUrl('');
+    setSelectedUploadItemId(targetItemId);
+    setActiveImageTab(targetItemId || 'ALL');
+    setIsImageModalOpen(true);
+    try {
+      const res = await getProductionOrderDetail(order.production_id);
+      const full = res?.productionOrder;
+      if (full) {
+        setDesignImages(full.designImages || []);
+        setInspectionImages(full.inspectionImages || []);
+        setImageModalOrder((prev) => ({ ...prev, ...full }));
+        if (targetItemId) {
+          setActiveImageTab(targetItemId);
+          setSelectedUploadItemId(targetItemId);
+        }
+      }
+    } catch (err) {
+      toast.error('Không thể tải ảnh lệnh gia công');
+    }
+  };
+
+  // Chọn tab trong Modal Ảnh (tất cả, hoặc món cụ thể)
+  const handleSelectImageTab = (tabKey) => {
+    setActiveImageTab(tabKey);
+    if (tabKey === 'ALL') {
+      setSelectedUploadItemId(null);
+    } else {
+      setSelectedUploadItemId(tabKey);
+    }
+    setPendingDesignFiles([]);
+    setPendingDesignPreviews([]);
+    setNewDesignUrl('');
+  };
+
+  // Chọn file ảnh thiết kế (preview local, chưa upload)
+  const handleDesignFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setPendingDesignFiles((prev) => [...prev, ...files]);
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setPendingDesignPreviews((prev) => [...prev, ev.target.result]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Thêm URL ảnh thiết kế thủ công
+  const handleAddDesignUrl = () => {
+    if (!newDesignUrl.trim()) return;
+    setPendingDesignPreviews((prev) => [...prev, newDesignUrl.trim()]);
+    setPendingDesignFiles((prev) => [...prev, { _url: newDesignUrl.trim() }]);
+    setNewDesignUrl('');
+  };
+
+  // Xóa ảnh đang chờ
+  const handleRemovePendingDesign = (idx) => {
+    setPendingDesignFiles((prev) => prev.filter((_, i) => i !== idx));
+    setPendingDesignPreviews((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // Submit upload ảnh thiết kế
+  const handleSubmitDesignImages = async () => {
+    if (!pendingDesignFiles.length) {
+      toast.error('Chưa chọn ảnh nào để gửi');
+      return;
+    }
+    setUploadingDesign(true);
+    try {
+      const realFiles = pendingDesignFiles.filter((f) => f instanceof File);
+      const urlItems = pendingDesignFiles.filter((f) => f._url).map((f) => f._url);
+      const res = await uploadProductionDesignImages(
+        imageModalOrder.production_id,
+        realFiles,
+        urlItems,
+        selectedUploadItemId
+      );
+      toast.success(res?.message || 'Đã gửi ảnh thiết kế cho thợ thành công');
+      setPendingDesignFiles([]);
+      setPendingDesignPreviews([]);
+      // Tải lại chi tiết để cập nhật ảnh theo từng item
+      const refresh = await getProductionOrderDetail(imageModalOrder.production_id);
+      if (refresh?.productionOrder) {
+        setImageModalOrder(refresh.productionOrder);
+        setDesignImages(refresh.productionOrder.designImages || []);
+        setInspectionImages(refresh.productionOrder.inspectionImages || []);
+      }
+      fetchProductionOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể upload ảnh thiết kế');
+    } finally {
+      setUploadingDesign(false);
+    }
+  };
+
+  // Mở Modal Nghiệm Thu (nhập lý do từ chối)
+  const handleOpenInspectModal = (order) => {
+    setInspectOrder(order);
+    setInspectNote('');
+    setIsInspectOpen(true);
+  };
+
+  // Duyệt hoặc Từ chối nghiệm thu
+  const handleInspectSubmit = async (passed) => {
+    const target = inspectOrder || imageModalOrder;
+    if (!target) return;
+    if (!passed && !inspectNote.trim()) {
+      toast.error('Vui lòng nhập lý do từ chối');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await inspectProductionOrder(target.production_id, {
+        passed,
+        rejectReason: passed ? undefined : inspectNote.trim(),
+      });
+      toast.success(res?.message || (passed ? 'Đã duyệt nghiệm thu' : 'Đã từ chối nghiệm thu'));
+      setIsInspectOpen(false);
+      setIsImageModalOpen(false);
+      fetchProductionOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Không thể cập nhật kết quả nghiệm thu');
     } finally {
       setSubmitting(false);
     }
@@ -615,6 +798,30 @@ export const ManageProductionOrdersPage = () => {
                             <Eye className="h-3.5 w-3.5 text-stone-400" />
                             <span>Chi tiết</span>
                           </button>
+
+                          {/* Nút Ảnh Thiết Kế & Nghiệm Thu */}
+                          {(() => {
+                            const isUnderInspection =
+                              order.order_status === 'UNDER_INSPECTION' ||
+                              order.status === 'UNDER_INSPECTION';
+                            return (
+                              <button
+                                onClick={() => handleOpenImageModal(order)}
+                                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition active:scale-95 ${
+                                  isUnderInspection
+                                    ? 'border border-amber-400 bg-amber-100 text-amber-900 font-bold ring-2 ring-amber-400 ring-offset-1 animate-pulse'
+                                    : 'border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                                }`}
+                                title={isUnderInspection ? 'Có ảnh nghiệm thu từ thợ chờ duyệt!' : 'Xem ảnh thiết kế / nghiệm thu'}
+                              >
+                                <Camera className="h-3.5 w-3.5" />
+                                <span>{isUnderInspection ? 'Duyệt ảnh' : 'Ảnh'}</span>
+                                {isUnderInspection && (
+                                  <span className="ml-0.5 inline-block h-2 w-2 rounded-full bg-red-600" />
+                                )}
+                              </button>
+                            );
+                          })()}
 
                           {canAct && (
                             <>
@@ -930,162 +1137,888 @@ export const ManageProductionOrdersPage = () => {
       {/* ── Modal 4: Chi Tiết Lệnh Gia Công & Sản Phẩm ────── */}
       {isDetailOpen && detailOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 my-8 border border-stone-200">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
+          <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in-95 my-auto border border-stone-200 overflow-hidden">
+            {/* Header cố định */}
+            <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4 bg-stone-50/50">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-amber-100 p-2.5 text-amber-800 shadow-2xs">
                   <Hammer className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-lg font-bold text-stone-900">
                       Chi Tiết Lệnh #{detailOrder.production_code}
                     </h3>
                     <StatusBadge status={detailOrder.status} />
+                    <span className="rounded-md bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-600">
+                      {detailOrder.production_type === 'CUSTOM' ? 'Hàng đặt làm theo yêu cầu' : 'Hàng sản xuất kho'}
+                    </span>
                   </div>
-                  <p className="text-xs text-stone-500">
-                    {detailOrder.production_type === 'CUSTOM' ? 'Hàng đặt làm theo yêu cầu' : 'Hàng sản xuất kho'}
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Hồ sơ chi tiết sản phẩm, bản vẽ kỹ thuật và ảnh thành phẩm đối chiếu
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsDetailOpen(false)}
-                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+                title="Đóng"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="mt-4 space-y-4">
-              {/* Thông tin đơn hàng & Người phụ trách */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-xs">
-                <div className="rounded-xl border border-stone-200 p-3.5 bg-stone-50/60 space-y-1.5">
-                  <span className="font-bold text-stone-700 block uppercase tracking-wider text-[11px]">
+            {/* Nội dung cuộn */}
+            <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-stone-50/30">
+              {/* Thẻ tóm tắt thông tin: 3 cột thanh lịch */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Cột 1: Đơn hàng liên kết */}
+                <div className="rounded-xl border border-stone-200 bg-white p-3.5 shadow-2xs space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500 block">
                     Đơn hàng liên kết
                   </span>
                   {detailOrder.order_code ? (
                     <>
-                      <div className="flex items-center gap-1.5 text-stone-800 font-semibold">
-                        <ShoppingBag className="h-3.5 w-3.5 text-amber-700" />
-                        <span>Mã đơn: #{detailOrder.order_code}</span>
+                      <div className="flex items-center gap-1.5 font-bold text-stone-800 text-sm">
+                        <ShoppingBag className="h-4 w-4 text-amber-700" />
+                        <span>#{detailOrder.order_code}</span>
                       </div>
                       {detailOrder.customer_name && (
-                        <div className="text-stone-600 flex items-center gap-1.5">
+                        <div className="text-xs text-stone-600 flex items-center gap-1.5">
                           <User className="h-3.5 w-3.5 text-stone-400" />
-                          <span>Khách hàng: {detailOrder.customer_name}</span>
+                          <span>Khách: {detailOrder.customer_name}</span>
                         </div>
                       )}
                     </>
                   ) : (
-                    <span className="text-stone-400 italic">Không có đơn hàng liên kết (Hàng kho)</span>
+                    <span className="text-xs text-stone-400 italic">Hàng sản xuất kho (không có đơn khách)</span>
                   )}
                 </div>
 
-                <div className="rounded-xl border border-stone-200 p-3.5 bg-stone-50/60 space-y-1.5">
-                  <span className="font-bold text-stone-700 block uppercase tracking-wider text-[11px]">
-                    Tiến độ & Phân công
+                {/* Cột 2: Phụ trách sản xuất */}
+                <div className="rounded-xl border border-stone-200 bg-white p-3.5 shadow-2xs space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500 block">
+                    Thợ trưởng phụ trách
                   </span>
-                  <div className="text-stone-800">
-                    <span className="font-medium text-stone-600">Trưởng nhóm: </span>
-                    <span className="font-semibold">{detailOrder.leader_name || 'Chưa phân công'}</span>
-                    {detailOrder.leader_phone && ` (${detailOrder.leader_phone})`}
+                  <div className="flex items-center gap-1.5 text-stone-800 text-sm font-bold">
+                    <UserCheck className="h-4 w-4 text-emerald-600" />
+                    <span>{detailOrder.leader_name || 'Chưa phân công'}</span>
                   </div>
-                  <div className="text-stone-600 flex items-center gap-1">
+                  <div className="text-xs text-stone-500 flex items-center gap-1">
                     <Calendar className="h-3.5 w-3.5 text-stone-400" />
                     <span>Kế hoạch: {formatDate(detailOrder.planned_start)} → {formatDate(detailOrder.planned_end)}</span>
                   </div>
                 </div>
+
+                {/* Cột 3: Tổng quan tiến độ & Nút nhanh */}
+                <div className="rounded-xl border border-stone-200 bg-white p-3.5 shadow-2xs flex flex-col justify-between">
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500 block">
+                      Quy mô & Thao tác
+                    </span>
+                    <div className="text-xs text-stone-700 font-semibold mt-1">
+                      {detailOrder.items?.length || 0} sản phẩm cần gia công
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDetailOpen(false);
+                      handleOpenImageModal(detailOrder);
+                    }}
+                    className="mt-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-amber-800 transition active:scale-95"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    <span>Mở kho ảnh & Duyệt nghiệm thu</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Danh sách sản phẩm của đơn hàng cần gia công */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-bold text-stone-800 flex items-center gap-1.5">
+              {/* Danh sách từng sản phẩm dưới dạng Modern Product Cards */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-stone-900 flex items-center gap-2">
                     <Layers className="h-4 w-4 text-amber-700" />
                     <span>Danh Sách Sản Phẩm Cần Gia Công ({detailOrder.items?.length || 0})</span>
                   </h4>
+                  <span className="text-xs text-stone-500 hidden sm:inline">
+                    Bản vẽ thiết kế & ảnh thành phẩm tách riêng theo từng món
+                  </span>
                 </div>
 
                 {detailOrder.items && detailOrder.items.length > 0 ? (
-                  <div className="overflow-hidden rounded-xl border border-stone-200 shadow-xs">
-                    <table className="min-w-full divide-y divide-stone-200 text-left text-xs">
-                      <thead className="bg-stone-50 font-semibold text-stone-700">
-                        <tr>
-                          <th className="py-2.5 pl-3 pr-2">#</th>
-                          <th className="px-3 py-2.5">Tên sản phẩm</th>
-                          <th className="px-3 py-2.5">Kích thước (D x R x C)</th>
-                          <th className="px-3 py-2.5">Mô tả / Yêu cầu</th>
-                          <th className="px-3 py-2.5 text-center">SL kế hoạch</th>
-                          <th className="py-2.5 pl-2 pr-3 text-center">Đã xong</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-stone-200 bg-white">
-                        {detailOrder.items.map((it, idx) => (
-                          <tr key={idx} className="hover:bg-stone-50/70">
-                            <td className="py-2.5 pl-3 pr-2 text-stone-400 font-mono">{idx + 1}</td>
-                            <td className="px-3 py-2.5 font-bold text-stone-900">
-                              {it.item_name}
+                  <div className="space-y-3">
+                    {detailOrder.items.map((it, idx) => {
+                      const itemDesigns = it.designImages && it.designImages.length > 0
+                        ? it.designImages
+                        : (it.imageUrl ? [it.imageUrl] : []);
+                      const itemInspections = it.inspectionImages || [];
+
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5 shadow-xs hover:border-amber-300 transition-all space-y-3"
+                        >
+                          {/* Header của thẻ sản phẩm */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-900">
+                                {idx + 1}
+                              </span>
+                              <span className="text-base font-bold text-stone-900">
+                                {it.item_name}
+                              </span>
                               {it.product_code && (
-                                <span className="block font-mono text-[10px] text-stone-500 font-normal">
-                                  Mã: {it.product_code}
+                                <span className="rounded bg-stone-100 px-2 py-0.5 font-mono text-xs text-stone-600">
+                                  {it.product_code}
                                 </span>
                               )}
-                            </td>
-                            <td className="px-3 py-2.5 font-mono text-stone-700 whitespace-nowrap">
-                              {it.dimensions ? (
-                                <span className="inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[11px] font-medium text-stone-800">
-                                  {it.dimensions}
-                                </span>
-                              ) : (it.length_cm || it.width_cm || it.height_cm) ? (
-                                <span className="inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[11px] font-medium text-stone-800">
-                                  {it.length_cm || '—'} × {it.width_cm || '—'} × {it.height_cm || '—'} cm
-                                </span>
-                              ) : (
-                                <span className="text-stone-400 italic">Tiêu chuẩn</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 text-stone-500 max-w-xs truncate" title={it.description || ''}>
-                              {it.description || '—'}
-                            </td>
-                            <td className="px-3 py-2.5 text-center font-bold text-amber-900">
-                              {it.quantity_planned}
-                            </td>
-                            <td className="py-2.5 pl-2 pr-3 text-center">
-                              <span className={`inline-block rounded px-1.5 py-0.5 font-semibold text-[11px] ${
+                            </div>
+
+                            {/* Số lượng & Tiến độ */}
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
+                                Kế hoạch: <strong className="text-amber-900">{it.quantity_planned}</strong> cái
+                              </span>
+                              <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
                                 it.quantity_done >= it.quantity_planned
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-stone-100 text-stone-700'
+                                  : 'bg-amber-100 text-amber-800'
                               }`}>
-                                {it.quantity_done} / {it.quantity_planned}
+                                Đã xong: {it.quantity_done} / {it.quantity_planned}
                               </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            </div>
+                          </div>
+
+                          {/* Thông số kỹ thuật & quy cách */}
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            {/* Kích thước */}
+                            <div className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50/80 border border-amber-200/80 px-2.5 py-1 font-semibold text-amber-950 font-mono">
+                             
+                              <span>
+                                Kích thước:{' '}
+                                {it.dimensions ? (
+                                  it.dimensions
+                                ) : (it.length_cm || it.width_cm || it.height_cm) ? (
+                                  `${it.length_cm || '—'} × ${it.width_cm || '—'} × ${it.height_cm || '—'} cm`
+                                ) : (
+                                  'Kích thước tiêu chuẩn'
+                                )}
+                              </span>
+                            </div>
+
+                            {/* Chất liệu */}
+                            {it.materialName && (
+                              <div className="inline-flex items-center gap-1 rounded-lg bg-stone-100 border border-stone-200 px-2.5 py-1 text-stone-700">
+                                <span>Chất liệu: <strong>{it.materialName}</strong></span>
+                              </div>
+                            )}
+
+                            {/* Màu sắc */}
+                            {it.colorName && (
+                              <div className="inline-flex items-center gap-1 rounded-lg bg-stone-100 border border-stone-200 px-2.5 py-1 text-stone-700">
+                                <span>Màu: <strong>{it.colorName}</strong></span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Yêu cầu / Mô tả chi tiết nếu có */}
+                          {it.description && (
+                            <div className="rounded-lg bg-stone-50 border border-stone-100 px-3 py-2 text-xs text-stone-600">
+                              <span className="font-semibold text-stone-700">Yêu cầu gia công: </span>
+                              {it.description}
+                            </div>
+                          )}
+
+                          {/* KHU VỰC HÌNH ẢNH CỦA RIÊNG MÓN NÀY: Chia 2 cột đối chiếu */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                            {/* Cột Trái: Bản vẽ kỹ thuật mẫu */}
+                            <div className="rounded-xl border border-amber-200/80 bg-amber-50/30 p-3 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                                  Bản vẽ kỹ thuật ({itemDesigns.length})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsDetailOpen(false);
+                                    handleOpenImageModal(detailOrder, it.order_item_id);
+                                  }}
+                                  className="text-[11px] font-semibold text-amber-800 hover:text-amber-900 hover:underline inline-flex items-center gap-0.5"
+                                >
+                                  <Upload className="h-3 w-3" />
+                                  <span>+ Thêm bản vẽ</span>
+                                </button>
+                              </div>
+
+                              {itemDesigns.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {itemDesigns.map((url, dIdx) => (
+                                    <div
+                                      key={dIdx}
+                                      className="relative group rounded-xl overflow-hidden border border-amber-300 aspect-square h-16 w-16 bg-white cursor-pointer shadow-2xs hover:scale-105 transition"
+                                      onClick={() => setLightboxSrc(url)}
+                                      title={`Bản vẽ ${it.item_name} (#${dIdx + 1}) - Bấm phóng to`}
+                                    >
+                                      <img src={url} alt={`Bản vẽ ${dIdx + 1}`} className="h-full w-full object-cover" />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                        <ZoomIn className="h-4 w-4 text-white" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-stone-400 italic py-1">
+                                  Chưa có ảnh bản vẽ riêng cho món này
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Cột Phải: Ảnh thành phẩm thực tế từ thợ */}
+                            <div className="rounded-xl border border-purple-200/80 bg-purple-50/30 p-3 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                                  <Camera className="h-3.5 w-3.5 text-purple-700" />
+                                  Ảnh thành phẩm thợ nộp ({itemInspections.length})
+                                </span>
+                                {itemInspections.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsDetailOpen(false);
+                                      handleOpenImageModal(detailOrder, it.order_item_id);
+                                    }}
+                                    className="text-[11px] font-semibold text-purple-700 hover:underline inline-flex items-center gap-0.5"
+                                  >
+                                    <Eye className="h-3 w-3" />
+                                    <span>Đối chiếu lớn</span>
+                                  </button>
+                                )}
+                              </div>
+
+                              {itemInspections.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {itemInspections.map((url, fIdx) => (
+                                    <div
+                                      key={fIdx}
+                                      className="relative group rounded-xl overflow-hidden border border-purple-300 aspect-square h-16 w-16 bg-white cursor-pointer shadow-2xs hover:scale-105 transition"
+                                      onClick={() => setLightboxSrc(url)}
+                                      title={`Thành phẩm ${it.item_name} (#${fIdx + 1}) - Bấm phóng to`}
+                                    >
+                                      <img src={url} alt={`Thành phẩm ${fIdx + 1}`} className="h-full w-full object-cover" />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                        <ZoomIn className="h-4 w-4 text-white" />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-stone-400 italic py-1">
+                                  Thợ đang gia công, chưa nộp ảnh thành phẩm
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Nút shortcut mở đối chiếu sản phẩm này */}
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsDetailOpen(false);
+                                handleOpenImageModal(detailOrder, it.order_item_id);
+                              }}
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-3 py-1 rounded-lg border border-amber-200 transition"
+                            >
+                              <Camera className="h-3.5 w-3.5" />
+                              <span>Mở đối chiếu & duyệt ảnh món này</span>
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-stone-200 p-6 text-center text-xs text-stone-400">
+                  <div className="rounded-2xl border border-dashed border-stone-200 p-8 text-center text-xs text-stone-400 bg-white">
                     Chưa có thông tin sản phẩm chi tiết cho lệnh này
                   </div>
                 )}
               </div>
 
+              {/* Ghi chú */}
               {detailOrder.note && (
-                <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-                  <span className="font-semibold">Ghi chú: </span>
+                <div className="rounded-xl bg-amber-50/60 border border-amber-200 p-3.5 text-xs text-amber-900">
+                  <span className="font-bold">Ghi chú lệnh: </span>
                   {detailOrder.note}
                 </div>
               )}
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-stone-100">
+            {/* Footer cố định */}
+            <div className="flex items-center justify-between border-t border-stone-100 px-6 py-4 bg-stone-50/50">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDetailOpen(false);
+                  handleOpenImageModal(detailOrder);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-800 transition active:scale-95"
+              >
+                <Camera className="h-4 w-4" />
+                <span>Mở Xem Ảnh & Duyệt Nghiệm Thu</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsDetailOpen(false)}
-                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                className="rounded-xl border border-stone-300 bg-white px-5 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 transition"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LIGHTBOX phóng to ảnh ── */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img
+            src={lightboxSrc}
+            alt="Phóng to"
+            className="max-h-[90vh] max-w-[90vw] rounded-xl shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxSrc(null)}
+            className="absolute top-4 right-4 rounded-full bg-white/20 p-2 text-white hover:bg-white/40"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      {/* ── Modal 5: Ảnh Thiết Kế & Nghiệm Thu (Tabs Phân Loại Từng Món) ── */}
+      {isImageModalOpen && imageModalOrder && (() => {
+        const isOrderUnderInspection =
+          imageModalOrder.order_status === 'UNDER_INSPECTION' ||
+          imageModalOrder.orderStatus === 'UNDER_INSPECTION' ||
+          imageModalOrder.status === 'UNDER_INSPECTION';
+
+        const itemsList = imageModalOrder.items || [];
+        const isSingleItemSelected = activeImageTab !== 'ALL';
+        const selectedItem = isSingleItemSelected
+          ? itemsList.find((it) => it.order_item_id === activeImageTab) || itemsList[0]
+          : null;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overflow-y-auto">
+            <div className="w-full max-w-5xl max-h-[92vh] flex flex-col rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in-95 my-auto border border-stone-200 overflow-hidden">
+              {/* Header Modal */}
+              <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4 bg-stone-50/60 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-purple-100 p-2.5 text-purple-800 shadow-2xs">
+                    <Camera className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg font-bold text-stone-900">
+                        Hồ Sơ Ảnh & Duyệt Nghiệm Thu — Lệnh #{imageModalOrder.production_code}
+                      </h3>
+                      <StatusBadge status={imageModalOrder.status} />
+                    </div>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      Bản vẽ thiết kế đối chiếu trực tiếp với ảnh thành phẩm từ xưởng thợ
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsImageModalOpen(false)}
+                  className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+                  title="Đóng"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Thanh Tab Phân Loại Sản Phẩm (Tabs Pills) */}
+              <div className="border-b border-stone-200 bg-white px-6 py-3 flex items-center gap-2 overflow-x-auto shrink-0 shadow-2xs">
+                {/* Tab: Tất cả sản phẩm */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectImageTab('ALL')}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
+                    activeImageTab === 'ALL'
+                      ? 'bg-amber-700 text-white shadow-sm ring-2 ring-amber-700/20'
+                      : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                  }`}
+                >
+                  <Package className="h-3.5 w-3.5" />
+                  <span>Tất cả sản phẩm ({itemsList.length})</span>
+                </button>
+
+                {/* Các Tab riêng của từng sản phẩm */}
+                {itemsList.map((it, idx) => {
+                  const designsCount = (it.designImages?.length || (it.imageUrl ? 1 : 0));
+                  const inspectsCount = (it.inspectionImages?.length || 0);
+                  const isActive = activeImageTab === it.order_item_id;
+
+                  return (
+                    <button
+                      key={it.order_item_id || idx}
+                      type="button"
+                      onClick={() => handleSelectImageTab(it.order_item_id)}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
+                        isActive
+                          ? 'bg-amber-700 text-white shadow-sm ring-2 ring-amber-700/20'
+                          : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
+                      }`}
+                    >
+                      <span>#{idx + 1}. {it.item_name}</span>
+                      <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                        isActive ? 'bg-amber-800 text-amber-100' : 'bg-stone-100 text-stone-600'
+                      }`}>
+                        {designsCount} vẽ
+                      </span>
+                      {inspectsCount > 0 && (
+                        <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                          isActive ? 'bg-purple-900 text-purple-100' : 'bg-purple-100 text-purple-800'
+                        }`}>
+                          {inspectsCount} thật
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Nội dung theo Tab (Cuộn mượt mà) */}
+              <div className="p-6 space-y-6 overflow-y-auto flex-1 bg-stone-50/40">
+
+                {/* ── CASE 1: Xem chi tiết 1 sản phẩm được chọn (Side-by-Side) ── */}
+                {isSingleItemSelected && selectedItem && (() => {
+                  const itemDesigns = selectedItem.designImages && selectedItem.designImages.length > 0
+                    ? selectedItem.designImages
+                    : (selectedItem.imageUrl ? [selectedItem.imageUrl] : []);
+                  const itemInspections = selectedItem.inspectionImages || [];
+
+                  return (
+                    <div className="space-y-5">
+                      {/* Thẻ tóm tắt thông số của sản phẩm đang xem */}
+                      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-base font-bold text-stone-900">
+                              {selectedItem.item_name}
+                            </span>
+                            {selectedItem.product_code && (
+                              <span className="rounded bg-stone-100 px-2 py-0.5 font-mono text-xs text-stone-600">
+                                {selectedItem.product_code}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
+                            <span className="inline-flex items-center gap-1 font-mono font-semibold text-amber-950 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              {selectedItem.dimensions || `${selectedItem.length_cm || '—'} × ${selectedItem.width_cm || '—'} × ${selectedItem.height_cm || '—'} cm`}
+                            </span>
+                            {selectedItem.materialName && <span>Chất liệu: <strong>{selectedItem.materialName}</strong></span>}
+                            {selectedItem.colorName && <span>Màu: <strong>{selectedItem.colorName}</strong></span>}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="rounded-lg bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700">
+                            Kế hoạch: <strong className="text-amber-900">{selectedItem.quantity_planned}</strong> cái
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bố cục 2 Cột Đối Chiếu Song Song (Bản vẽ mẫu VS Ảnh thành phẩm) */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                        {/* CỘT TRÁI: Bản vẽ kỹ thuật mẫu */}
+                        <div className="rounded-2xl border border-amber-200 bg-white p-5 shadow-2xs space-y-4">
+                          <div className="flex items-center justify-between border-b border-amber-100 pb-3">
+                            <div>
+                              <h4 className="text-sm font-bold text-amber-900 flex items-center gap-2">
+                                <Image className="h-4 w-4 text-amber-700" />
+                                <span>Bản Vẽ Kỹ Thuật Mẫu</span>
+                                <span className="rounded-full bg-amber-100 px-2 py-0.2 text-xs text-amber-800 font-bold">
+                                  {itemDesigns.length}
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-stone-500 mt-0.5">
+                                Hồ sơ thiết kế & quy cách gửi cho xưởng gia công
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Gallery ảnh bản vẽ */}
+                          {itemDesigns.length > 0 ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {itemDesigns.map((url, idx) => (
+                                <div
+                                  key={idx}
+                                  className="relative group rounded-xl overflow-hidden border border-amber-300 aspect-square bg-amber-50/30 cursor-pointer shadow-2xs hover:scale-105 transition"
+                                  onClick={() => setLightboxSrc(url)}
+                                  title={`Xem lớn bản vẽ ${idx + 1}`}
+                                >
+                                  <img src={url} alt={`Bản vẽ ${idx + 1}`} className="h-full w-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                    <ZoomIn className="h-5 w-5 text-white" />
+                                  </div>
+                                  <span className="absolute bottom-1.5 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white font-medium">
+                                    Bản vẽ {idx + 1}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-stone-200 p-6 text-center text-xs text-stone-400">
+                              Chưa có bản vẽ kỹ thuật riêng cho món này
+                            </div>
+                          )}
+
+                          {/* Khung tải thêm bản vẽ cho riêng món này */}
+                          <div className="rounded-xl border border-amber-300/80 bg-amber-50/50 p-4 space-y-3 pt-3">
+                            <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                              <Upload className="h-3.5 w-3.5 text-amber-700" />
+                              <span>Tải thêm bản vẽ kỹ thuật cho món này</span>
+                            </span>
+
+                            {/* Preview ảnh đang chờ upload */}
+                            {pendingDesignPreviews.length > 0 && (
+                              <div className="space-y-1.5">
+                                <span className="text-[11px] text-amber-800 font-medium">
+                                  Ảnh mới chờ gửi ({pendingDesignPreviews.length}):
+                                </span>
+                                <div className="grid grid-cols-4 gap-2">
+                                  {pendingDesignPreviews.map((src, pIdx) => (
+                                    <div
+                                      key={pIdx}
+                                      className="relative group rounded-lg overflow-hidden border-2 border-dashed border-amber-400 aspect-square bg-amber-50"
+                                    >
+                                      <img src={src} alt={`Preview ${pIdx + 1}`} className="h-full w-full object-cover" />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemovePendingDesign(pIdx)}
+                                        className="absolute top-1 right-1 rounded-full bg-rose-600 p-0.5 opacity-0 group-hover:opacity-100 transition text-white"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex flex-wrap gap-2">
+                              <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-lg border border-dashed border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition shadow-2xs">
+                                <Upload className="h-3.5 w-3.5" />
+                                Chọn ảnh từ máy
+                                <input type="file" accept="image/*" multiple className="hidden" onChange={handleDesignFileSelect} />
+                              </label>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <input
+                                type="url"
+                                value={newDesignUrl}
+                                onChange={(e) => setNewDesignUrl(e.target.value)}
+                                placeholder="Hoặc dán URL ảnh thiết kế (https://...)"
+                                className="flex-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs focus:border-amber-600 focus:outline-none bg-white"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleAddDesignUrl}
+                                className="rounded-lg bg-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-300 transition"
+                              >
+                                Thêm URL
+                              </button>
+                            </div>
+
+                            {pendingDesignFiles.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={handleSubmitDesignImages}
+                                disabled={uploadingDesign}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50 shadow-xs transition"
+                              >
+                                {uploadingDesign ? (
+                                  <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Upload className="h-3.5 w-3.5" />
+                                )}
+                                <span>
+                                  {uploadingDesign ? 'Đang gửi...' : `Lưu & Gửi ${pendingDesignFiles.length} bản vẽ cho thợ`}
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* CỘT PHẢI: Ảnh thành phẩm thực tế từ thợ gửi lên */}
+                        <div className="rounded-2xl border border-purple-200 bg-white p-5 shadow-2xs space-y-4">
+                          <div className="flex items-center justify-between border-b border-purple-100 pb-3">
+                            <div>
+                              <h4 className="text-sm font-bold text-purple-900 flex items-center gap-2">
+                                <Camera className="h-4 w-4 text-purple-700" />
+                                <span>Ảnh Thành Phẩm Thực Tế</span>
+                                <span className="rounded-full bg-purple-100 px-2 py-0.2 text-xs text-purple-800 font-bold">
+                                  {itemInspections.length}
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-stone-500 mt-0.5">
+                                Thợ hoàn thiện chụp từ xưởng gửi sang để chủ duyệt
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Gallery ảnh thành phẩm */}
+                          {itemInspections.length > 0 ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {itemInspections.map((url, idx) => (
+                                <div
+                                  key={idx}
+                                  className="relative group rounded-xl overflow-hidden border border-purple-300 aspect-square bg-purple-50/30 cursor-pointer shadow-2xs hover:scale-105 transition"
+                                  onClick={() => setLightboxSrc(url)}
+                                  title={`Xem lớn thành phẩm thực tế ${idx + 1}`}
+                                >
+                                  <img src={url} alt={`Thành phẩm ${idx + 1}`} className="h-full w-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                    <ZoomIn className="h-5 w-5 text-white" />
+                                  </div>
+                                  <span className="absolute bottom-1.5 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white font-medium">
+                                    Ảnh thực tế {idx + 1}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border border-dashed border-stone-200 p-8 text-center space-y-2 bg-stone-50/50">
+                              <Camera className="h-8 w-8 text-stone-300 mx-auto" />
+                              <p className="text-xs text-stone-500 font-medium">
+                                Thợ đang gia công, chưa chụp ảnh nghiệm thu cho món này
+                              </p>
+                              <p className="text-[11px] text-stone-400">
+                                Sau khi hoàn thành, thợ sẽ tải ảnh lên và hiển thị ở đây để bạn đối chiếu
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── CASE 2: Tab 'ALL' (Xem tổng hợp tất cả các sản phẩm) ── */}
+                {activeImageTab === 'ALL' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-1">
+                      <h4 className="text-sm font-bold text-stone-800 flex items-center gap-2">
+                        <Layers className="h-4 w-4 text-amber-700" />
+                        <span>Hồ Sơ Toàn Bộ Sản Phẩm ({itemsList.length})</span>
+                      </h4>
+                      <span className="text-xs text-stone-500">
+                        Bấm vào từng tab sản phẩm phía trên để đối chiếu lớn 1-1
+                      </span>
+                    </div>
+
+                    {itemsList.map((it, idx) => {
+                      const itemDesigns = it.designImages && it.designImages.length > 0
+                        ? it.designImages
+                        : (it.imageUrl ? [it.imageUrl] : []);
+                      const itemInspections = it.inspectionImages || [];
+
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5 shadow-xs space-y-3 hover:border-amber-300 transition"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-stone-100">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-stone-900 text-sm">
+                                  #{idx + 1}. {it.item_name}
+                                </span>
+                                {it.product_code && (
+                                  <span className="rounded bg-stone-100 px-2 py-0.5 font-mono text-[11px] text-stone-600">
+                                    {it.product_code}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-stone-500 flex flex-wrap gap-2 mt-0.5">
+                                <span>
+                                  Kích thước:{' '}
+                                  <strong className="text-amber-950 font-mono">
+                                    {it.dimensions || `${it.length_cm || '—'} × ${it.width_cm || '—'} × ${it.height_cm || '—'} cm`}
+                                  </strong>
+                                </span>
+                                <span>SL: <strong className="text-stone-700">{it.quantity_planned}</strong></span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSelectImageTab(it.order_item_id)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 transition shrink-0"
+                            >
+                              <span>Xem đối chiếu lớn món này</span>
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+
+                          {/* 2 hàng: Bản vẽ và Thành phẩm */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                            {/* Bản vẽ */}
+                            <div className="rounded-xl bg-amber-50/40 border border-amber-200/80 p-3 space-y-1.5">
+                              <span className="text-xs font-bold text-amber-900 block">
+                                📐 Bản vẽ kỹ thuật ({itemDesigns.length}):
+                              </span>
+                              {itemDesigns.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {itemDesigns.map((url, dIdx) => (
+                                    <img
+                                      key={dIdx}
+                                      src={url}
+                                      alt={`Bản vẽ ${dIdx + 1}`}
+                                      onClick={() => setLightboxSrc(url)}
+                                      className="h-14 w-14 rounded-lg border border-amber-300 object-cover cursor-pointer hover:scale-105 transition shadow-2xs"
+                                      title="Bấm xem lớn"
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-stone-400 italic">Chưa có bản vẽ riêng</span>
+                              )}
+                            </div>
+
+                            {/* Thành phẩm */}
+                            <div className="rounded-xl bg-purple-50/40 border border-purple-200/80 p-3 space-y-1.5">
+                              <span className="text-xs font-bold text-purple-900 block">
+                                📸 Ảnh thành phẩm thực tế ({itemInspections.length}):
+                              </span>
+                              {itemInspections.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {itemInspections.map((url, fIdx) => (
+                                    <img
+                                      key={fIdx}
+                                      src={url}
+                                      alt={`Thành phẩm ${fIdx + 1}`}
+                                      onClick={() => setLightboxSrc(url)}
+                                      className="h-14 w-14 rounded-lg border border-purple-300 object-cover cursor-pointer hover:scale-105 transition shadow-2xs"
+                                      title="Bấm xem lớn"
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-stone-400 italic">Chưa có ảnh thành phẩm</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Cố Định: Quyết Định Nghiệm Thu & Đóng */}
+              <div className="border-t border-stone-100 bg-stone-50/70 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+                {/* Trạng thái nghiệm thu */}
+                <div className="w-full sm:w-auto">
+                  {isOrderUnderInspection ? (
+                    <div className="flex items-center gap-2 text-amber-900 font-semibold text-xs">
+                      <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span>Thợ đã nộp ảnh thành phẩm nghiệm thu. Vui lòng đối chiếu và duyệt:</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-stone-500 italic">
+                      {imageModalOrder.order_status === 'READY_TO_DELIVER' ||
+                      imageModalOrder.status === 'COMPLETED'
+                        ? '✅ Đã nghiệm thu ĐẠT — Sản phẩm sẵn sàng xuất kho / giao hàng'
+                        : `Trạng thái lệnh: ${imageModalOrder.status}`}
+                    </p>
+                  )}
+                </div>
+
+                {/* Nút hành động */}
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                  {isOrderUnderInspection && (
+                    <>
+                      <button
+                        onClick={() => handleInspectSubmit(true)}
+                        disabled={submitting}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-bold text-white hover:bg-emerald-700 shadow-sm transition active:scale-95 disabled:opacity-50"
+                      >
+                        <CheckCheck className="h-4 w-4" />
+                        <span>Duyệt — Nghiệm thu ĐẠT</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenInspectModal(imageModalOrder)}
+                        disabled={submitting}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-xs sm:text-sm font-bold text-rose-700 hover:bg-rose-100 transition active:scale-95 disabled:opacity-50"
+                      >
+                        <ThumbsDown className="h-4 w-4" />
+                        <span>Từ chối — Bắt sửa lại</span>
+                      </button>
+                    </>
+                  )}
+
+                  <button
+                    onClick={() => setIsImageModalOpen(false)}
+                    className="rounded-xl border border-stone-300 bg-white px-5 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 transition"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Modal 6: Từ Chối Nghiệm Thu (nhập lý do) ── */}
+      {isInspectOpen && inspectOrder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-rose-100 p-2 text-rose-700">
+                  <ThumbsDown className="h-5 w-5" />
+                </div>
+                <h3 className="text-lg font-bold text-stone-900">Từ Chối Nghiệm Thu</h3>
+              </div>
+              <button onClick={() => setIsInspectOpen(false)} className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-xs text-stone-500 mb-4">
+              Nhập lý do từ chối để thợ biết cần sửa gì trước khi gửi lại ảnh nghiệm thu.
+            </p>
+            <textarea
+              rows={4}
+              value={inspectNote}
+              onChange={(e) => setInspectNote(e.target.value)}
+              placeholder="VD: Mối ghép không khít, cần đánh bóng lại bề mặt, thiếu phụ kiện..."
+              className="w-full rounded-lg border border-stone-200 p-3 text-sm focus:border-rose-500 focus:outline-none"
+            />
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => setIsInspectOpen(false)}
+                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={() => handleInspectSubmit(false)}
+                disabled={submitting || !inspectNote.trim()}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {submitting ? 'Đang xử lý...' : 'Xác nhận Từ chối'}
               </button>
             </div>
           </div>
