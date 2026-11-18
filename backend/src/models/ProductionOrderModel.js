@@ -521,6 +521,22 @@ async function assignLeaderToOrder(productionId, assignedTo, modifieBy) {
   }
 
   await po.update({ assigned_to: assignedTo, modifieby: modifieBy || 'system' });
+
+  // Tự động đồng bộ phân công sang bảng customer_order nếu có liên kết đơn hàng
+  if (po.order_id) {
+    try {
+      const CustomerOrder = getCustomerOrder();
+      if (isModel(CustomerOrder)) {
+        await CustomerOrder.update(
+          { assigned_to: assignedTo, modifieby: modifieBy || 'system' },
+          { where: { order_id: po.order_id } }
+        );
+      }
+    } catch (ordErr) {
+      console.warn('[assignLeaderToOrder] Không thể đồng bộ sang customer_order:', ordErr.message);
+    }
+  }
+
   return findProductionOrderById(productionId);
 }
 

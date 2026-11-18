@@ -207,7 +207,7 @@ describe('LeaderOrdersPage Component', () => {
     });
 
     // Bấm nút lưu tiến độ
-    const saveBtn = screen.getByText('Lưu tiến độ');
+    const saveBtn = screen.getByRole('button', { name: /Xác nhận hoàn thành|Lưu tiến độ/i });
     await user.click(saveBtn);
 
     expect(leaderStaffService.leaderUpdateProgress).toHaveBeenCalledWith(2, expect.objectContaining({
