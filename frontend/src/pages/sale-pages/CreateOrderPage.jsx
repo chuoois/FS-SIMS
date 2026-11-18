@@ -10,8 +10,8 @@
 // Kết nối trực tiếp qua saleOrderService (Controller riêng biệt, không conflict)
 // =========================================================
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart,
   Search,
@@ -38,6 +38,9 @@ import {
   Sparkles,
   Printer,
   PenTool,
+  UserPlus,
+  UploadCloud,
+  Camera,
 } from 'lucide-react';
 import { PrintContractModal } from '../../components/common/PrintContractModal';
 import toast from 'react-hot-toast';
@@ -48,6 +51,8 @@ import {
   createOfflineContract,
   signContract,
   createOrderFromContract,
+  getSaleCustomers,
+  uploadContractProof,
 } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
 
@@ -60,8 +65,31 @@ const formatVND = (amount) => {
   }).format(amount || 0);
 };
 
+// Tính ngày hẹn giao tối thiểu (cách hôm nay ít nhất 10 ngày)
+const getMinDeliveryDate = (days = 10) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d;
+};
+
+const formatDateInputStr = (dateObj) => {
+  const yyyy = dateObj.getFullYear();
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const formatDateVN = (dateObj) => {
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const yyyy = dateObj.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+};
+
 export const CreateOrderPage = () => {
   const navigate = useNavigate();
+  const minDeliveryDate = useMemo(() => getMinDeliveryDate(10), []);
+  const minDeliveryDateStr = useMemo(() => formatDateInputStr(minDeliveryDate), [minDeliveryDate]);
 
   // ── 1. States Sản phẩm trong kho (Bên phải) ────────────────
   const [products, setProducts] = useState([]);
@@ -85,11 +113,30 @@ export const CreateOrderPage = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  const [searchParams] = useSearchParams();
+
   // ── 3. States Giỏ hàng (Bên trái) ───────────────────────────
-  const [cartItems, setCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('pos_cart_items');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Tự động lưu giỏ hàng vào sessionStorage để không bị mất khi chuyển sang trang Khách hàng
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('pos_cart_items', JSON.stringify(cartItems));
+    } catch {
+      // ignore
+    }
+  }, [cartItems]);
 
   // ── 4. Form Thông tin Khách hàng ────────────────────────────
   const [customerInfo, setCustomerInfo] = useState({
+    customerAccountId: null,
     customerName: '',
     customerPhone: '',
     customerAddress: '',
@@ -99,6 +146,113 @@ export const CreateOrderPage = () => {
     note: '',
   });
 
+  // Autocomplete & Tìm kiếm khách hàng
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [activeDropdownField, setActiveDropdownField] = useState(null); // 'name' | 'phone' | null
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const searchTimeoutRef = useRef(null);
+  const customerDropdownRef = useRef(null);
+
+  // Tự động điền khách hàng nếu nhận từ URL query params (sau khi tạo mới ở trang Khách hàng)
+  useEffect(() => {
+    const pName = searchParams.get('customerName') || searchParams.get('name');
+    const pPhone = searchParams.get('customerPhone') || searchParams.get('phone');
+    const pAddress = searchParams.get('customerAddress') || searchParams.get('address');
+    const pId = searchParams.get('customerAccountId');
+
+    if (pName || pPhone) {
+      const custObj = {
+        customerAccountId: pId ? Number(pId) : null,
+        fullName: pName || '',
+        phoneNumber: pPhone || '',
+        address: pAddress || '',
+      };
+      setCustomerInfo((prev) => ({
+        ...prev,
+        customerAccountId: custObj.customerAccountId,
+        customerName: custObj.fullName || prev.customerName,
+        customerPhone: custObj.phoneNumber || prev.customerPhone,
+        customerAddress: custObj.address || prev.customerAddress,
+      }));
+      setSelectedCustomer(custObj);
+      toast.success(`Đã tự động chọn khách hàng: ${custObj.fullName || custObj.phoneNumber}`);
+    }
+  }, [searchParams]);
+
+  // Xử lý tìm kiếm khách hàng khi gõ (debounce 250ms)
+  const handleCustomerQueryChange = useCallback((value, field) => {
+    setActiveDropdownField(field);
+    setSelectedCustomer(null);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (!value || !value.trim()) {
+      setCustomerSuggestions([]);
+      setSearchingCustomers(false);
+      return;
+    }
+
+    setSearchingCustomers(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await getSaleCustomers({ search: value.trim(), mode: 'dropdown' });
+        setCustomerSuggestions(res.data || []);
+      } catch (err) {
+        console.error('Lỗi tìm kiếm khách hàng:', err);
+      } finally {
+        setSearchingCustomers(false);
+      }
+    }, 250);
+  }, []);
+
+  const handleSelectCustomer = (customer) => {
+    setCustomerInfo((prev) => ({
+      ...prev,
+      customerAccountId: customer.customerAccountId,
+      customerName: customer.fullName || '',
+      customerPhone: customer.phoneNumber || '',
+      customerAddress: customer.address || prev.customerAddress,
+    }));
+    setSelectedCustomer(customer);
+    setActiveDropdownField(null);
+    setCustomerSuggestions([]);
+    toast.success(`Đã chọn khách hàng: ${customer.fullName}`);
+  };
+
+  const handleUnlinkCustomer = () => {
+    setSelectedCustomer(null);
+    setCustomerInfo((prev) => ({
+      ...prev,
+      customerAccountId: null,
+    }));
+  };
+
+  const handleNavigateToCreateCustomer = () => {
+    const params = new URLSearchParams();
+    params.set('action', 'create');
+    params.set('returnUrl', '/sale/create-order');
+    if (customerInfo.customerName) params.set('name', customerInfo.customerName);
+    if (customerInfo.customerPhone) params.set('phone', customerInfo.customerPhone);
+    navigate(`/sale/customers?${params.toString()}`);
+  };
+
+  // Đóng dropdown tìm kiếm khách hàng khi click ra ngoài
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target)) {
+        setActiveDropdownField(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
   // ── 5. Modal Biên bản Hợp đồng & Chốt đơn ──────────────────
   const [contractModalOpen, setContractModalOpen] = useState(false);
   const [currentContract, setCurrentContract] = useState(null);
@@ -107,7 +261,37 @@ export const CreateOrderPage = () => {
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [orderCreatedResult, setOrderCreatedResult] = useState(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [paperSignedContractFileUrl, setPaperSignedContractFileUrl] = useState('');
+  const [contractProofFile, setContractProofFile] = useState(null);
+  const [contractProofPreview, setContractProofPreview] = useState('');
+  const [proofPreviewModalOpen, setProofPreviewModalOpen] = useState(false);
+  const contractFileInputRef = useRef(null);
+
+  const handleProofFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn file hình ảnh (JPG, PNG, WEBP...)');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Dung lượng ảnh tối đa là 10MB.');
+      return;
+    }
+
+    setContractProofFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setContractProofPreview(localUrl);
+    toast.success('Đã chọn ảnh chụp hợp đồng đã ký.');
+  };
+
+  const handleRemoveProofFile = () => {
+    setContractProofFile(null);
+    setContractProofPreview('');
+    if (contractFileInputRef.current) {
+      contractFileInputRef.current.value = '';
+    }
+  };
 
   // ── Lấy danh mục, phòng phục vụ lọc ────────────────────────
   useEffect(() => {
@@ -229,6 +413,7 @@ export const CreateOrderPage = () => {
     if (cartItems.length === 0) return;
     if (window.confirm('Bạn có chắc chắn muốn xóa toàn bộ sản phẩm trong giỏ hàng?')) {
       setCartItems([]);
+      sessionStorage.removeItem('pos_cart_items');
       toast.success('Đã làm trống giỏ hàng');
     }
   };
@@ -275,6 +460,33 @@ export const CreateOrderPage = () => {
       return;
     }
 
+    if (!customerInfo.deliveryDate) {
+      toast.error('Vui lòng chọn ngày hẹn giao hàng.');
+      return;
+    }
+
+    const selectedDeliveryDate = new Date(customerInfo.deliveryDate);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetDate = new Date(
+      selectedDeliveryDate.getFullYear(),
+      selectedDeliveryDate.getMonth(),
+      selectedDeliveryDate.getDate()
+    );
+    const diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      toast.error('Ngày hẹn giao hàng không thể ở trong quá khứ.');
+      return;
+    }
+
+    if (diffDays < 10) {
+      toast.error(
+        `Ngày hẹn giao hàng phải cách thời điểm tạo đơn ít nhất 10 ngày (sớm nhất từ ngày ${formatDateVN(minDeliveryDate)}).`
+      );
+      return;
+    }
+
     const minRequiredDeposit = totalAmount > 10000000 ? Math.round(totalAmount * 0.3) : 0;
     if (totalAmount > 10000000 && Number(customerInfo.depositAmount) < minRequiredDeposit) {
       toast.error(
@@ -291,6 +503,7 @@ export const CreateOrderPage = () => {
     try {
       setIsSubmittingContract(true);
       const payload = {
+        customer_account_id: customerInfo.customerAccountId || null,
         customer_name: customerInfo.customerName.trim(),
         customer_phone: customerInfo.customerPhone.trim(),
         customer_address: customerInfo.customerAddress.trim() || null,
@@ -309,8 +522,10 @@ export const CreateOrderPage = () => {
       if (res.data) {
         setCurrentContract(res.data);
         setOrderCreatedResult(null);
+        setContractProofFile(null);
+        setContractProofPreview(res.data.contractFileUrl || '');
         setContractModalOpen(true);
-        toast.success('Đã lập biên bản hợp đồng! Vui lòng kiểm tra và ký chốt.');
+        toast.success('Đã lập biên bản hợp đồng! Vui lòng in, ký tay và chụp ảnh bằng chứng.');
       }
     } catch (err) {
       console.error('Lỗi tạo hợp đồng:', err);
@@ -324,14 +539,42 @@ export const CreateOrderPage = () => {
   const handleSignContract = async () => {
     if (!currentContract) return;
 
+    if (!contractProofFile && !contractProofPreview && !currentContract.contractFileUrl) {
+      toast.error('Bắt buộc phải tải lên ảnh chụp/scan hợp đồng đã ký để làm bằng chứng!');
+      return;
+    }
+
     try {
       setIsSigning(true);
+      let finalFileUrl = currentContract.contractFileUrl || '';
+
+      if (contractProofFile) {
+        toast.loading('Đang tải ảnh bằng chứng lên máy chủ...', { id: 'upload-proof' });
+        const uploadRes = await uploadContractProof(contractProofFile);
+        const uploadedUrls = uploadRes.urls || uploadRes.images || [];
+        if (!uploadedUrls[0]) {
+          toast.dismiss('upload-proof');
+          toast.error('Không thể tải ảnh hợp đồng lên máy chủ. Vui lòng thử lại.');
+          return;
+        }
+        finalFileUrl = uploadedUrls[0];
+        toast.dismiss('upload-proof');
+      }
+
+      if (!finalFileUrl) {
+        toast.error('Bắt buộc phải có ảnh bằng chứng hợp đồng đã ký!');
+        return;
+      }
+
       const res = await signContract(currentContract.contractId, {
         signed_place: customerInfo.signedPlace || 'Cửa hàng Góc Nhà',
+        contract_file_url: finalFileUrl,
       });
       if (res.data) {
         setCurrentContract(res.data);
-        toast.success('Hợp đồng đã được ký kết thành công! Bây giờ bạn có thể tạo đơn hàng.');
+        setContractProofPreview(res.data.contractFileUrl || finalFileUrl);
+        setContractProofFile(null);
+        toast.success('Hợp đồng đã được ký kết và lưu ảnh bằng chứng thành công! Bạn có thể tạo đơn hàng.');
       }
     } catch (err) {
       console.error('Lỗi khi ký hợp đồng:', err);
@@ -357,7 +600,12 @@ export const CreateOrderPage = () => {
 
         // Làm trống giỏ hàng và reset thông tin khách hàng
         setCartItems([]);
+        sessionStorage.removeItem('pos_cart_items');
+        setSelectedCustomer(null);
+        setContractProofFile(null);
+        setContractProofPreview('');
         setCustomerInfo({
+          customerAccountId: null,
           customerName: '',
           customerPhone: '',
           customerAddress: '',
@@ -383,6 +631,11 @@ export const CreateOrderPage = () => {
     setContractModalOpen(false);
     setCurrentContract(null);
     setOrderCreatedResult(null);
+    setContractProofFile(null);
+    setContractProofPreview('');
+    if (contractFileInputRef.current) {
+      contractFileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -587,48 +840,214 @@ export const CreateOrderPage = () => {
             onSubmit={handleStartContractCreation}
             className="flex flex-col rounded-xl border border-stone-200 bg-white p-5 shadow-sm"
           >
-            <div className="mb-4 flex items-center gap-2 border-b border-stone-100 pb-3">
-              <User className="h-4 w-4 text-amber-700" />
-              <h2 className="text-sm font-bold text-stone-900">Thông tin khách hàng & Giao nhận</h2>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-amber-700" />
+                <h2 className="text-sm font-bold text-stone-900">Thông tin khách hàng & Giao nhận</h2>
+              </div>
+              <button
+                type="button"
+                onClick={handleNavigateToCreateCustomer}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+                title="Chuyển sang trang Quản lý khách hàng để tạo mới"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Tạo mới khách hàng
+              </button>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-stone-700">
-                  Họ và tên khách hàng <span className="text-red-500">*</span>
-                </label>
+            {/* Thông báo khi đã chọn khách hàng có sẵn */}
+            {selectedCustomer && (
+              <div className="mb-3 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <div>
+                    <span className="font-bold">Đã chọn khách hàng có sẵn: </span>
+                    <span className="font-semibold">{customerInfo.customerName}</span>
+                    <span className="ml-1 text-[11px] text-emerald-700 font-mono">({customerInfo.customerPhone})</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUnlinkCustomer}
+                  className="text-[11px] font-semibold text-emerald-700 underline hover:text-emerald-950 transition"
+                >
+                  Nhập khác / Bỏ chọn
+                </button>
+              </div>
+            )}
+
+            <div ref={customerDropdownRef} className="flex flex-col gap-3">
+              {/* Họ và tên khách hàng kèm tìm kiếm tự động */}
+              <div className="relative">
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-stone-700">
+                    Họ và tên khách hàng <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-stone-400">Gõ để tìm kiếm khách có sẵn</span>
+                </div>
                 <div className="relative">
                   <User className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
                   <input
                     type="text"
                     required
-                    placeholder="Ví dụ: Nguyễn Văn A"
+                    placeholder="Nhập hoặc tìm theo họ tên..."
                     value={customerInfo.customerName}
-                    onChange={(e) =>
-                      setCustomerInfo((prev) => ({ ...prev, customerName: e.target.value }))
-                    }
+                    onFocus={() => handleCustomerQueryChange(customerInfo.customerName, 'name')}
+                    onChange={(e) => {
+                      setCustomerInfo((prev) => ({ ...prev, customerName: e.target.value, customerAccountId: null }));
+                      handleCustomerQueryChange(e.target.value, 'name');
+                    }}
                     className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                 </div>
+
+                {/* Dropdown danh sách khách hàng tìm thấy theo tên */}
+                {activeDropdownField === 'name' && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-stone-200 bg-white p-1.5 shadow-lg">
+                    {searchingCustomers ? (
+                      <div className="flex items-center justify-center gap-2 p-3 text-xs text-stone-500">
+                        <RotateCw className="h-3.5 w-3.5 animate-spin text-amber-700" />
+                        Đang tìm kiếm khách hàng...
+                      </div>
+                    ) : customerSuggestions.length > 0 ? (
+                      <div>
+                        <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+                          Khách hàng có sẵn ({customerSuggestions.length})
+                        </div>
+                        {customerSuggestions.map((cust) => (
+                          <button
+                            key={cust.customerAccountId}
+                            type="button"
+                            onClick={() => handleSelectCustomer(cust)}
+                            className="flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition hover:bg-amber-50"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-stone-900">{cust.fullName}</span>
+                              <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 font-mono">
+                                <Phone className="h-3 w-3" />
+                                {cust.phoneNumber}
+                              </span>
+                            </div>
+                            {cust.address && (
+                              <span className="truncate text-[11px] text-stone-500">{cust.address}</span>
+                            )}
+                          </button>
+                        ))}
+                        <div className="mt-1 border-t border-stone-100 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleNavigateToCreateCustomer}
+                            className="flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 transition"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                            Không có trong danh sách? Sang trang Khách hàng để tạo mới
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-stone-500">
+                          Không tìm thấy khách hàng nào khớp với <strong className="text-stone-800">"{customerInfo.customerName}"</strong>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleNavigateToCreateCustomer}
+                          className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-800"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          Điều hướng sang trang Khách hàng để tạo mới
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-stone-700">
-                  Số điện thoại liên hệ <span className="text-red-500">*</span>
-                </label>
+              {/* Số điện thoại liên hệ kèm tìm kiếm tự động */}
+              <div className="relative">
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-stone-700">
+                    Số điện thoại liên hệ <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-stone-400">Gõ để tìm kiếm theo SĐT</span>
+                </div>
                 <div className="relative">
                   <Phone className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
                   <input
                     type="tel"
                     required
-                    placeholder="Ví dụ: 0912345678"
+                    placeholder="Nhập hoặc tìm theo SĐT (Ví dụ: 0912345678)..."
                     value={customerInfo.customerPhone}
-                    onChange={(e) =>
-                      setCustomerInfo((prev) => ({ ...prev, customerPhone: e.target.value }))
-                    }
+                    onFocus={() => handleCustomerQueryChange(customerInfo.customerPhone, 'phone')}
+                    onChange={(e) => {
+                      setCustomerInfo((prev) => ({ ...prev, customerPhone: e.target.value, customerAccountId: null }));
+                      handleCustomerQueryChange(e.target.value, 'phone');
+                    }}
                     className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                 </div>
+
+                {/* Dropdown danh sách khách hàng tìm thấy theo SĐT */}
+                {activeDropdownField === 'phone' && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-lg border border-stone-200 bg-white p-1.5 shadow-lg">
+                    {searchingCustomers ? (
+                      <div className="flex items-center justify-center gap-2 p-3 text-xs text-stone-500">
+                        <RotateCw className="h-3.5 w-3.5 animate-spin text-amber-700" />
+                        Đang tìm kiếm khách hàng...
+                      </div>
+                    ) : customerSuggestions.length > 0 ? (
+                      <div>
+                        <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+                          Khách hàng có sẵn ({customerSuggestions.length})
+                        </div>
+                        {customerSuggestions.map((cust) => (
+                          <button
+                            key={cust.customerAccountId}
+                            type="button"
+                            onClick={() => handleSelectCustomer(cust)}
+                            className="flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition hover:bg-amber-50"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-stone-900">{cust.fullName}</span>
+                              <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 font-mono">
+                                <Phone className="h-3 w-3" />
+                                {cust.phoneNumber}
+                              </span>
+                            </div>
+                            {cust.address && (
+                              <span className="truncate text-[11px] text-stone-500">{cust.address}</span>
+                            )}
+                          </button>
+                        ))}
+                        <div className="mt-1 border-t border-stone-100 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleNavigateToCreateCustomer}
+                            className="flex w-full items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 transition"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                            Không có trong danh sách? Sang trang Khách hàng để tạo mới
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-stone-500">
+                          Không tìm thấy khách hàng nào khớp với <strong className="text-stone-800">"{customerInfo.customerPhone}"</strong>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleNavigateToCreateCustomer}
+                          className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-800"
+                        >
+                          <UserPlus className="h-3.5 w-3.5" />
+                          Điều hướng sang trang Khách hàng để tạo mới
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -652,12 +1071,14 @@ export const CreateOrderPage = () => {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-stone-700">
-                    Ngày hẹn giao (dự kiến)
+                    Ngày hẹn giao (dự kiến) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-2.5 h-3.5 w-3.5 text-stone-400" />
                     <input
                       type="date"
+                      required
+                      min={minDeliveryDateStr}
                       value={customerInfo.deliveryDate}
                       onChange={(e) =>
                         setCustomerInfo((prev) => ({ ...prev, deliveryDate: e.target.value }))
@@ -665,6 +1086,9 @@ export const CreateOrderPage = () => {
                       className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-3 text-xs text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                     />
                   </div>
+                  <p className="mt-1 text-[11px] text-stone-500">
+                    Cách ngày tạo đơn ít nhất 10 ngày (từ ngày {formatDateVN(minDeliveryDate)}).
+                  </p>
                 </div>
 
                 <div>
@@ -1346,20 +1770,140 @@ export const CreateOrderPage = () => {
                       </button>
                     </div>
 
-                    {currentContract.status === 'DRAFT' && (
-                      <div className="mt-3 border-t border-amber-200/80 pt-2.5">
-                        <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                          Link ảnh chụp / scan hợp đồng giấy đã ký (tùy chọn lưu trữ):
+                    {/* Bằng chứng ảnh chụp hợp đồng đã ký */}
+                    <div className="mt-3 border-t border-amber-200/80 pt-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-bold text-amber-950">
+                          Ảnh chụp / Bản scan hợp đồng đã ký tay <span className="text-rose-600 font-extrabold">* (Bắt buộc)</span>
                         </label>
-                        <input
-                          type="url"
-                          placeholder="https://... (đường dẫn lưu trữ hình ảnh hoặc bản scan hợp đồng giấy nếu có)"
-                          value={paperSignedContractFileUrl}
-                          onChange={(e) => setPaperSignedContractFileUrl(e.target.value)}
-                          className="w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs text-stone-800 placeholder-stone-400 focus:border-amber-600 focus:outline-none"
-                        />
+                        {contractProofPreview && (
+                          <span className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Đã có ảnh bằng chứng
+                          </span>
+                        )}
                       </div>
-                    )}
+
+                      <input
+                        type="file"
+                        ref={contractFileInputRef}
+                        accept="image/*"
+                        onChange={handleProofFileSelect}
+                        className="hidden"
+                      />
+
+                      {currentContract.status === 'DRAFT' ? (
+                        contractProofPreview ? (
+                          <div className="flex flex-col sm:flex-row items-center gap-3 rounded-lg border border-amber-200 bg-white p-3 shadow-sm">
+                            <div
+                              onClick={() => setProofPreviewModalOpen(true)}
+                              className="group relative h-24 w-28 shrink-0 cursor-pointer overflow-hidden rounded-md border border-stone-200 bg-stone-100"
+                            >
+                              <img
+                                src={contractProofPreview}
+                                alt="Ảnh hợp đồng đã ký"
+                                className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                                <Eye className="h-5 w-5 text-white" />
+                              </div>
+                            </div>
+
+                            <div className="flex-1 space-y-1 text-center sm:text-left">
+                              <p className="text-xs font-bold text-stone-800 line-clamp-1">
+                                {contractProofFile?.name || 'Ảnh chụp hợp đồng đã chọn'}
+                              </p>
+                              {contractProofFile && (
+                                <p className="text-[11px] text-stone-500">
+                                  Dung lượng: {(contractProofFile.size / 1024).toFixed(0)} KB
+                                </p>
+                              )}
+                              <p className="text-[11px] text-emerald-700">
+                                Ảnh sẽ được tải lên hệ thống khi xác nhận ký kết.
+                              </p>
+                              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setProofPreviewModalOpen(true)}
+                                  className="inline-flex items-center gap-1 rounded bg-stone-100 px-2.5 py-1 text-[11px] font-semibold text-stone-700 hover:bg-stone-200"
+                                >
+                                  <Eye className="h-3.5 w-3.5" /> Xem ảnh lớn
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => contractFileInputRef.current?.click()}
+                                  className="inline-flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100"
+                                >
+                                  <Camera className="h-3.5 w-3.5" /> Đổi ảnh khác
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleRemoveProofFile}
+                                  className="inline-flex items-center gap-1 rounded bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" /> Xóa ảnh
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => contractFileInputRef.current?.click()}
+                            className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/50 p-4 text-center cursor-pointer transition hover:border-amber-500 hover:bg-amber-100/50"
+                          >
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800 mb-2">
+                              <Camera className="h-5 w-5" />
+                            </div>
+                            <p className="text-xs font-bold text-amber-900">
+                              Bấm vào đây để tải lên ảnh chụp / scan hợp đồng giấy đã ký
+                            </p>
+                            <p className="text-[11px] text-stone-500 mt-0.5">
+                              Hỗ trợ file ảnh JPG, PNG, WEBP (Tối đa 10MB) &mdash; <span className="text-rose-600 font-semibold">Bắt buộc phải có để xác nhận hợp đồng</span>
+                            </p>
+                          </div>
+                        )
+                      ) : (
+                        /* Đã ký (SIGNED) */
+                        currentContract.contractFileUrl ? (
+                          <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                            <div
+                              onClick={() => {
+                                setContractProofPreview(currentContract.contractFileUrl);
+                                setProofPreviewModalOpen(true);
+                              }}
+                              className="group relative h-20 w-24 shrink-0 cursor-pointer overflow-hidden rounded-md border border-stone-200 bg-stone-100"
+                            >
+                              <img
+                                src={currentContract.contractFileUrl}
+                                alt="Ảnh bằng chứng hợp đồng đã ký"
+                                className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                                <Eye className="h-5 w-5 text-white" />
+                              </div>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
+                                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                                Hợp đồng đã có ảnh bằng chứng ký kết
+                              </div>
+                              <p className="text-[11px] text-stone-600 mt-0.5">
+                                Lưu trữ bản scan / ảnh chụp chữ ký tươi trên hệ thống
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setContractProofPreview(currentContract.contractFileUrl);
+                                  setProofPreviewModalOpen(true);
+                                }}
+                                className="mt-2 inline-flex items-center gap-1 rounded bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-800 shadow-sm border border-emerald-200 hover:bg-emerald-50"
+                              >
+                                <Eye className="h-3.5 w-3.5" /> Xem ảnh gốc kích thước đầy đủ
+                              </button>
+                            </div>
+                          </div>
+                        ) : null
+                      )}
+                    </div>
                   </div>
 
                   {/* Trạng thái hợp đồng */}
@@ -1526,16 +2070,27 @@ export const CreateOrderPage = () => {
                 <div className="flex items-center gap-3">
                   {/* Nếu hợp đồng đang là DRAFT -> Nút Xác nhận đã ký bản giấy */}
                   {currentContract.status === 'DRAFT' && (
-                    <button
-                      type="button"
-                      disabled={isSigning}
-                      onClick={handleSignContract}
-                      className="flex items-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white shadow transition hover:bg-emerald-800 disabled:opacity-50"
-                      title="Xác nhận khách hàng và nhân viên đã ký tay bằng bút mực trên bản in giấy"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                      {isSigning ? 'Đang xác nhận...' : 'XÁC NHẬN ĐÃ KÝ BẢN GIẤY TẠI QUẦY'}
-                    </button>
+                    <div className="flex flex-col items-end gap-1">
+                      <button
+                        type="button"
+                        disabled={isSigning || (!contractProofFile && !contractProofPreview && !currentContract.contractFileUrl)}
+                        onClick={handleSignContract}
+                        className="flex items-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white shadow transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500"
+                        title={
+                          !contractProofFile && !contractProofPreview && !currentContract.contractFileUrl
+                            ? 'Vui lòng tải lên ảnh chụp bản hợp đồng đã ký trước khi xác nhận'
+                            : 'Xác nhận khách hàng và nhân viên đã ký tay bằng bút mực trên bản in giấy'
+                        }
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        {isSigning ? 'Đang xác nhận...' : 'XÁC NHẬN ĐÃ KÝ BẢN GIẤY TẠI QUẦY'}
+                      </button>
+                      {!contractProofFile && !contractProofPreview && !currentContract.contractFileUrl && (
+                        <span className="text-[10px] font-medium text-rose-600">
+                          * Bắt buộc có ảnh bằng chứng hợp đồng đã ký
+                        </span>
+                      )}
+                    </div>
                   )}
                   {currentContract.status === 'SIGNED' && (
                     <button
@@ -1552,6 +2107,40 @@ export const CreateOrderPage = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox xem ảnh bằng chứng kích thước lớn */}
+      {proofPreviewModalOpen && (contractProofPreview || currentContract?.contractFileUrl) && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setProofPreviewModalOpen(false)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-4xl overflow-hidden rounded-xl bg-stone-900 p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-800 px-4 py-2 text-white">
+              <span className="text-xs font-bold flex items-center gap-2">
+                <Camera className="h-4 w-4 text-amber-400" />
+                Ảnh chụp / bản scan bằng chứng hợp đồng đã ký
+              </span>
+              <button
+                type="button"
+                onClick={() => setProofPreviewModalOpen(false)}
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex max-h-[80vh] items-center justify-center overflow-auto p-2">
+              <img
+                src={contractProofPreview || currentContract?.contractFileUrl}
+                alt="Ảnh hợp đồng lớn"
+                className="max-h-[75vh] w-auto max-w-full rounded object-contain"
+              />
+            </div>
           </div>
         </div>
       )}

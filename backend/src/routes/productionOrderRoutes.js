@@ -12,9 +12,13 @@ const {
   createProductionOrderHandler,
   assignLeader,
   cancelProductionOrderHandler,
+  uploadDesignImages,
+  getProductionOrderDetail,
+  ownerInspectProductionOrder,
 } = require('../controllers/productionOrderController');
 
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
+const upload = require('../middlewares/uploadMiddleware');
 
 const router = express.Router();
 
@@ -44,5 +48,17 @@ router.patch('/:id/assign-leader', assignLeader);
 // 6. POST /api/production-orders/:id/cancel
 //    Hủy lệnh gia công (DRAFT hoặc IN_PROGRESS)
 router.post('/:id/cancel', cancelProductionOrderHandler);
+
+// 7. GET /api/production-orders/:id
+//    Lấy chi tiết lệnh gia công kèm ảnh thiết kế & ảnh nghiệm thu
+router.get('/:id', getProductionOrderDetail);
+
+// 8. POST /api/production-orders/:id/upload-design-images
+//    Chủ xưởng upload ảnh thiết kế / bản vẽ mẫu cho lệnh gia công
+router.post('/:id/upload-design-images', upload.array('images', 10), uploadDesignImages);
+
+// 9. POST /api/production-orders/:id/inspect
+//    Chủ xưởng nghiệm thu (Duyệt / Từ chối) lệnh gia công
+router.post('/:id/inspect', ownerInspectProductionOrder);
 
 module.exports = router;

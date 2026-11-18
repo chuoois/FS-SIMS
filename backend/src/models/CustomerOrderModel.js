@@ -769,6 +769,30 @@ async function assignLeaderToCustomerOrder(orderId, leaderId, { assignedBy, staf
 }
 
 /**
+ * Helper kiểm tra quyền của Tổ trưởng đối với đơn hàng:
+ * Hợp lệ nếu order.assigned_to === leaderId HOẶC order đó có lệnh gia công phân công cho leaderId
+ */
+async function verifyLeaderOrderPermission(order, leaderId) {
+  if (!order) return false;
+  if (order.assigned_to && String(order.assigned_to) === String(leaderId)) {
+    return true;
+  }
+  try {
+    const [poRows] = await sequelize.query(
+      'SELECT production_id FROM production_order WHERE order_id = :orderId AND assigned_to = :leaderId LIMIT 1',
+      { replacements: { orderId: order.order_id, leaderId } }
+    );
+    if (Array.isArray(poRows) && poRows.length > 0) {
+      await order.update({ assigned_to: leaderId });
+      return true;
+    }
+  } catch {
+    // fallback
+  }
+  return false;
+}
+
+/**
  * Leader tiếp nhận đơn hàng vào sản xuất
  */
 async function leaderAcceptOrder(orderId, leaderId) {
@@ -776,7 +800,8 @@ async function leaderAcceptOrder(orderId, leaderId) {
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
-  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+  const isAllowed = await verifyLeaderOrderPermission(order, leaderId);
+  if (!isAllowed) {
     throw new Error('Bạn không được phân công phụ trách đơn hàng này.');
   }
   if (order.status !== 'CONFIRMED') {
@@ -800,7 +825,8 @@ async function leaderUpdateProgress(orderId, leaderId, { note, isCompleted } = {
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
-  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+  const isAllowed = await verifyLeaderOrderPermission(order, leaderId);
+  if (!isAllowed) {
     throw new Error('Bạn không có quyền cập nhật tiến độ cho đơn hàng này.');
   }
   if (order.status !== 'IN_PRODUCTION') {
@@ -836,7 +862,8 @@ async function leaderSubmitInspection(orderId, leaderId, { note, images } = {}) 
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
-  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+  const isAllowed = await verifyLeaderOrderPermission(order, leaderId);
+  if (!isAllowed) {
     throw new Error('Bạn không có quyền gửi nghiệm thu đơn hàng này.');
   }
   if (order.status !== 'IN_PRODUCTION') {
@@ -982,16 +1009,45 @@ async function getOrdersForLeader(leaderId, { search, status, page = 1, limit = 
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (pageNum - 1) * limitNum;
 
-  const whereClause = { assigned_to: leaderId };
+  // 1. Tìm thêm các đơn hàng được gán cho Leader thông qua bảng production_order
+  let leaderOrderIds = [];
+  try {
+    const [poRows] = await sequelize.query(
+      'SELECT DISTINCT order_id FROM production_order WHERE assigned_to = :leaderId AND order_id IS NOT NULL',
+      { replacements: { leaderId } }
+    );
+    leaderOrderIds = (poRows || []).map((r) => r.order_id).filter(Boolean);
+  } catch (poErr) {
+    console.warn('[getOrdersForLeader] Không thể truy vấn production_order:', poErr.message);
+  }
+
+  // 2. Điều kiện: hoặc customer_order.assigned_to = leaderId hoặc order_id được gán trong production_order
+  const assignedCondition = leaderOrderIds.length > 0
+    ? {
+        [Op.or]: [
+          { assigned_to: leaderId },
+          { order_id: { [Op.in]: leaderOrderIds } },
+        ],
+      }
+    : { assigned_to: leaderId };
+
+  const whereClause = {
+    ...assignedCondition,
+  };
+
   if (status && status !== 'ALL') {
     whereClause.status = status;
   }
   if (search && search.trim()) {
     const trimmed = search.trim();
-    whereClause[Op.or] = [
-      { order_code: { [Op.like]: `%${trimmed}%` } },
-      { contact_name: { [Op.like]: `%${trimmed}%` } },
-      { contact_phone: { [Op.like]: `%${trimmed}%` } },
+    whereClause[Op.and] = [
+      {
+        [Op.or]: [
+          { order_code: { [Op.like]: `%${trimmed}%` } },
+          { contact_name: { [Op.like]: `%${trimmed}%` } },
+          { contact_phone: { [Op.like]: `%${trimmed}%` } },
+        ],
+      },
     ];
   }
 

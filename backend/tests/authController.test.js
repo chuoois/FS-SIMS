@@ -275,7 +275,7 @@ describe('authController', () => {
       expect(jwt.sign).toHaveBeenCalledWith(
         { sub: 10, email: account.email, role: 5 },
         process.env.JWT_SECRET,
-        { expiresIn: '30s' },
+        { expiresIn: '15m' },
       );
       expect(createRefreshToken).toHaveBeenCalledWith(expect.objectContaining({
         userAccountId: 10,

@@ -5,6 +5,7 @@
 // =========================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Users,
   Search,
@@ -22,9 +23,11 @@ import {
   CheckCircle2,
   XCircle,
   ChevronDown,
+  UserPlus,
+  ArrowLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getCustomers, getCustomerById } from '../../services/saleOrderService';
+import { getCustomers, getCustomerById, createSaleCustomer } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -107,16 +110,11 @@ function CustomerDetailModal({ customerId, onClose }) {
       <div className="relative w-full max-w-3xl rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-              <Users className="h-5 w-5 text-amber-700" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-stone-800">
-                {loading ? 'Đang tải...' : customer?.full_name || '—'}
-              </h2>
-              <p className="text-xs text-stone-500">Chi tiết khách hàng</p>
-            </div>
+          <div>
+            <h2 className="text-lg font-bold text-stone-800">
+              {loading ? 'Đang tải...' : customer?.full_name || '—'}
+            </h2>
+            <p className="text-xs text-stone-500">Chi tiết khách hàng</p>
           </div>
           <button
             onClick={onClose}
@@ -325,8 +323,190 @@ function HistoryList({ items, emptyText, renderItem }) {
   );
 }
 
+// ─── Create Customer Modal ─────────────────────────────────
+function CreateCustomerModal({ open, onClose, initialName = '', initialPhone = '', onSuccess, returnUrl }) {
+  const [fullName, setFullName] = useState(initialName);
+  const [phoneNumber, setPhoneNumber] = useState(initialPhone);
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (open) {
+      setFullName(initialName);
+      setPhoneNumber(initialPhone);
+      setEmail('');
+      setAddress('');
+      setNote('');
+    }
+  }, [open, initialName, initialPhone]);
+
+  if (!open) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!fullName.trim()) {
+      toast.error('Vui lòng nhập họ tên khách hàng.');
+      return;
+    }
+    if (!phoneNumber.trim()) {
+      toast.error('Vui lòng nhập số điện thoại khách hàng.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const res = await createSaleCustomer({
+        fullName: fullName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        email: email.trim() || undefined,
+        address: address.trim() || undefined,
+        note: note.trim() || undefined,
+      });
+
+      const newCustomer = res.data;
+      toast.success('Tạo khách hàng mới thành công!');
+      if (onSuccess) onSuccess(newCustomer);
+
+      if (returnUrl) {
+        const params = new URLSearchParams();
+        params.set('customerAccountId', newCustomer.customerAccountId);
+        params.set('customerName', newCustomer.fullName);
+        params.set('customerPhone', newCustomer.phoneNumber);
+        if (newCustomer.address) params.set('customerAddress', newCustomer.address);
+        navigate(`${returnUrl}?${params.toString()}`);
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      console.error('Lỗi khi tạo khách hàng:', err);
+      toast.error(err.response?.data?.message || err.message || 'Không thể tạo khách hàng.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
+          <h3 className="font-bold text-stone-900">Thêm mới thông tin khách hàng</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+          {returnUrl && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+              💡 Sau khi lưu, hệ thống sẽ tự động chuyển về trang Tạo đơn hàng và điền thông tin khách hàng này.
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-1">
+              Họ và tên khách hàng <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="Ví dụ: Nguyễn Văn A"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-1">
+              Số điện thoại <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="tel"
+              required
+              placeholder="Ví dụ: 0912345678"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-1">
+              Email (không bắt buộc)
+            </label>
+            <input
+              type="email"
+              placeholder="khachhang@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+            <p className="mt-1 text-[11px] text-stone-500">
+              Để trống nếu khách chưa có email (hệ thống sẽ tạo email theo số điện thoại).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-1">
+              Địa chỉ nhận hàng (nếu có)
+            </label>
+            <input
+              type="text"
+              placeholder="Số nhà, tên đường, phường/xã, quận/huyện..."
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-1">
+              Ghi chú thêm
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Yêu cầu riêng, sở thích khách hàng..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-900 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
+
+          <div className="mt-2 flex items-center justify-end gap-3 border-t border-stone-100 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="rounded-lg border border-stone-200 px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-lg bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50 transition"
+            >
+              {submitting ? 'Đang lưu...' : 'Lưu khách hàng'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────
 export function CustomersPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [pagination, setPagination] = useState({
     totalItems: 0,
@@ -407,29 +587,59 @@ export function CustomersPage() {
     setFilters({ search: '', search_by: 'ALL', status: 'ALL' });
   };
 
+  useEffect(() => {
+    if (searchParams.get('action') === 'create' || searchParams.get('create') === 'true') {
+      setCreateModalOpen(true);
+    }
+  }, [searchParams]);
+
   return (
     <div className="min-h-screen bg-stone-50 p-4 sm:p-6">
-      {/* Page header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100">
-            <Users className="h-5 w-5 text-amber-700" />
+      {/* Return URL Alert Banner */}
+      {searchParams.get('returnUrl') && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-amber-700 shrink-0" />
+            <span>
+              Bạn đang ở chế độ tra cứu / tạo khách hàng để sử dụng cho đơn hàng POS.
+            </span>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-stone-800">Quản lý khách hàng</h1>
-            <p className="text-xs text-stone-500">
-              {pagination.totalItems} khách hàng
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate(searchParams.get('returnUrl'))}
+            className="flex items-center gap-1.5 font-bold text-amber-800 underline hover:text-amber-950 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Quay lại tạo đơn
+          </button>
         </div>
-        <button
-          onClick={() => fetchCustomers(pagination.currentPage)}
-          disabled={loading}
-          className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-600 shadow-sm transition hover:bg-stone-50 disabled:opacity-50"
-        >
-          <RotateCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Làm mới
-        </button>
+      )}
+
+      {/* Page header */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Quản lý khách hàng</h1>
+          <p className="text-xs text-stone-500">
+            {pagination.totalItems} khách hàng
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCreateModalOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-amber-700 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          >
+            <UserPlus className="h-4 w-4" />
+            Thêm khách hàng
+          </button>
+          <button
+            onClick={() => fetchCustomers(pagination.currentPage)}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-600 shadow-sm transition hover:bg-stone-50 disabled:opacity-50"
+          >
+            <RotateCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Làm mới
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -598,13 +808,33 @@ export function CustomersPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => setSelectedCustomerId(c.user_account_id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 transition"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        Xem
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        {searchParams.get('returnUrl') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const params = new URLSearchParams();
+                              params.set('customerAccountId', c.user_account_id);
+                              params.set('customerName', c.full_name);
+                              params.set('customerPhone', c.phone_number || '');
+                              if (c.address) params.set('customerAddress', c.address);
+                              navigate(`${searchParams.get('returnUrl')}?${params.toString()}`);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition"
+                            title="Chọn khách hàng này cho đơn hàng"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Chọn cho đơn
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setSelectedCustomerId(c.user_account_id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 transition"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          Xem
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -634,6 +864,18 @@ export function CustomersPage() {
           onClose={() => setSelectedCustomerId(null)}
         />
       )}
+
+      {/* Create Customer Modal */}
+      <CreateCustomerModal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        initialName={searchParams.get('name') || ''}
+        initialPhone={searchParams.get('phone') || ''}
+        returnUrl={searchParams.get('returnUrl') || ''}
+        onSuccess={() => {
+          fetchCustomers(1);
+        }}
+      />
     </div>
   );
 }
