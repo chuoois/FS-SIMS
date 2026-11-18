@@ -41,7 +41,22 @@ export async function createOfflineContract(payload) {
  * 5. Ký và chốt hợp đồng tại quầy (Chuyển sang SIGNED)
  */
 export async function signContract(contractId, payload = {}) {
-  const response = await api.post(`/sale-orders/contracts/${contractId}/sign`, payload);
+  const isFormData = payload instanceof FormData;
+  const response = await api.post(
+    `/sale-orders/contracts/${contractId}/sign`,
+    payload,
+    isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {}
+  );
+  return response.data;
+}
+
+/**
+ * 5b. Tải ảnh bằng chứng hợp đồng đã ký lên Cloudinary
+ */
+export async function uploadContractProof(file) {
+  const formData = new FormData();
+  formData.append('images', file);
+  const response = await api.post('/sale-orders/upload-images', formData);
   return response.data;
 }
 
@@ -126,6 +141,15 @@ export async function getSaleCustomerById(customerId) {
   return response.data;
 }
 export const getCustomerById = getSaleCustomerById;
+
+/**
+ * 14c. Tạo mới khách hàng cho Sales
+ */
+export async function createSaleCustomer(payload) {
+  const response = await api.post('/sale-orders/customers', payload);
+  return response.data;
+}
+export const createCustomer = createSaleCustomer;
 
 /**
  * 15. Sales tạo đơn yêu cầu thiết kế / may đo riêng biệt (Order Request)

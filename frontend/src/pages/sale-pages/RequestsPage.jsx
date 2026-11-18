@@ -592,6 +592,18 @@ function ConvertToContractModal({ request, onClose, onSuccess }) {
   const [deliveryDate, setDeliveryDate] = useState(request.expectedDate || '');
   const [depositAmount, setDepositAmount] = useState(0);
 
+  const minDeliveryDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 10);
+    return d;
+  }, []);
+  const minDeliveryDateStr = useMemo(() => {
+    const yyyy = minDeliveryDate.getFullYear();
+    const mm = String(minDeliveryDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(minDeliveryDate.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }, [minDeliveryDate]);
+
   const initialItems = useMemo(() => {
     return (request.items || []).map((it) => ({
       requestItemId: it.requestItemId,
@@ -660,6 +672,20 @@ function ConvertToContractModal({ request, onClose, onSuccess }) {
     if (!customerPhone.trim()) return toast.error('Số điện thoại khách hàng là bắt buộc');
     if (cartItems.length === 0) return toast.error('Giỏ hàng trống');
     if (depositError) return toast.error(depositError);
+
+    if (deliveryDate) {
+      const selDate = new Date(deliveryDate);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const targetDate = new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate());
+      const diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        return toast.error('Ngày giao hàng không thể ở trong quá khứ.');
+      }
+      if (diffDays < 10) {
+        return toast.error('Ngày giao hàng dự kiến phải cách thời điểm tạo hợp đồng ít nhất 10 ngày.');
+      }
+    }
 
     try {
       setSubmitting(true);
@@ -839,10 +865,14 @@ function ConvertToContractModal({ request, onClose, onSuccess }) {
                 </label>
                 <input
                   type="date"
+                  min={minDeliveryDateStr}
                   value={deliveryDate ? deliveryDate.split('T')[0] : ''}
                   onChange={(e) => setDeliveryDate(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none"
                 />
+                <p className="mt-1 text-[11px] text-stone-500">
+                  Cách thời điểm tạo hợp đồng ít nhất 10 ngày.
+                </p>
               </div>
 
               <div>

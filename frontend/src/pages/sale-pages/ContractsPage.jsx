@@ -5,7 +5,7 @@
 // Hỗ trợ In / Xuất file bản giấy và Xác nhận đã ký ngoài bằng bút mực
 // =========================================================
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -21,6 +21,10 @@ import {
   ArrowRight,
   Printer,
   Filter,
+  Camera,
+  UploadCloud,
+  Trash2,
+  ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -28,6 +32,7 @@ import {
   getContractById,
   signContract,
   createOrderFromContract,
+  uploadContractProof,
 } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
 import { PrintContractModal } from '../../components/common/PrintContractModal';
@@ -82,10 +87,40 @@ export const ContractsPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
 
-  // States hỗ trợ in hợp đồng bản giấy
+  // States hỗ trợ in hợp đồng bản giấy & upload ảnh bằng chứng
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [contractToPrint, setContractToPrint] = useState(null);
-  const [paperFileUrl, setPaperFileUrl] = useState('');
+  const [contractProofFile, setContractProofFile] = useState(null);
+  const [contractProofPreview, setContractProofPreview] = useState('');
+  const [proofPreviewModalOpen, setProofPreviewModalOpen] = useState(false);
+  const contractFileInputRef = useRef(null);
+
+  const handleProofFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn file hình ảnh (JPG, PNG, WEBP...)');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Dung lượng ảnh tối đa là 10MB.');
+      return;
+    }
+
+    setContractProofFile(file);
+    const localUrl = URL.createObjectURL(file);
+    setContractProofPreview(localUrl);
+    toast.success('Đã chọn ảnh chụp hợp đồng đã ký.');
+  };
+
+  const handleRemoveProofFile = () => {
+    setContractProofFile(null);
+    setContractProofPreview('');
+    if (contractFileInputRef.current) {
+      contractFileInputRef.current.value = '';
+    }
+  };
 
   // Đếm số lượng bộ lọc đang kích hoạt
   const activeFilterCount = useMemo(() => {
@@ -146,8 +181,15 @@ export const ContractsPage = () => {
     try {
       setModalOpen(true);
       setSelectedContract(contract);
+      setContractProofFile(null);
+      setContractProofPreview(contract.contractFileUrl || '');
+      if (contractFileInputRef.current) contractFileInputRef.current.value = '';
+
       const res = await getContractById(contract.contractId);
-      if (res.data) setSelectedContract(res.data);
+      if (res.data) {
+        setSelectedContract(res.data);
+        setContractProofPreview(res.data.contractFileUrl || '');
+      }
     } catch (err) {
       console.error('Lỗi lấy chi tiết hợp đồng:', err);
     }
@@ -170,13 +212,41 @@ export const ContractsPage = () => {
 
   const handleSign = async () => {
     if (!selectedContract) return;
+
+    if (!contractProofFile && !contractProofPreview && !selectedContract.contractFileUrl) {
+      toast.error('Bắt buộc phải tải lên ảnh chụp/scan hợp đồng đã ký để làm bằng chứng!');
+      return;
+    }
+
     try {
       setLoadingAction(true);
+      let finalFileUrl = selectedContract.contractFileUrl || '';
+
+      if (contractProofFile) {
+        toast.loading('Đang tải ảnh bằng chứng lên máy chủ...', { id: 'upload-proof' });
+        const uploadRes = await uploadContractProof(contractProofFile);
+        const uploadedUrls = uploadRes.urls || uploadRes.images || [];
+        if (!uploadedUrls[0]) {
+          toast.dismiss('upload-proof');
+          toast.error('Không thể tải ảnh hợp đồng lên máy chủ. Vui lòng thử lại.');
+          return;
+        }
+        finalFileUrl = uploadedUrls[0];
+        toast.dismiss('upload-proof');
+      }
+
+      if (!finalFileUrl) {
+        toast.error('Bắt buộc phải có ảnh bằng chứng hợp đồng đã ký!');
+        return;
+      }
+
       const res = await signContract(selectedContract.contractId, {
-        contract_file_url: paperFileUrl.trim() || null,
+        contract_file_url: finalFileUrl,
       });
       if (res.data) {
         setSelectedContract(res.data);
+        setContractProofFile(null);
+        setContractProofPreview(res.data.contractFileUrl || '');
         toast.success('Xác nhận khách đã ký bản giấy thành công!');
         fetchContractsList();
       }
@@ -208,16 +278,11 @@ export const ContractsPage = () => {
     <div className="flex flex-col gap-5">
       {/* Header */}
       <div className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
-            <FileText className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-stone-900">Danh Sách Hợp Đồng</h1>
-            <p className="text-xs text-stone-500">
-              Biên bản hợp đồng bán hàng tại quầy (ký ngoài bản giấy) và trực tuyến
-            </p>
-          </div>
+        <div>
+          <h1 className="text-xl font-bold text-stone-900">Danh Sách Hợp Đồng</h1>
+          <p className="text-xs text-stone-500">
+            Biên bản hợp đồng bán hàng tại quầy (ký ngoài bản giấy) và trực tuyến
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -455,12 +520,9 @@ export const ContractsPage = () => {
           <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             {/* Header Modal */}
             <div className="flex items-center justify-between border-b border-stone-200 bg-stone-900 px-5 py-3.5 text-white">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-amber-400" />
-                <h3 className="text-base font-bold">
-                  Biên bản hợp đồng #{selectedContract.contractCode}
-                </h3>
-              </div>
+              <h3 className="text-base font-bold">
+                Biên bản hợp đồng #{selectedContract.contractCode}
+              </h3>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -501,20 +563,140 @@ export const ContractsPage = () => {
                 <p className="mt-1 text-[11px] text-stone-600">
                   Hợp đồng mua bán được in ra giấy để hai bên ký bút mực trực tiếp, không sử dụng chữ ký số.
                 </p>
-                {selectedContract.status === 'DRAFT' && (
-                  <div className="mt-2.5 border-t border-amber-200/80 pt-2">
-                    <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-                      Link ảnh scan/chụp hợp đồng giấy đã ký (tùy chọn):
+                {/* Bằng chứng ảnh chụp hợp đồng đã ký */}
+                <div className="mt-3 border-t border-amber-200/80 pt-2.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[11px] font-bold text-amber-950">
+                      Ảnh chụp / scan hợp đồng giấy đã ký <span className="text-rose-600 font-extrabold">* (Bắt buộc)</span>
                     </label>
-                    <input
-                      type="url"
-                      placeholder="https://... (đường dẫn lưu trữ file scan hợp đồng giấy)"
-                      value={paperFileUrl}
-                      onChange={(e) => setPaperFileUrl(e.target.value)}
-                      className="w-full rounded border border-stone-300 bg-white px-2 py-1 text-xs text-stone-800 placeholder-stone-400 focus:outline-none"
-                    />
+                    {contractProofPreview && (
+                      <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> Đã có ảnh bằng chứng
+                      </span>
+                    )}
                   </div>
-                )}
+
+                  <input
+                    type="file"
+                    ref={contractFileInputRef}
+                    accept="image/*"
+                    onChange={handleProofFileSelect}
+                    className="hidden"
+                  />
+
+                  {selectedContract.status === 'DRAFT' ? (
+                    contractProofPreview ? (
+                      <div className="flex flex-col sm:flex-row items-center gap-3 rounded-lg border border-amber-200 bg-white p-2.5 shadow-sm">
+                        <div
+                          onClick={() => setProofPreviewModalOpen(true)}
+                          className="group relative h-20 w-24 shrink-0 cursor-pointer overflow-hidden rounded-md border border-stone-200 bg-stone-100"
+                        >
+                          <img
+                            src={contractProofPreview}
+                            alt="Ảnh hợp đồng đã ký"
+                            className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                            <Eye className="h-4 w-4 text-white" />
+                          </div>
+                        </div>
+
+                        <div className="flex-1 space-y-1 text-center sm:text-left">
+                          <p className="text-xs font-bold text-stone-800 line-clamp-1">
+                            {contractProofFile?.name || 'Ảnh chụp hợp đồng đã chọn'}
+                          </p>
+                          {contractProofFile && (
+                            <p className="text-[10px] text-stone-500">
+                              Dung lượng: {(contractProofFile.size / 1024).toFixed(0)} KB
+                            </p>
+                          )}
+                          <p className="text-[10px] text-emerald-700">
+                            Ảnh sẽ được tải lên hệ thống khi xác nhận ký kết.
+                          </p>
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setProofPreviewModalOpen(true)}
+                              className="inline-flex items-center gap-1 rounded bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-700 hover:bg-stone-200"
+                            >
+                              <Eye className="h-3 w-3" /> Xem ảnh lớn
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => contractFileInputRef.current?.click()}
+                              className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 hover:bg-amber-100"
+                            >
+                              <Camera className="h-3 w-3" /> Đổi ảnh khác
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleRemoveProofFile}
+                              className="inline-flex items-center gap-1 rounded bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
+                            >
+                              <Trash2 className="h-3 w-3" /> Xóa ảnh
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => contractFileInputRef.current?.click()}
+                        className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/50 p-3 text-center cursor-pointer transition hover:border-amber-500 hover:bg-amber-100/50"
+                      >
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-800 mb-1.5">
+                          <Camera className="h-4 w-4" />
+                        </div>
+                        <p className="text-xs font-bold text-amber-900">
+                          Bấm vào đây để tải lên ảnh chụp / scan hợp đồng giấy đã ký
+                        </p>
+                        <p className="text-[10px] text-stone-500 mt-0.5">
+                          Hỗ trợ file ảnh JPG, PNG, WEBP (Tối đa 10MB) &mdash; <span className="text-rose-600 font-semibold">Bắt buộc để xác nhận ký</span>
+                        </p>
+                      </div>
+                    )
+                  ) : (
+                    /* Đã ký (SIGNED) */
+                    selectedContract.contractFileUrl ? (
+                      <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5">
+                        <div
+                          onClick={() => {
+                            setContractProofPreview(selectedContract.contractFileUrl);
+                            setProofPreviewModalOpen(true);
+                          }}
+                          className="group relative h-16 w-20 shrink-0 cursor-pointer overflow-hidden rounded-md border border-stone-200 bg-stone-100"
+                        >
+                          <img
+                            src={selectedContract.contractFileUrl}
+                            alt="Ảnh bằng chứng hợp đồng đã ký"
+                            className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+                            <Eye className="h-4 w-4 text-white" />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1 text-xs font-bold text-emerald-900">
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                            Hợp đồng đã có ảnh bằng chứng ký kết
+                          </div>
+                          <p className="text-[10px] text-stone-600 mt-0.5">
+                            Lưu trữ bản scan / ảnh chụp chữ ký tươi trên hệ thống
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setContractProofPreview(selectedContract.contractFileUrl);
+                              setProofPreviewModalOpen(true);
+                            }}
+                            className="mt-1.5 inline-flex items-center gap-1 rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-emerald-800 shadow-sm border border-emerald-200 hover:bg-emerald-50"
+                          >
+                            <Eye className="h-3 w-3" /> Xem ảnh gốc kích thước đầy đủ
+                          </button>
+                        </div>
+                      </div>
+                    ) : null
+                  )}
+                </div>
               </div>
 
               {/* Trạng thái & Khách hàng */}
@@ -593,15 +775,26 @@ export const ContractsPage = () => {
 
               <div className="flex items-center gap-2">
                 {selectedContract.status === 'DRAFT' && (
-                  <button
-                    disabled={loadingAction}
-                    onClick={handleSign}
-                    title="Xác nhận khách hàng đã ký tên bằng bút mực trên bản giấy"
-                    className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Xác nhận đã ký bản giấy
-                  </button>
+                  <div className="flex flex-col items-end gap-1">
+                    <button
+                      disabled={loadingAction || (!contractProofFile && !contractProofPreview && !selectedContract.contractFileUrl)}
+                      onClick={handleSign}
+                      title={
+                        !contractProofFile && !contractProofPreview && !selectedContract.contractFileUrl
+                          ? 'Vui lòng tải lên ảnh chụp bản hợp đồng đã ký trước khi xác nhận'
+                          : 'Xác nhận khách hàng đã ký tên bằng bút mực trên bản giấy'
+                      }
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      {loadingAction ? 'Đang xác nhận...' : 'Xác nhận đã ký bản giấy'}
+                    </button>
+                    {!contractProofFile && !contractProofPreview && !selectedContract.contractFileUrl && (
+                      <span className="text-[10px] font-medium text-rose-600">
+                        * Bắt buộc có ảnh bằng chứng hợp đồng đã ký
+                      </span>
+                    )}
+                  </div>
                 )}
                 {selectedContract.status === 'SIGNED' && (
                   <button
@@ -615,6 +808,40 @@ export const ContractsPage = () => {
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox xem ảnh bằng chứng kích thước lớn */}
+      {proofPreviewModalOpen && (contractProofPreview || selectedContract?.contractFileUrl) && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setProofPreviewModalOpen(false)}
+        >
+          <div
+            className="relative max-h-[90vh] max-w-4xl overflow-hidden rounded-xl bg-stone-900 p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-800 px-4 py-2 text-white">
+              <span className="text-xs font-bold flex items-center gap-2">
+                <Camera className="h-4 w-4 text-amber-400" />
+                Ảnh chụp / bản scan bằng chứng hợp đồng đã ký
+              </span>
+              <button
+                type="button"
+                onClick={() => setProofPreviewModalOpen(false)}
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex max-h-[80vh] items-center justify-center overflow-auto p-2">
+              <img
+                src={contractProofPreview || selectedContract?.contractFileUrl}
+                alt="Ảnh hợp đồng lớn"
+                className="max-h-[75vh] w-auto max-w-full rounded object-contain"
+              />
             </div>
           </div>
         </div>

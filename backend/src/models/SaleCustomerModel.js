@@ -219,5 +219,56 @@ async function findCustomerById(customerId) {
   return { ...account, requests, contracts, orders };
 }
 
-module.exports = { getCustomersWithPagination, findCustomerById };
+/**
+ * Tạo mới khách hàng bởi Nhân viên kinh doanh (Sale)
+ */
+async function createCustomerBySales({ fullName, phoneNumber, email, address, note, createBy }) {
+  const bcrypt = require('bcryptjs');
+  const customerRole = typeof findUserRoleByCode === 'function'
+    ? await findUserRoleByCode('CUSTOMER')
+    : (UserRole && typeof UserRole.findOne === 'function' ? await UserRole.findOne({ where: { role_code: 'CUSTOMER' }, raw: true }) : null);
+  const roleId = customerRole ? customerRole.role_id : 4;
+
+  const cleanFullName = (fullName || '').trim();
+  const cleanPhone = (phoneNumber || '').trim();
+  let cleanEmail = (email || '').trim().toLowerCase();
+
+  // Nếu không nhập email, sinh email định danh tự động duy nhất
+  if (!cleanEmail) {
+    cleanEmail = `kh_${cleanPhone.replace(/\D/g, '') || Date.now()}@customer.gocnha.local`;
+  }
+
+  const existingEmail = await UserAccount.findOne({ where: { email: cleanEmail } });
+  if (existingEmail) {
+    throw new Error(`Email "${cleanEmail}" đã được sử dụng bởi một tài khoản khác.`);
+  }
+
+  const defaultPassword = cleanPhone || 'GocNha@123';
+  const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
+  const newAccount = await UserAccount.create({
+    role_id: roleId,
+    email: cleanEmail,
+    password_hash: passwordHash,
+    status: 'ACTIVE',
+    full_name: cleanFullName,
+    phone_number: cleanPhone || null,
+    address: (address || '').trim() || null,
+    note: (note || '').trim() || null,
+    createby: createBy || 'SALES',
+  });
+
+  return {
+    customerAccountId: newAccount.user_account_id,
+    fullName: newAccount.full_name,
+    phoneNumber: newAccount.phone_number,
+    email: newAccount.email,
+    address: newAccount.address,
+    note: newAccount.note,
+    status: newAccount.status,
+    createdate: newAccount.createdate,
+  };
+}
+
+module.exports = { getCustomersWithPagination, findCustomerById, createCustomerBySales };
 
