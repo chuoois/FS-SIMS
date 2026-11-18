@@ -378,16 +378,11 @@ export const OrdersPage = () => {
     <div className="flex flex-col gap-5">
       {/* ── Header trang Quản lý Đơn Hàng ────────────────────── */}
       <div className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
-            <Package className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-stone-900">Quản Lý Đơn Hàng</h1>
-            <p className="text-xs text-stone-500">
-              Tra cứu, lọc và theo dõi tiến độ các đơn hàng bán lẻ tại quầy và trực tuyến
-            </p>
-          </div>
+        <div>
+          <h1 className="text-xl font-bold text-stone-900">Quản Lý Đơn Hàng</h1>
+          <p className="text-xs text-stone-500">
+            Tra cứu, lọc và theo dõi tiến độ các đơn hàng bán lẻ tại quầy và trực tuyến
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -672,7 +667,6 @@ export const OrdersPage = () => {
             {/* Header sticky */}
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200 bg-white px-6 py-4">
               <div className="flex items-center gap-2.5">
-                <ClipboardList className="h-5 w-5 text-amber-700" />
                 <h2 className="text-lg font-bold text-stone-900">
                   Chi tiết đơn hàng #{selectedOrder.orderCode}
                 </h2>

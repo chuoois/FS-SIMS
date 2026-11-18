@@ -52,11 +52,34 @@ const formatVND = (amount) => {
   }).format(amount || 0);
 };
 
+// Tính ngày hoàn thiện tối thiểu (cách hôm nay ít nhất 10 ngày)
+const getMinExpectedDate = (days = 10) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d;
+};
+
+const formatDateInputStr = (dateObj) => {
+  const yyyy = dateObj.getFullYear();
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const formatDateVN = (dateObj) => {
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const yyyy = dateObj.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+};
+
 export const CreateOrderRequestPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get('editId');
   const [refreshing, setRefreshing] = useState(false);
+  const minExpectedDate = useMemo(() => getMinExpectedDate(10), []);
+  const minExpectedDateStr = useMemo(() => formatDateInputStr(minExpectedDate), [minExpectedDate]);
 
   // ── 1. Metadata từ API hệ thống (Danh mục, phòng, vật liệu, màu sắc) ──
   const [metadata, setMetadata] = useState({
@@ -446,6 +469,25 @@ export const CreateOrderRequestPage = () => {
       toast.error('Vui lòng nhập số điện thoại khách hàng.');
       return;
     }
+
+    if (customerInfo.expectedDate) {
+      const selDate = new Date(customerInfo.expectedDate);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const targetDate = new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate());
+      const diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        toast.error('Ngày mong muốn hoàn thiện không thể ở trong quá khứ.');
+        return;
+      }
+      if (diffDays < 10) {
+        toast.error(
+          `Ngày mong muốn hoàn thiện phải cách thời điểm tạo đơn ít nhất 10 ngày (sớm nhất từ ngày ${formatDateVN(minExpectedDate)}).`
+        );
+        return;
+      }
+    }
+
     if (items.length === 0) {
       toast.error('Vui lòng nhập ít nhất một sản phẩm vào yêu cầu.');
       return;
@@ -694,11 +736,15 @@ export const CreateOrderRequestPage = () => {
                 <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <input
                   type="date"
+                  min={minExpectedDateStr}
                   value={customerInfo.expectedDate}
                   onChange={(e) => setCustomerInfo((p) => ({ ...p, expectedDate: e.target.value }))}
                   className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
                 />
               </div>
+              <p className="mt-1 text-[11px] text-stone-500">
+                Tối thiểu 10 ngày kể từ ngày tạo (từ ngày {formatDateVN(minExpectedDate)}).
+              </p>
             </div>
           </div>
         </div>

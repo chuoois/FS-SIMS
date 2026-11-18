@@ -40,6 +40,7 @@ const {
 const {
   getCustomersWithPagination: getCustomersModel,
   findCustomerById: findCustomerByIdModel,
+  createCustomerBySales: createCustomerBySalesModel,
 } = require('../models/SaleCustomerModel');
 
 const {
@@ -155,6 +156,7 @@ async function createOfflineContract(req, res) {
       customer_name,
       customer_phone,
       customer_address,
+      customer_account_id,
       deposit_amount,
       delivery_date,
       signed_place,
@@ -164,6 +166,7 @@ async function createOfflineContract(req, res) {
     } = validation.value;
 
     const contract = await createOfflineContractModel({
+      customerAccountId: customer_account_id,
       customerName: customer_name,
       customerPhone: customer_phone,
       customerAddress: customer_address,
@@ -203,7 +206,17 @@ async function signContract(req, res) {
       return res.status(400).json({ message: 'Mã hợp đồng không hợp lệ.' });
     }
 
-    const validation = validateSignContractInput(req.body);
+    const uploadedFileUrl = req.file?.path || req.file?.url || req.file?.secure_url;
+    const rawContractFileUrl = uploadedFileUrl || req.body.contract_file_url || req.body.contractFileUrl;
+
+    const validation = validateSignContractInput({
+      ...req.body,
+      contract_file_url: rawContractFileUrl,
+    });
+    if (!validation.isValid) {
+      return res.status(400).json({ message: validation.error });
+    }
+
     const { signed_place, contract_file_url } = validation.value;
 
     const contract = await signContractModel(contractId, {
@@ -517,6 +530,23 @@ async function convertRequestToContract(req, res) {
       note,
     } = req.body;
 
+    if (delivery_date && String(delivery_date).trim()) {
+      const delDateObj = new Date(String(delivery_date).trim());
+      if (isNaN(delDateObj.getTime())) {
+        return res.status(400).json({ message: 'Ngày hẹn giao hàng không đúng định dạng.' });
+      }
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const targetDelDate = new Date(delDateObj.getFullYear(), delDateObj.getMonth(), delDateObj.getDate());
+      const diffDays = Math.round((targetDelDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        return res.status(400).json({ message: 'Ngày hẹn giao hàng không thể ở trong quá khứ.' });
+      }
+      if (diffDays < 10) {
+        return res.status(400).json({ message: 'Ngày hẹn giao hàng phải cách thời điểm tạo hợp đồng ít nhất 10 ngày.' });
+      }
+    }
+
     const result = await convertRequestToContractModel({
       requestId,
       customerName: customer_name,
@@ -803,6 +833,53 @@ async function getSaleCustomerById(req, res) {
 }
 
 /**
+ * POST /api/sale-orders/customers
+ * Tạo mới khách hàng trực tiếp từ màn hình Bán hàng (Sale)
+ */
+async function createSaleCustomer(req, res) {
+  try {
+    const { fullName, phoneNumber, email, address, note } = req.body;
+    if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+      return res.status(400).json({ message: 'Họ và tên khách hàng là bắt buộc.' });
+    }
+    if (!phoneNumber || typeof phoneNumber !== 'string' || !phoneNumber.trim()) {
+      return res.status(400).json({ message: 'Số điện thoại khách hàng là bắt buộc.' });
+    }
+    const PHONE_REGEX = /^[0-9+\-\s()]{7,20}$/;
+    if (!PHONE_REGEX.test(phoneNumber.trim())) {
+      return res.status(400).json({ message: 'Số điện thoại không hợp lệ (từ 7 đến 20 ký tự số).' });
+    }
+    if (email && email.trim()) {
+      const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!EMAIL_REGEX.test(email.trim())) {
+        return res.status(400).json({ message: 'Địa chỉ email không đúng định dạng.' });
+      }
+    }
+
+    const newCustomer = await createCustomerBySalesModel({
+      fullName,
+      phoneNumber,
+      email,
+      address,
+      note,
+      createBy: req.user?.email || 'SALES',
+    });
+
+    return res.status(201).json({
+      message: 'Tạo khách hàng mới thành công',
+      data: newCustomer,
+    });
+  } catch (error) {
+    console.error('[saleOrderController.createSaleCustomer]', error);
+    const isDuplicate = error.message && error.message.includes('đã được sử dụng');
+    return res.status(isDuplicate ? 409 : 500).json({
+      message: error.message || 'Lỗi hệ thống khi tạo khách hàng mới',
+      error: error.message,
+    });
+  }
+}
+
+/**
  * POST /api/sale-orders/requests
  * Sales tạo đơn đặt hàng may đo & thiết kế (Order Request)
  */
@@ -947,6 +1024,8 @@ module.exports = {
   deleteDesignImage,
   getSaleCustomers,
   getSaleCustomerById,
+  createSaleCustomer,
   getCustomers: getSaleCustomers,
   getCustomerById: getSaleCustomerById,
+  createCustomer: createSaleCustomer,
 };

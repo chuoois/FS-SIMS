@@ -14,6 +14,8 @@ function validateCreateOfflineContractInput(data = {}) {
     customer_name,
     customer_phone,
     customer_address,
+    customer_account_id,
+    customerAccountId,
     deposit_amount,
     delivery_date,
     signed_place,
@@ -47,6 +49,29 @@ function validateCreateOfflineContractInput(data = {}) {
       : null;
   if (deposit !== null && (isNaN(deposit) || deposit < 0)) {
     return { isValid: false, error: 'Tiền đặt cọc phải là số không âm.' };
+  }
+
+  // 3b. Ngày hẹn giao hàng (bắt buộc, không ở quá khứ và cách ít nhất 10 ngày)
+  if (!delivery_date || typeof delivery_date !== 'string' || !delivery_date.trim()) {
+    return { isValid: false, error: 'Ngày hẹn giao hàng là bắt buộc.' };
+  }
+  const deliveryDateObj = new Date(delivery_date.trim());
+  if (isNaN(deliveryDateObj.getTime())) {
+    return { isValid: false, error: 'Ngày hẹn giao hàng không đúng định dạng.' };
+  }
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDeliveryDate = new Date(
+    deliveryDateObj.getFullYear(),
+    deliveryDateObj.getMonth(),
+    deliveryDateObj.getDate()
+  );
+  const diffDays = Math.round((targetDeliveryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) {
+    return { isValid: false, error: 'Ngày hẹn giao hàng không thể ở trong quá khứ.' };
+  }
+  if (diffDays < 10) {
+    return { isValid: false, error: 'Ngày hẹn giao hàng phải cách thời điểm tạo đơn ít nhất 10 ngày.' };
   }
 
   // 4. Danh sách sản phẩm (items)
@@ -103,6 +128,7 @@ function validateCreateOfflineContractInput(data = {}) {
   return {
     isValid: true,
     value: {
+      customer_account_id: customer_account_id || customerAccountId ? parseInt(customer_account_id || customerAccountId, 10) || null : null,
       customer_name: trimmedName,
       customer_phone: trimmedPhone,
       customer_address: customer_address ? String(customer_address).trim().slice(0, 255) : null,
@@ -122,12 +148,20 @@ function validateCreateOfflineContractInput(data = {}) {
  */
 function validateSignContractInput(data = {}) {
   const { signed_place, note, contract_file_url } = data;
+
+  if (!contract_file_url || typeof contract_file_url !== 'string' || !contract_file_url.trim()) {
+    return {
+      isValid: false,
+      error: 'Ảnh chụp/bản scan hợp đồng đã ký là bắt buộc để làm bằng chứng xác nhận ký kết.',
+    };
+  }
+
   return {
     isValid: true,
     value: {
       signed_place: signed_place ? String(signed_place).trim().slice(0, 255) : 'Cửa hàng Góc Nhà',
       note: note ? String(note).trim().slice(0, 500) : null,
-      contract_file_url: contract_file_url ? String(contract_file_url).trim().slice(0, 500) : null,
+      contract_file_url: String(contract_file_url).trim().slice(0, 500),
     },
   };
 }
@@ -186,6 +220,24 @@ function validateCreateSalesRequestInput(data = {}) {
     const qty = Number(it.quantity);
     if (isNaN(qty) || qty <= 0) {
       return { isValid: false, error: `Số lượng của sản phẩm "${name}" phải lớn hơn 0.` };
+    }
+  }
+
+  // Ngày hẹn giao / mong muốn hoàn thiện (nếu nhập thì phải không ở quá khứ và cách ít nhất 10 ngày)
+  if (expectedDate && String(expectedDate).trim()) {
+    const expDateObj = new Date(String(expectedDate).trim());
+    if (isNaN(expDateObj.getTime())) {
+      return { isValid: false, error: 'Ngày hẹn giao hàng không đúng định dạng.' };
+    }
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetExpDate = new Date(expDateObj.getFullYear(), expDateObj.getMonth(), expDateObj.getDate());
+    const diffDays = Math.round((targetExpDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) {
+      return { isValid: false, error: 'Ngày hẹn giao hàng không thể ở trong quá khứ.' };
+    }
+    if (diffDays < 10) {
+      return { isValid: false, error: 'Ngày hẹn giao hàng phải cách thời điểm tạo yêu cầu ít nhất 10 ngày.' };
     }
   }
 

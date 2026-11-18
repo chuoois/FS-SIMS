@@ -84,6 +84,7 @@ async function generateNextContractCode() {
  * Tạo hợp đồng bán hàng trực tiếp tại quầy (OFFLINE)
  */
 async function createOfflineContract({
+  customerAccountId = null,
   customerName,
   customerPhone,
   customerAddress,
@@ -152,7 +153,7 @@ async function createOfflineContract({
         source: 'OFFLINE',
         contract_type: 'READY',
         request_id: null,
-        customer_account_id: null,
+        customer_account_id: customerAccountId || null,
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_address: customerAddress || null,
