@@ -16,7 +16,7 @@ import {
   formatVnd,
   statusClasses,
   statusNames,
-} from './orderStatus';
+} from '../../constants/orderStatus';
 
 /* =====================================================================
  * Cấu hình
@@ -263,12 +263,19 @@ export const CustomerOrdersPage = () => {
       .then((response) => {
         if (cancelled) return;
         setOrders(Array.isArray(response.data) ? response.data : []);
-        if (response.pagination) setPagination(response.pagination);
+        if (response.meta) {
+          setPagination({
+            totalItems: response.meta.total,
+            totalPages: response.meta.totalPages,
+            currentPage: response.meta.page,
+            itemsPerPage: response.meta.limit,
+          });
+        }
       })
       .catch((requestError) => {
         if (cancelled) return;
         console.error('[CustomerOrdersPage] Không thể tải đơn hàng:', requestError);
-        setError(requestError.response?.data?.message || 'Không thể tải đơn hàng. Vui lòng thử lại.');
+        setError(requestError.response?.data?.detail || 'Không thể tải đơn hàng. Vui lòng thử lại.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

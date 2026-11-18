@@ -19,7 +19,7 @@ import {
   statusClasses,
   statusHints,
   statusNames,
-} from './orderStatus';
+} from '../../constants/orderStatus';
 
 const focusRing =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900';
@@ -174,7 +174,7 @@ export const CustomerOrderDetailPage = () => {
             ? requestId
               ? 'Không tìm thấy yêu cầu hoặc bạn không có quyền xem yêu cầu này.'
               : 'Không tìm thấy đơn hàng hoặc bạn không có quyền xem đơn này.'
-            : requestError.response?.data?.message || 'Không thể tải chi tiết đơn hàng.'
+            : requestError.response?.data?.detail || 'Không thể tải chi tiết đơn hàng.'
         );
       })
       .finally(() => {
