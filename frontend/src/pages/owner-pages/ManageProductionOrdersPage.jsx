@@ -153,7 +153,7 @@ export const ManageProductionOrdersPage = () => {
   const [pendingDesignFiles, setPendingDesignFiles] = useState([]);
   const [pendingDesignPreviews, setPendingDesignPreviews] = useState([]);
   const [selectedUploadItemId, setSelectedUploadItemId] = useState(null); // ID sản phẩm muốn tải ảnh riêng
-  const [activeImageTab, setActiveImageTab] = useState('ALL'); // 'ALL' | 'GENERAL' | order_item_id
+  const [activeImageTab, setActiveImageTab] = useState('ALL'); // 'ALL' | order_item_id
 
   // ── States cho Modal Nghiệm Thu ───────────────────────────
   const [isInspectOpen, setIsInspectOpen] = useState(false);
@@ -426,10 +426,10 @@ export const ManageProductionOrdersPage = () => {
     }
   };
 
-  // Chọn tab trong Modal Ảnh (tất cả, món cụ thể, hoặc ảnh chung)
+  // Chọn tab trong Modal Ảnh (tất cả, hoặc món cụ thể)
   const handleSelectImageTab = (tabKey) => {
     setActiveImageTab(tabKey);
-    if (tabKey === 'ALL' || tabKey === 'GENERAL') {
+    if (tabKey === 'ALL') {
       setSelectedUploadItemId(null);
     } else {
       setSelectedUploadItemId(tabKey);
@@ -1294,7 +1294,7 @@ export const ManageProductionOrdersPage = () => {
                           <div className="flex flex-wrap items-center gap-2 text-xs">
                             {/* Kích thước */}
                             <div className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50/80 border border-amber-200/80 px-2.5 py-1 font-semibold text-amber-950 font-mono">
-                              <Ruler className="h-3.5 w-3.5 text-amber-700" />
+                             
                               <span>
                                 Kích thước:{' '}
                                 {it.dimensions ? (
@@ -1310,14 +1310,14 @@ export const ManageProductionOrdersPage = () => {
                             {/* Chất liệu */}
                             {it.materialName && (
                               <div className="inline-flex items-center gap-1 rounded-lg bg-stone-100 border border-stone-200 px-2.5 py-1 text-stone-700">
-                                <span>🪵 Chất liệu: <strong>{it.materialName}</strong></span>
+                                <span>Chất liệu: <strong>{it.materialName}</strong></span>
                               </div>
                             )}
 
                             {/* Màu sắc */}
                             {it.colorName && (
                               <div className="inline-flex items-center gap-1 rounded-lg bg-stone-100 border border-stone-200 px-2.5 py-1 text-stone-700">
-                                <span>🎨 Màu: <strong>{it.colorName}</strong></span>
+                                <span>Màu: <strong>{it.colorName}</strong></span>
                               </div>
                             )}
                           </div>
@@ -1336,7 +1336,6 @@ export const ManageProductionOrdersPage = () => {
                             <div className="rounded-xl border border-amber-200/80 bg-amber-50/30 p-3 space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                                  <Image className="h-3.5 w-3.5 text-amber-700" />
                                   Bản vẽ kỹ thuật ({itemDesigns.length})
                                 </span>
                                 <button
@@ -1447,58 +1446,6 @@ export const ManageProductionOrdersPage = () => {
                 )}
               </div>
 
-              {/* Bản vẽ thiết kế phối cảnh chung của toàn đơn hàng (nếu có) */}
-              {detailOrder.generalDesignImages && detailOrder.generalDesignImages.length > 0 && (
-                <div className="rounded-2xl border border-amber-200 bg-white p-4 shadow-2xs space-y-2">
-                  <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                    <Image className="h-4 w-4 text-amber-700" />
-                    <span>Bản Vẽ Phối Cảnh Không Gian Chung Toàn Đơn ({detailOrder.generalDesignImages.length} ảnh)</span>
-                  </h4>
-                  <p className="text-[11px] text-stone-500">
-                    Bản vẽ bố trí không gian hoặc phối cảnh tổng thể áp dụng chung cho toàn bộ đơn hàng
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5 pt-1">
-                    {detailOrder.generalDesignImages.map((url, idx) => (
-                      <div
-                        key={idx}
-                        className="relative group rounded-xl overflow-hidden border border-amber-300 aspect-video bg-stone-100 cursor-pointer shadow-2xs hover:scale-105 transition"
-                        onClick={() => setLightboxSrc(url)}
-                        title="Bấm để xem lớn"
-                      >
-                        <img src={url} alt={`Phối cảnh ${idx + 1}`} className="h-full w-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                          <ZoomIn className="h-4 w-4 text-white" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Ảnh nghiệm thu tổng thể từ thợ (nếu có) */}
-              {detailOrder.generalInspectionImages && detailOrder.generalInspectionImages.length > 0 && (
-                <div className="rounded-2xl border border-purple-200 bg-white p-4 shadow-2xs space-y-2">
-                  <h4 className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                    <Camera className="h-4 w-4 text-purple-700" />
-                    <span>Ảnh Thành Phẩm Nghiệm Thu Tổng Thể ({detailOrder.generalInspectionImages.length} ảnh)</span>
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-                    {detailOrder.generalInspectionImages.map((url, idx) => (
-                      <div
-                        key={idx}
-                        className="relative group rounded-xl overflow-hidden border border-purple-300 aspect-video bg-stone-100 cursor-pointer shadow-2xs hover:scale-105 transition"
-                        onClick={() => setLightboxSrc(url)}
-                      >
-                        <img src={url} alt={`Nghiệm thu chung ${idx + 1}`} className="h-full w-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                          <ZoomIn className="h-4 w-4 text-white" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Ghi chú */}
               {detailOrder.note && (
                 <div className="rounded-xl bg-amber-50/60 border border-amber-200 p-3.5 text-xs text-amber-900">
@@ -1563,8 +1510,7 @@ export const ManageProductionOrdersPage = () => {
           imageModalOrder.status === 'UNDER_INSPECTION';
 
         const itemsList = imageModalOrder.items || [];
-        const isSingleItemSelected =
-          activeImageTab !== 'ALL' && activeImageTab !== 'GENERAL';
+        const isSingleItemSelected = activeImageTab !== 'ALL';
         const selectedItem = isSingleItemSelected
           ? itemsList.find((it) => it.order_item_id === activeImageTab) || itemsList[0]
           : null;
@@ -1648,20 +1594,6 @@ export const ManageProductionOrdersPage = () => {
                     </button>
                   );
                 })}
-
-                {/* Tab: Phối cảnh chung toàn đơn */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectImageTab('GENERAL')}
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
-                    activeImageTab === 'GENERAL'
-                      ? 'bg-amber-700 text-white shadow-sm ring-2 ring-amber-700/20'
-                      : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
-                  }`}
-                >
-                  <Image className="h-3.5 w-3.5" />
-                  <span>Phối cảnh chung ({imageModalOrder.generalDesignImages?.length || 0})</span>
-                </button>
               </div>
 
               {/* Nội dung theo Tab (Cuộn mượt mà) */}
@@ -1691,11 +1623,10 @@ export const ManageProductionOrdersPage = () => {
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
                             <span className="inline-flex items-center gap-1 font-mono font-semibold text-amber-950 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                              <Ruler className="h-3 w-3 text-amber-700" />
                               {selectedItem.dimensions || `${selectedItem.length_cm || '—'} × ${selectedItem.width_cm || '—'} × ${selectedItem.height_cm || '—'} cm`}
                             </span>
-                            {selectedItem.materialName && <span>🪵 Chất liệu: <strong>{selectedItem.materialName}</strong></span>}
-                            {selectedItem.colorName && <span>🎨 Màu: <strong>{selectedItem.colorName}</strong></span>}
+                            {selectedItem.materialName && <span>Chất liệu: <strong>{selectedItem.materialName}</strong></span>}
+                            {selectedItem.colorName && <span>Màu: <strong>{selectedItem.colorName}</strong></span>}
                           </div>
                         </div>
 
@@ -1991,124 +1922,6 @@ export const ManageProductionOrdersPage = () => {
                         </div>
                       );
                     })}
-                  </div>
-                )}
-
-                {/* ── CASE 3: Tab 'GENERAL' (Phối cảnh không gian chung) ── */}
-                {activeImageTab === 'GENERAL' && (
-                  <div className="space-y-5">
-                    <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-2xs space-y-4">
-                      <div>
-                        <h4 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                          <Image className="h-4 w-4 text-amber-700" />
-                          <span>Bản Vẽ Phối Cảnh & Không Gian Chung Toàn Đơn</span>
-                          <span className="rounded-full bg-amber-100 px-2 py-0.2 text-xs text-amber-800 font-bold">
-                            {imageModalOrder.generalDesignImages?.length || 0}
-                          </span>
-                        </h4>
-                        <p className="text-xs text-stone-500 mt-0.5">
-                          Bản vẽ 3D tổng thể, bố cục phòng khách/phòng ngủ hoặc hồ sơ áp dụng cho toàn bộ lệnh
-                        </p>
-                      </div>
-
-                      {imageModalOrder.generalDesignImages && imageModalOrder.generalDesignImages.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                          {imageModalOrder.generalDesignImages.map((url, idx) => (
-                            <div
-                              key={idx}
-                              className="relative group rounded-xl overflow-hidden border border-amber-300 aspect-video bg-stone-100 cursor-pointer shadow-2xs hover:scale-105 transition"
-                              onClick={() => setLightboxSrc(url)}
-                              title="Bấm xem lớn"
-                            >
-                              <img src={url} alt={`Phối cảnh ${idx + 1}`} className="h-full w-full object-cover" />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                                <ZoomIn className="h-5 w-5 text-white" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="rounded-xl border border-dashed border-stone-200 p-8 text-center text-xs text-stone-400">
-                          Chưa có ảnh phối cảnh chung cho toàn đơn
-                        </div>
-                      )}
-
-                      {/* Khung tải thêm bản vẽ không gian chung */}
-                      <div className="rounded-xl border border-amber-300 bg-amber-50/50 p-4 space-y-3 pt-3">
-                        <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
-                          <Upload className="h-3.5 w-3.5 text-amber-700" />
-                          <span>Tải thêm bản vẽ không gian chung toàn đơn</span>
-                        </span>
-
-                        {pendingDesignPreviews.length > 0 && (
-                          <div className="space-y-1.5">
-                            <span className="text-[11px] text-amber-800 font-medium">
-                              Ảnh mới chờ gửi ({pendingDesignPreviews.length}):
-                            </span>
-                            <div className="grid grid-cols-4 gap-2">
-                              {pendingDesignPreviews.map((src, pIdx) => (
-                                <div
-                                  key={pIdx}
-                                  className="relative group rounded-lg overflow-hidden border-2 border-dashed border-amber-400 aspect-square bg-amber-50"
-                                >
-                                  <img src={src} alt={`Preview ${pIdx + 1}`} className="h-full w-full object-cover" />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemovePendingDesign(pIdx)}
-                                    className="absolute top-1 right-1 rounded-full bg-rose-600 p-0.5 opacity-0 group-hover:opacity-100 transition text-white"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex flex-wrap gap-2">
-                          <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-lg border border-dashed border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition shadow-2xs">
-                            <Upload className="h-3.5 w-3.5" />
-                            Chọn ảnh từ máy
-                            <input type="file" accept="image/*" multiple className="hidden" onChange={handleDesignFileSelect} />
-                          </label>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <input
-                            type="url"
-                            value={newDesignUrl}
-                            onChange={(e) => setNewDesignUrl(e.target.value)}
-                            placeholder="Hoặc dán URL ảnh thiết kế (https://...)"
-                            className="flex-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs focus:border-amber-600 focus:outline-none bg-white"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleAddDesignUrl}
-                            className="rounded-lg bg-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-300 transition"
-                          >
-                            Thêm URL
-                          </button>
-                        </div>
-
-                        {pendingDesignFiles.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleSubmitDesignImages}
-                            disabled={uploadingDesign}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-50 shadow-xs transition"
-                          >
-                            {uploadingDesign ? (
-                              <RotateCw className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Upload className="h-3.5 w-3.5" />
-                            )}
-                            <span>
-                              {uploadingDesign ? 'Đang gửi...' : `Lưu & Gửi ${pendingDesignFiles.length} bản vẽ chung cho thợ`}
-                            </span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
