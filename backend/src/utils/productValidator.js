@@ -373,10 +373,16 @@ function validateProductQueryParams(query = {}) {
 /**
  * Chuẩn hóa output DTO trả về cho client
  */
-function toProductDTO(product) {
+function toProductDTO(product, { showAvailableStock = false } = {}) {
   if (!product) return null;
   const raw = typeof product.toJSON === 'function' ? product.toJSON() : product;
   const isFavorite = parseBoolean(raw.is_favorite);
+  const getQuantity = (item) => {
+    if (!showAvailableStock || item.stock_quantity === undefined || item.stock_quantity === null) {
+      return item.stock_quantity;
+    }
+    return Number(item.stock_quantity) - Number(item.hold_quantity || 0);
+  };
 
   const setItems = (raw.setItems || []).map((si) => {
     const item = typeof si.toJSON === 'function' ? si.toJSON() : si;
@@ -391,7 +397,7 @@ function toProductDTO(product) {
       quantity: item.quantity,
       unitPrice: prod.price,
       imageUrl: prod.image_url,
-      stockQuantity: prod.stock_quantity,
+      stockQuantity: getQuantity(prod),
       dimensions: dim ? `${dim} cm` : null,
       categoryName: prod.category?.category_name || null,
       roomName: prod.room?.room_name || null,
@@ -426,7 +432,7 @@ function toProductDTO(product) {
     setItems,
     totalSetItems,
     price: raw.price,
-    stockQuantity: raw.stock_quantity,
+    stockQuantity: getQuantity(raw),
     dimensions: {
       lengthCm: raw.length_cm,
       widthCm: raw.width_cm,

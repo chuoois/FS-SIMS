@@ -82,7 +82,7 @@ describe('productController', () => {
         limit: 10,
         status: 'ACTIVE',
       });
-      expect(toProductDTO.mock.calls[0][0]).toBe(product);
+      expect(toProductDTO).toHaveBeenCalledWith(product, { showAvailableStock: true });
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         status: 200,
@@ -143,7 +143,7 @@ describe('productController', () => {
       await getProductById(req, res, next);
 
       expect(findProductById).toHaveBeenCalledWith(12);
-      expect(toProductDTO).toHaveBeenCalledWith(product);
+      expect(toProductDTO).toHaveBeenCalledWith(product, { showAvailableStock: true });
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         status: 200,

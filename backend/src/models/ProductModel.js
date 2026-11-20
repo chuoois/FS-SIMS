@@ -79,6 +79,11 @@ const Product = sequelize.define(
       allowNull: false,
       defaultValue: 0,
     },
+    hold_quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
     image_url: {
       type: DataTypes.STRING(255),
       allowNull: true,
@@ -169,6 +174,7 @@ async function findProductById(productId) {
               'height_cm',
               'price',
               'stock_quantity',
+              'hold_quantity',
               'image_url',
               'status',
             ],
@@ -303,7 +309,7 @@ async function getProductsWithPagination({
           {
             model: Product,
             as: 'itemProduct',
-            attributes: ['product_id', 'product_code', 'product_name', 'length_cm', 'width_cm', 'height_cm', 'price', 'stock_quantity', 'image_url', 'status'],
+            attributes: ['product_id', 'product_code', 'product_name', 'length_cm', 'width_cm', 'height_cm', 'price', 'stock_quantity', 'hold_quantity', 'image_url', 'status'],
           },
         ],
       },

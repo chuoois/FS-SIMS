@@ -30,7 +30,7 @@ async function getProducts(req, res, next) {
     return res.status(200).json(buildSuccessResponse({
       status: 200,
       message: 'Lấy danh sách sản phẩm thành công',
-      data: (result.products || []).map(toProductDTO),
+      data: (result.products || []).map((product) => toProductDTO(product, { showAvailableStock: true })),
       meta: {
         page: result.currentPage,
         limit: result.itemsPerPage,
@@ -52,7 +52,7 @@ async function getProductById(req, res, next) {
     }
 
     const product = await findProductById(productId);
-    const data = toProductDTO(product);
+    const data = toProductDTO(product, { showAvailableStock: true });
     if (!data || data.status !== 'ACTIVE') {
       throw new ApiError(404, 'Không tìm thấy sản phẩm yêu cầu.');
     }
