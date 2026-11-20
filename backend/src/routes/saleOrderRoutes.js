@@ -5,29 +5,37 @@
 // =========================================================
 
 const express = require('express');
+
+// Controllers tách biệt theo từng nghiệp vụ (Customer, Contract, Order/POS)
 const {
-  getWarehouseProducts,
-  getProductDetail,
-  getProductMetadata,
+  getSaleCustomers,
+  getSaleCustomerById,
+  createSaleCustomer,
+} = require('../controllers/saleCustomerController');
+
+const {
   createOfflineContract,
   signContract,
   getContracts,
   getContractById,
-  createOrderFromContract,
-  getOrders,
-  getOrderById,
   getRequests,
   getRequestById,
   convertRequestToContract,
   createSalesRequest,
   updateSalesRequest,
-  deliverOrder,
-  completeOrder,
   updateDesignFile,
   deleteDesignImage,
-  getSaleCustomers,
-  getSaleCustomerById,
-  createSaleCustomer,
+} = require('../controllers/saleContractController');
+
+const {
+  getWarehouseProducts,
+  getProductDetail,
+  getProductMetadata,
+  createOrderFromContract,
+  getOrders,
+  getOrderById,
+  deliverOrder,
+  completeOrder,
 } = require('../controllers/saleOrderController');
 const { createProductMaterial, createProductColor } = require('../controllers/productManagerController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
