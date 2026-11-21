@@ -1,12 +1,12 @@
 // =========================================================
 // saleOrderService.js
-// Service gọi API Riêng biệt cho Bán hàng & Tạo đơn hàng tại quầy (Sale POS)
+// Service gọi API Riêng biệt cho Bán hàng & Tạo đơn hàng tại quầy (Sale)
 // =========================================================
 
 import api from './api';
 
 /**
- * 1. Lấy danh sách sản phẩm có trong kho dành cho POS
+ * 1. Lấy danh sách sản phẩm có trong kho dành cho bán hàng tại quầy
  */
 export async function getWarehouseProducts(params = {}) {
   const response = await api.get('/sale-orders/products', { params });
@@ -22,7 +22,7 @@ export async function getProductDetail(productId) {
 }
 
 /**
- * 3. Lấy metadata (danh mục, phòng...) phục vụ lọc ở POS
+ * 3. Lấy metadata (danh mục, phòng...) phục vụ lọc sản phẩm
  */
 export async function getProductMetadata() {
   const response = await api.get('/sale-orders/metadata');

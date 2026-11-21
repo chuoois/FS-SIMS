@@ -331,6 +331,46 @@ async function convertRequestToContract({
 
     await ContractItem.bulkCreate(contractItemsData, { transaction });
 
+    // Điều chỉnh hold_quantity nếu danh sách sản phẩm hoặc số lượng thay đổi so với yêu cầu ban đầu
+    const origQtyMap = new Map();
+    for (const ri of (request.items || [])) {
+      if (ri.product_id) {
+        origQtyMap.set(Number(ri.product_id), (origQtyMap.get(Number(ri.product_id)) || 0) + Number(ri.quantity || 0));
+      }
+    }
+
+    const newQtyMap = new Map();
+    for (const ci of itemsToProcess) {
+      const pid = ci.product_id || ci.productId;
+      if (pid) {
+        newQtyMap.set(Number(pid), (newQtyMap.get(Number(pid)) || 0) + Number(ci.quantity || 0));
+      }
+    }
+
+    const allPids = new Set([...origQtyMap.keys(), ...newQtyMap.keys()]);
+    for (const pid of allPids) {
+      const oldQty = origQtyMap.get(pid) || 0;
+      const newQty = newQtyMap.get(pid) || 0;
+      const diff = newQty - oldQty;
+
+      if (diff > 0) {
+        const prod = await Product.findByPk(pid, { transaction, lock: transaction.LOCK.UPDATE });
+        if (prod) {
+          const avail = Math.max(0, Number(prod.stock_quantity) - Number(prod.hold_quantity || 0));
+          if (avail < diff) {
+            throw new Error(`Sản phẩm "${prod.product_name}" không đủ tồn kho khả dụng để tăng thêm ${diff} (khả dụng còn ${avail}).`);
+          }
+          await prod.increment('hold_quantity', { by: diff, transaction });
+        }
+      } else if (diff < 0) {
+        const prod = await Product.findByPk(pid, { transaction, lock: transaction.LOCK.UPDATE });
+        if (prod && prod.hold_quantity > 0) {
+          const releaseQty = Math.min(Number(prod.hold_quantity), Math.abs(diff));
+          await prod.decrement('hold_quantity', { by: releaseQty, transaction });
+        }
+      }
+    }
+
     // Cập nhật trạng thái và thông tin bổ sung cho request
     request.status = 'CONVERTED';
     request.approved_at = new Date();
@@ -724,6 +764,22 @@ async function reviewOrderRequest(requestId, action, { reason, note, reviewedBy 
     }
     updateData.status = 'REJECTED';
     updateData.reject_reason = String(reason).trim();
+
+    // Nhả lại số lượng giữ chỗ (hold_quantity) cho các sản phẩm khi yêu cầu bị từ chối
+    if (request.status !== 'REJECTED' && request.status !== 'CONVERTED') {
+      const reqWithItems = await OrderRequest.findByPk(requestId, {
+        include: [{ model: OrderRequestItem, as: 'items' }],
+      });
+      for (const item of (reqWithItems?.items || [])) {
+        if (item.product_id && item.quantity > 0) {
+          const prod = await Product.findByPk(item.product_id);
+          if (prod && prod.hold_quantity > 0) {
+            const releaseQty = Math.min(Number(prod.hold_quantity), Number(item.quantity));
+            await prod.decrement('hold_quantity', { by: releaseQty });
+          }
+        }
+      }
+    }
   } else if (action === 'APPROVE') {
     updateData.status = 'APPROVED';
     if (note) updateData.staff_note = note;

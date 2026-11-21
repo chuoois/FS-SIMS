@@ -1,6 +1,6 @@
 // =========================================================
 // saleOrderValidator.js
-// Validation & DTO chuyên biệt cho Luồng Bán hàng tại quầy (Role Sale POS) & May đo (Order Request)
+// Validation & DTO chuyên biệt cho Luồng Bán hàng tại quầy (Role Sale) & May đo (Order Request)
 // Thuộc utils/ -> Dễ unit test, hàm thuần không phụ thuộc DB/network
 // =========================================================
 

@@ -596,6 +596,7 @@ async function updateSalesRequest(req, res) {
 }
 
 module.exports = {
+  toRequestDTO,
   createOfflineContract,
   signContract,
   getContracts,

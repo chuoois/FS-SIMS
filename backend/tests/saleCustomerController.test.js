@@ -196,7 +196,7 @@ describe('saleCustomerController', () => {
   });
 
   describe('getSaleCustomers', () => {
-    test('UTCID07 - SALE retrieves paginated customer list successfully', async () => {
+    test('UTCID01 - SALE retrieves paginated customer list successfully', async () => {
       // Arrange
       const req = createRequest({ query: { page: '1', limit: '10' } });
       const res = createResponse();
@@ -227,7 +227,7 @@ describe('saleCustomerController', () => {
       expect(getCustomersModel).toHaveBeenCalledTimes(1);
     });
 
-    test('UTCID08 - SALE searches customer autocomplete dropdown by keyword', async () => {
+    test('UTCID02 - SALE searches customer autocomplete dropdown by keyword', async () => {
       // Arrange
       const req = createRequest({ query: { mode: 'dropdown', search: 'Nam' } });
       const res = createResponse();
@@ -255,7 +255,7 @@ describe('saleCustomerController', () => {
   });
 
   describe('getSaleCustomerById', () => {
-    test('UTCID09 - SALE views customer details by ID successfully', async () => {
+    test('UTCID01 - SALE views customer details by ID successfully', async () => {
       // Arrange
       const req = createRequest({ params: { id: '15' } });
       const res = createResponse();
@@ -283,7 +283,7 @@ describe('saleCustomerController', () => {
       expect(findCustomerByIdModel).toHaveBeenCalledWith('15');
     });
 
-    test('UTCID10 - Returns 404 Not Found when requested customer ID does not exist', async () => {
+    test('UTCID02 - Returns 404 Not Found when requested customer ID does not exist', async () => {
       // Arrange
       const req = createRequest({ params: { id: '9999' } });
       const res = createResponse();

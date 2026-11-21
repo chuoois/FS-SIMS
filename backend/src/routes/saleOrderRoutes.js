@@ -1,12 +1,12 @@
 // =========================================================
 // saleOrderRoutes.js
-// Định tuyến API Riêng biệt cho Bán hàng & Tạo đơn hàng (Sale Role POS)
+// Định tuyến API Riêng biệt cho Bán hàng & Tạo đơn hàng (Sale Role)
 // Tách biệt hoàn toàn, không gộp vào các route có sẵn
 // =========================================================
 
 const express = require('express');
 
-// Controllers tách biệt theo từng nghiệp vụ (Customer, Contract, Order/POS)
+// Controllers tách biệt theo từng nghiệp vụ (Customer, Contract, Order)
 const {
   getSaleCustomers,
   getSaleCustomerById,
@@ -63,7 +63,7 @@ router.post('/upload-images', (req, res) => {
   });
 });
 
-// ── Kho sản phẩm dành cho POS ─────────────────────────────
+// ── Kho sản phẩm dành cho bán hàng tại quầy ─────────────────────
 router.get('/products', getWarehouseProducts);
 router.get('/products/:id', getProductDetail);
 router.get('/metadata', getProductMetadata);

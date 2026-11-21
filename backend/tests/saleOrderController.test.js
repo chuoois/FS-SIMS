@@ -1,6 +1,6 @@
 // ==============================================================================
 // saleOrderController.test.js
-// Automated Unit Tests for Sale Order & POS Warehouse Management
+// Automated Unit Tests for Sale Order & Warehouse Management
 // Enterprise / Clean Architecture Standard:
 // - Standard Identifier Codes: UTCID23 -> UTCID30
 // - 3-Phase Structure: Arrange - Act - Assert
@@ -78,7 +78,7 @@ describe('saleOrderController', () => {
   });
 
   describe('createOrderFromContract', () => {
-    test('UTCID23 - SALE creates order from signed contract successfully', async () => {
+    test('UTCID01 - SALE creates order from signed contract successfully', async () => {
       // Arrange
       const req = createRequest({ params: { contractId: '50' } });
       const res = createResponse();
@@ -110,7 +110,7 @@ describe('saleOrderController', () => {
       );
     });
 
-    test('UTCID24 - Returns 409 Conflict when contract has already been converted to an order', async () => {
+    test('UTCID02 - Returns 409 Conflict when contract has already been converted to an order', async () => {
       // Arrange
       const req = createRequest({ params: { contractId: '50' } });
       const res = createResponse();
@@ -133,7 +133,7 @@ describe('saleOrderController', () => {
   });
 
   describe('getOrders', () => {
-    test('UTCID25 - SALE retrieves paginated order list with status filter successfully', async () => {
+    test('UTCID01 - SALE retrieves paginated order list with status filter successfully', async () => {
       // Arrange
       const req = createRequest({
         query: { page: '1', limit: '10', status: 'CONFIRMED' },
@@ -166,7 +166,7 @@ describe('saleOrderController', () => {
   });
 
   describe('getOrderById', () => {
-    test('UTCID26 - SALE views order details by orderId successfully', async () => {
+    test('UTCID01 - SALE views order details by orderId successfully', async () => {
       // Arrange
       const req = createRequest({ params: { id: '100' } });
       const res = createResponse();
@@ -195,7 +195,7 @@ describe('saleOrderController', () => {
   });
 
   describe('deliverOrder', () => {
-    test('UTCID27 - SALE confirms and activates order delivery successfully', async () => {
+    test('UTCID01 - SALE confirms and activates order delivery successfully', async () => {
       // Arrange
       const req = createRequest({
         params: { id: '100' },
@@ -233,7 +233,7 @@ describe('saleOrderController', () => {
   });
 
   describe('completeOrder', () => {
-    test('UTCID28 - SALE confirms customer receipt and completes order successfully', async () => {
+    test('UTCID01 - SALE confirms customer receipt and completes order successfully', async () => {
       // Arrange
       const req = createRequest({ params: { id: '100' } });
       const res = createResponse();
@@ -261,7 +261,7 @@ describe('saleOrderController', () => {
   });
 
   describe('getWarehouseProducts', () => {
-    test('UTCID29 - SALE queries POS warehouse products catalog for counter sales', async () => {
+    test('UTCID01 - SALE queries warehouse products catalog for counter sales', async () => {
       // Arrange
       const req = createRequest({
         query: { page: '1', limit: '12', search: 'Sofa' },
@@ -297,7 +297,7 @@ describe('saleOrderController', () => {
   });
 
   describe('getProductDetail', () => {
-    test('UTCID30 - SALE views counter product details by productId successfully', async () => {
+    test('UTCID30 - SALE views counter product details by productId successfully (accounting for hold_quantity)', async () => {
       // Arrange
       const req = createRequest({ params: { id: '1' } });
       const res = createResponse();
@@ -307,6 +307,7 @@ describe('saleOrderController', () => {
         product_code: 'TBL-OAK-01',
         price: 2500000,
         stock_quantity: 10,
+        hold_quantity: 2,
       };
       findProductById.mockResolvedValue(mockProduct);
 
@@ -318,7 +319,11 @@ describe('saleOrderController', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           message: 'Lấy thông tin chi tiết sản phẩm thành công',
-          data: expect.objectContaining({ productId: 1, productName: 'Oak Wood Tea Table' }),
+          data: expect.objectContaining({
+            productId: 1,
+            productName: 'Oak Wood Tea Table',
+            stockQuantity: 8,
+          }),
         })
       );
       expect(findProductById).toHaveBeenCalledTimes(1);

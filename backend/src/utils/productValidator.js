@@ -433,6 +433,8 @@ function toProductDTO(product, { showAvailableStock = false } = {}) {
     totalSetItems,
     price: raw.price,
     stockQuantity: getQuantity(raw),
+    rawStockQuantity: raw.stock_quantity !== undefined && raw.stock_quantity !== null ? Number(raw.stock_quantity) : undefined,
+    holdQuantity: raw.hold_quantity !== undefined && raw.hold_quantity !== null ? Number(raw.hold_quantity) : 0,
     dimensions: {
       lengthCm: raw.length_cm,
       widthCm: raw.width_cm,

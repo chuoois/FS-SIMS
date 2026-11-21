@@ -1,7 +1,7 @@
 // =========================================================
 // saleOrderController.js
-// Bộ điều khiển quản lý Đơn Hàng & Kho hàng POS cho Role Bán hàng (Sale)
-// Chức năng: Tra cứu kho sản phẩm POS, tạo đơn từ hợp đồng, theo dõi đơn, giao hàng & hoàn tất đơn
+// Bộ điều khiển quản lý Đơn Hàng & Kho hàng cho Role Bán hàng (Sale)
+// Chức năng: Tra cứu kho sản phẩm, tạo đơn từ hợp đồng, theo dõi đơn, giao hàng & hoàn tất đơn
 //
 // Đồng thời re-export các hàm từ saleCustomerController và saleContractController
 // để đảm bảo tính tương thích ngược 100% cho toàn bộ hệ thống.
@@ -37,7 +37,7 @@ const saleContractController = require("./saleContractController");
 
 /**
  * 1. GET /api/sale-orders/products
- * Lấy danh sách sản phẩm có trong kho dành cho màn hình POS
+ * Lấy danh sách sản phẩm có trong kho dành cho bán hàng tại quầy
  */
 async function getWarehouseProducts(req, res) {
   try {
@@ -73,7 +73,7 @@ async function getWarehouseProducts(req, res) {
 
 /**
  * 2. GET /api/sale-orders/products/:id
- * Lấy chi tiết thông tin sản phẩm phục vụ xem chi tiết ở POS
+ * Lấy chi tiết thông tin sản phẩm phục vụ xem chi tiết tại quầy
  */
 async function getProductDetail(req, res) {
   try {
@@ -92,7 +92,7 @@ async function getProductDetail(req, res) {
 
     return res.status(200).json({
       message: "Lấy thông tin chi tiết sản phẩm thành công",
-      data: toProductDTO(product),
+      data: toProductDTO(product, { showAvailableStock: true }),
     });
   } catch (error) {
     console.error("[saleOrderController.getProductDetail]", error);
@@ -105,7 +105,7 @@ async function getProductDetail(req, res) {
 
 /**
  * 3. GET /api/sale-orders/metadata
- * Lấy metadata danh mục, phòng phục vụ các dropdown lọc ở POS
+ * Lấy metadata danh mục, phòng phục vụ các dropdown lọc sản phẩm
  */
 async function getProductMetadata(req, res) {
   try {

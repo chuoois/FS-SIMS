@@ -119,9 +119,13 @@ async function createOfflineContract({
       if (prod.status !== 'ACTIVE') {
         throw new Error(`Sản phẩm "${prod.product_name}" hiện không còn kinh doanh.`);
       }
-      if (prod.stock_quantity < item.quantity) {
+      const currentStock = Number(prod.stock_quantity) || 0;
+      const currentHold = Number(prod.hold_quantity) || 0;
+      const availableStock = Math.max(0, currentStock - currentHold);
+
+      if (availableStock < item.quantity) {
         throw new Error(
-          `Sản phẩm "${prod.product_name}" trong kho chỉ còn ${prod.stock_quantity} (bạn chọn ${item.quantity}).`
+          `Sản phẩm "${prod.product_name}" trong kho chỉ còn ${availableStock} (bạn chọn ${item.quantity}).`
         );
       }
 
@@ -178,6 +182,14 @@ async function createOfflineContract({
 
     await ContractItem.bulkCreate(itemsToCreate, { transaction });
 
+    // Giữ chỗ (hold_quantity) sản phẩm trong kho khi tạo hợp đồng tại quầy
+    for (const item of items) {
+      const prod = productMap.get(item.product_id);
+      if (prod) {
+        await prod.increment('hold_quantity', { by: item.quantity, transaction });
+      }
+    }
+
     await transaction.commit();
 
     return findContractById(contract.contract_id);
@@ -227,7 +239,7 @@ async function findContractById(contractId) {
           {
             model: Product,
             as: 'product',
-            attributes: ['product_id', 'product_code', 'product_name', 'price', 'stock_quantity', 'image_url'],
+            attributes: ['product_id', 'product_code', 'product_name', 'price', 'stock_quantity', 'hold_quantity', 'image_url'],
           },
         ],
       },
@@ -255,7 +267,7 @@ async function findContractByCode(contractCode) {
           {
             model: Product,
             as: 'product',
-            attributes: ['product_id', 'product_code', 'product_name', 'price', 'stock_quantity', 'image_url'],
+            attributes: ['product_id', 'product_code', 'product_name', 'price', 'stock_quantity', 'hold_quantity', 'image_url'],
           },
         ],
       },

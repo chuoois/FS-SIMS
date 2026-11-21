@@ -1,6 +1,6 @@
 // =========================================================
 // CreateOrderPage.jsx
-// Giao diện Tạo Đơn Hàng Tại Quầy (POS) cho Nhân viên Bán hàng (Role Sale)
+// Giao diện Tạo Đơn Hàng Tại Quầy cho Nhân viên Bán hàng (Role Sale)
 //
 // Bố cục:
 // - Bên phải: Danh sách sản phẩm trong kho (giá bán, tồn kho, lọc, xem chi tiết)
@@ -640,10 +640,10 @@ export const CreateOrderPage = () => {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* ── Header trang POS ─────────────────────────────────── */}
+      {/* ── Header trang Tạo đơn hàng tại quầy ────────────────── */}
       <div className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-stone-900">Tạo Đơn Hàng Tại Quầy (POS)</h1>
+          <h1 className="text-xl font-bold text-stone-900">Tạo Đơn Hàng Tại Quầy</h1>
           <p className="text-xs text-stone-500">
             Chọn sản phẩm từ kho bên phải, lập hợp đồng và chốt đơn hàng nhanh chóng
           </p>
@@ -1734,7 +1734,7 @@ export const CreateOrderPage = () => {
                       onClick={handleCloseContractModal}
                       className="rounded-lg border border-stone-200 bg-white px-5 py-2.5 text-xs font-bold text-stone-700 hover:bg-stone-100"
                     >
-                      Tiếp tục tạo đơn mới (POS)
+                      Tiếp tục tạo đơn mới
                     </button>
                   </div>
                 </div>

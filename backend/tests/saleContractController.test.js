@@ -73,7 +73,7 @@ describe('saleContractController', () => {
   });
 
   describe('createOfflineContract', () => {
-    test('UTCID11 - SALE creates a draft offline sales contract successfully at counter', async () => {
+    test('UTCID1 - SALE creates a draft offline sales contract successfully at counter', async () => {
       // Arrange
       const validContractPayload = {
         customer_name: 'Lê Văn Tám',
@@ -113,7 +113,7 @@ describe('saleContractController', () => {
       expect(createOfflineContractModel).toHaveBeenCalledTimes(1);
     });
 
-    test('UTCID12 - Returns 400 Bad Request when contract items list is empty', async () => {
+    test('UTCID2 - Returns 400 Bad Request when contract items list is empty', async () => {
       // Arrange
       const invalidPayload = {
         customer_name: 'Lê Văn Tám',
@@ -137,7 +137,7 @@ describe('saleContractController', () => {
       expect(createOfflineContractModel).not.toHaveBeenCalled();
     });
 
-    test('UTCID13 - Returns 400 Bad Request when delivery date is less than 10 days from creation', async () => {
+    test('UTCID3 - Returns 400 Bad Request when delivery date is less than 10 days from creation', async () => {
       // Arrange
       const invalidPayload = {
         customer_name: 'Lê Văn Tám',
@@ -161,7 +161,7 @@ describe('saleContractController', () => {
       expect(createOfflineContractModel).not.toHaveBeenCalled();
     });
 
-    test('UTCID14 - Returns 400 Bad Request when inventory stock is insufficient to fulfill contract', async () => {
+    test('UTCID4 - Returns 400 Bad Request when inventory stock is insufficient to fulfill contract', async () => {
       // Arrange
       const contractPayload = {
         customer_name: 'Lê Văn Tám',
@@ -190,7 +190,7 @@ describe('saleContractController', () => {
   });
 
   describe('signContract', () => {
-    test('UTCID15 - SALE signs contract successfully with uploaded proof file attached via req.file', async () => {
+    test('UTCID1 - SALE signs contract successfully with uploaded proof file attached via req.file', async () => {
       // Arrange
       const req = createRequest({
         params: { id: '50' },
@@ -228,7 +228,7 @@ describe('saleContractController', () => {
       );
     });
 
-    test('UTCID16 - SALE signs contract successfully with proof image URL provided via req.body.contract_file_url', async () => {
+    test('UTCID2 - SALE signs contract successfully with proof image URL provided via req.body.contract_file_url', async () => {
       // Arrange
       const req = createRequest({
         params: { id: '50' },
@@ -257,7 +257,7 @@ describe('saleContractController', () => {
       expect(signContractModel).toHaveBeenCalledTimes(1);
     });
 
-    test('UTCID17 - Returns 400 Bad Request when signing contract without proof document image', async () => {
+    test('UTCID3 - Returns 400 Bad Request when signing contract without proof document image', async () => {
       // Arrange
       const req = createRequest({
         params: { id: '50' },
@@ -278,7 +278,7 @@ describe('saleContractController', () => {
       expect(signContractModel).not.toHaveBeenCalled();
     });
 
-    test('UTCID18 - Returns 400 Bad Request when contract ID param is not a valid number', async () => {
+    test('UTCID4 - Returns 400 Bad Request when contract ID param is not a valid number', async () => {
       // Arrange
       const req = createRequest({
         params: { id: 'abc_invalid' },
@@ -299,7 +299,7 @@ describe('saleContractController', () => {
   });
 
   describe('getContracts', () => {
-    test('UTCID19 - SALE retrieves contract list with search and status filters', async () => {
+    test('UTCID1 - SALE retrieves contract list with search and status filters', async () => {
       // Arrange
       const req = createRequest({
         query: { page: '1', limit: '10', status: 'SIGNED', search: '0912' },
@@ -332,7 +332,7 @@ describe('saleContractController', () => {
   });
 
   describe('getContractById', () => {
-    test('UTCID20 - SALE views contract details by ID successfully', async () => {
+    test('UTCID1 - SALE views contract details by ID successfully', async () => {
       // Arrange
       const req = createRequest({ params: { id: '77' } });
       const res = createResponse();
@@ -361,7 +361,7 @@ describe('saleContractController', () => {
   });
 
   describe('convertRequestToContract', () => {
-    test('UTCID21 - SALE converts custom design request to contract successfully', async () => {
+    test('UTCID1 - SALE converts custom design request to contract successfully', async () => {
       // Arrange
       const req = createRequest({
         params: { id: '30' },
@@ -398,7 +398,7 @@ describe('saleContractController', () => {
       expect(convertRequestToContractModel).toHaveBeenCalledTimes(1);
     });
 
-    test('UTCID22 - Returns 400 Bad Request when converting request with delivery date under 10 days', async () => {
+    test('UTCID2 - Returns 400 Bad Request when converting request with delivery date under 10 days', async () => {
       // Arrange
       const req = createRequest({
         params: { id: '30' },
