@@ -261,12 +261,17 @@ async function getProductsWithPagination({
   }
 
   if (stock_status) {
+    const availableExpr = sequelize.literal('(`Product`.`stock_quantity` - COALESCE(`Product`.`hold_quantity`, 0))');
     if (stock_status === 'OUT_OF_STOCK') {
-      whereClause.stock_quantity = 0;
+      whereClause[Op.and] = whereClause[Op.and] || [];
+      whereClause[Op.and].push(sequelize.where(availableExpr, '<=', 0));
     } else if (stock_status === 'LOW_STOCK') {
-      whereClause.stock_quantity = { [Op.gt]: 0, [Op.lte]: 5 };
+      whereClause[Op.and] = whereClause[Op.and] || [];
+      whereClause[Op.and].push(sequelize.where(availableExpr, '>', 0));
+      whereClause[Op.and].push(sequelize.where(availableExpr, '<=', 5));
     } else if (stock_status === 'IN_STOCK') {
-      whereClause.stock_quantity = { [Op.gt]: 0 };
+      whereClause[Op.and] = whereClause[Op.and] || [];
+      whereClause[Op.and].push(sequelize.where(availableExpr, '>', 0));
     }
   }
 
@@ -479,6 +484,8 @@ async function getProductStockSummary() {
   const inStock = await Product.count({ where: { stock_quantity: { [Op.gt]: 0 } } });
 
   const totalQuantity = (await Product.sum('stock_quantity')) || 0;
+  const totalHoldQuantity = (await Product.sum('hold_quantity')) || 0;
+  const totalAvailableQuantity = Math.max(0, totalQuantity - totalHoldQuantity);
 
   return {
     totalProducts,
@@ -486,6 +493,8 @@ async function getProductStockSummary() {
     outOfStock,
     lowStock,
     totalQuantity,
+    totalHoldQuantity,
+    totalAvailableQuantity,
   };
 }
 

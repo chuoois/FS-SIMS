@@ -39,7 +39,7 @@ export const roles = {
     label: 'Nhân viên bán hàng',
     base: '/sale',
     items: [
-      { label: 'Tạo đơn hàng (POS)', path: 'create-order', icon: Receipt },
+      { label: 'Tạo đơn hàng tại quầy', path: 'create-order', icon: Receipt },
       { label: 'Tạo đơn theo yêu cầu', path: 'requests/create', icon: PenTool },
       { label: 'Đơn hàng', path: 'orders', icon: Package },
       { label: 'Hợp đồng', path: 'contracts', icon: FileText },

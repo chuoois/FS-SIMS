@@ -181,17 +181,36 @@ async function createOrderFromContract(contractId, { assignedTo, createBy } = {}
     // Kiểm tra & trừ tồn kho với sản phẩm hàng sẵn (READY)
     for (const item of contract.items) {
       if (item.product_id) {
-        const prod = await Product.findByPk(item.product_id, { transaction });
+        const prod = await Product.findByPk(item.product_id, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
         if (!prod) {
           throw new Error(`Sản phẩm "${item.item_name}" không tìm thấy trong cơ sở dữ liệu.`);
         }
-        if (prod.stock_quantity < item.quantity) {
+
+        const currentStock = Number(prod.stock_quantity) || 0;
+        const currentHold = Number(prod.hold_quantity) || 0;
+
+        // Nếu sản phẩm đã được giữ chỗ trong hợp đồng/yêu cầu thì số lượng khả dụng kiểm tra là currentStock.
+        // Nếu chưa được giữ chỗ thì số lượng khả dụng = currentStock - currentHold.
+        const isAlreadyHeld = Boolean(contract.request_id || contract.source === 'ONLINE' || currentHold >= item.quantity);
+        const availableStock = isAlreadyHeld ? currentStock : Math.max(0, currentStock - currentHold);
+
+        if (availableStock < item.quantity) {
           throw new Error(
-            `Sản phẩm "${item.item_name}" trong kho hiện chỉ còn ${prod.stock_quantity}, không đủ để xuất ${item.quantity}.`
+            `Sản phẩm "${item.item_name}" trong kho hiện chỉ còn ${availableStock}, không đủ để xuất ${item.quantity}.`
           );
         }
 
+        // Trừ tồn kho thực tế của sản phẩm
         await prod.decrement('stock_quantity', { by: item.quantity, transaction });
+
+        // Đồng thời nhả / trừ số lượng đang giữ chỗ (hold_quantity)
+        const holdToDeduct = Math.min(currentHold, item.quantity);
+        if (holdToDeduct > 0) {
+          await prod.decrement('hold_quantity', { by: holdToDeduct, transaction });
+        }
       }
     }
 
@@ -671,6 +690,23 @@ async function cancelOrder(orderId, { cancelledBy } = {}) {
     status: 'CANCELLED',
     modifieby: cancelledBy || null,
   });
+
+  // Hoàn lại tồn kho thực tế cho sản phẩm hàng sẵn (READY) nếu đơn bị hủy
+  if (order.contract_id) {
+    const contract = await Contract.findByPk(order.contract_id, {
+      include: [{ model: ContractItem, as: 'items' }],
+    });
+    if (contract?.items) {
+      for (const item of contract.items) {
+        if (item.product_id && item.quantity > 0) {
+          const prod = await Product.findByPk(item.product_id);
+          if (prod) {
+            await prod.increment('stock_quantity', { by: item.quantity });
+          }
+        }
+      }
+    }
+  }
 
   return findOrderById(orderId);
 }
