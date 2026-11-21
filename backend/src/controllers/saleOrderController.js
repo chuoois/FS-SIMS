@@ -11,7 +11,7 @@ const {
   getProductsWithPagination,
   getProductMetadata: getProductMetadataModel,
   findProductById,
-} = require('../models/ProductModel');
+} = require("../models/ProductModel");
 
 const {
   createOrderFromContract: createOrderFromContractModel,
@@ -19,21 +19,21 @@ const {
   getOrdersWithPagination: getOrdersModel,
   confirmDelivery: confirmDeliveryModel,
   completeDelivery: completeDeliveryModel,
-} = require('../models/CustomerOrderModel');
+} = require("../models/CustomerOrderModel");
 
 const {
   validateCreateOrderFromContractInput,
   toOrderDTO,
-} = require('../utils/saleOrderValidator');
+} = require("../utils/saleOrderValidator");
 
 const {
   validateProductQueryParams,
   toProductDTO,
-} = require('../utils/productValidator');
+} = require("../utils/productValidator");
 
 // Import controllers thành phần để re-export
-const saleCustomerController = require('./saleCustomerController');
-const saleContractController = require('./saleContractController');
+const saleCustomerController = require("./saleCustomerController");
+const saleContractController = require("./saleContractController");
 
 /**
  * 1. GET /api/sale-orders/products
@@ -44,15 +44,17 @@ async function getWarehouseProducts(req, res) {
     const params = validateProductQueryParams(req.query);
     const queryParams = {
       ...params,
-      status: 'ACTIVE',
+      status: "ACTIVE",
       include_children: false,
     };
 
     const result = await getProductsWithPagination(queryParams);
 
     return res.status(200).json({
-      message: 'Lấy danh sách sản phẩm trong kho thành công',
-      data: (result.products || []).map(toProductDTO),
+      message: "Lấy danh sách sản phẩm trong kho thành công",
+      data: (result.products || []).map((product) =>
+        toProductDTO(product, { showAvailableStock: true }),
+      ),
       pagination: {
         totalItems: result.totalItems,
         totalPages: result.totalPages,
@@ -61,9 +63,9 @@ async function getWarehouseProducts(req, res) {
       },
     });
   } catch (error) {
-    console.error('[saleOrderController.getWarehouseProducts]', error);
+    console.error("[saleOrderController.getWarehouseProducts]", error);
     return res.status(500).json({
-      message: 'Lỗi máy chủ khi lấy danh sách sản phẩm',
+      message: "Lỗi máy chủ khi lấy danh sách sản phẩm",
       error: error.message,
     });
   }
@@ -78,22 +80,24 @@ async function getProductDetail(req, res) {
     const { id } = req.params;
     const productId = parseInt(id, 10);
     if (!productId || isNaN(productId) || productId <= 0) {
-      return res.status(400).json({ message: 'Mã sản phẩm không hợp lệ.' });
+      return res.status(400).json({ message: "Mã sản phẩm không hợp lệ." });
     }
 
     const product = await findProductById(productId);
     if (!product) {
-      return res.status(404).json({ message: 'Không tìm thấy sản phẩm trong kho.' });
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy sản phẩm trong kho." });
     }
 
     return res.status(200).json({
-      message: 'Lấy thông tin chi tiết sản phẩm thành công',
+      message: "Lấy thông tin chi tiết sản phẩm thành công",
       data: toProductDTO(product),
     });
   } catch (error) {
-    console.error('[saleOrderController.getProductDetail]', error);
+    console.error("[saleOrderController.getProductDetail]", error);
     return res.status(500).json({
-      message: 'Lỗi máy chủ khi xem chi tiết sản phẩm',
+      message: "Lỗi máy chủ khi xem chi tiết sản phẩm",
       error: error.message,
     });
   }
@@ -107,13 +111,13 @@ async function getProductMetadata(req, res) {
   try {
     const metadata = await getProductMetadataModel();
     return res.status(200).json({
-      message: 'Lấy metadata thành công',
+      message: "Lấy metadata thành công",
       data: metadata,
     });
   } catch (error) {
-    console.error('[saleOrderController.getProductMetadata]', error);
+    console.error("[saleOrderController.getProductMetadata]", error);
     return res.status(500).json({
-      message: 'Lỗi khi lấy metadata',
+      message: "Lỗi khi lấy metadata",
       error: error.message,
     });
   }
@@ -133,25 +137,26 @@ async function createOrderFromContract(req, res) {
 
     const order = await createOrderFromContractModel(validation.value, {
       assignedTo: req.user?.sub,
-      createBy: req.user?.email || 'STAFF',
+      createBy: req.user?.email || "STAFF",
     });
 
     return res.status(201).json({
-      message: 'Tạo đơn hàng từ hợp đồng thành công',
+      message: "Tạo đơn hàng từ hợp đồng thành công",
       data: toOrderDTO(order),
     });
   } catch (error) {
-    console.error('[saleOrderController.createOrderFromContract]', error);
-    const isConflict = error.message && error.message.includes('đã được tạo đơn hàng');
-    const isClientError = error.message && (
-      error.message.includes('chưa được ký') ||
-      error.message.includes('không đủ để xuất') ||
-      error.message.includes('không tìm thấy')
-    );
+    console.error("[saleOrderController.createOrderFromContract]", error);
+    const isConflict =
+      error.message && error.message.includes("đã được tạo đơn hàng");
+    const isClientError =
+      error.message &&
+      (error.message.includes("chưa được ký") ||
+        error.message.includes("không đủ để xuất") ||
+        error.message.includes("không tìm thấy"));
     const status = isConflict ? 409 : isClientError ? 400 : 500;
 
     return res.status(status).json({
-      message: error.message || 'Lỗi hệ thống khi tạo đơn hàng',
+      message: error.message || "Lỗi hệ thống khi tạo đơn hàng",
       error: error.message,
     });
   }
@@ -176,19 +181,24 @@ async function getOrders(req, res) {
     } = req.query;
 
     const result = await getOrdersModel({
-      search: typeof search === 'string' ? search.trim() : '',
-      search_by: typeof search_by === 'string' ? search_by.trim().toUpperCase() : 'ALL',
-      order_code: typeof order_code === 'string' ? order_code.trim() : '',
-      customer_name: typeof customer_name === 'string' ? customer_name.trim() : '',
-      status: typeof status === 'string' ? status.trim().toUpperCase() : 'ALL',
-      order_type: typeof order_type === 'string' ? order_type.trim().toUpperCase() : 'ALL',
-      sort: typeof sort === 'string' ? sort.trim().toUpperCase() : 'NEWEST',
+      search: typeof search === "string" ? search.trim() : "",
+      search_by:
+        typeof search_by === "string" ? search_by.trim().toUpperCase() : "ALL",
+      order_code: typeof order_code === "string" ? order_code.trim() : "",
+      customer_name:
+        typeof customer_name === "string" ? customer_name.trim() : "",
+      status: typeof status === "string" ? status.trim().toUpperCase() : "ALL",
+      order_type:
+        typeof order_type === "string"
+          ? order_type.trim().toUpperCase()
+          : "ALL",
+      sort: typeof sort === "string" ? sort.trim().toUpperCase() : "NEWEST",
       page: Math.max(1, parseInt(page, 10) || 1),
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
     });
 
     return res.status(200).json({
-      message: 'Lấy danh sách đơn hàng thành công',
+      message: "Lấy danh sách đơn hàng thành công",
       data: (result.orders || []).map(toOrderDTO),
       pagination: {
         totalItems: result.totalItems,
@@ -198,9 +208,9 @@ async function getOrders(req, res) {
       },
     });
   } catch (error) {
-    console.error('[saleOrderController.getOrders]', error);
+    console.error("[saleOrderController.getOrders]", error);
     return res.status(500).json({
-      message: 'Lỗi khi lấy danh sách đơn hàng',
+      message: "Lỗi khi lấy danh sách đơn hàng",
       error: error.message,
     });
   }
@@ -215,22 +225,22 @@ async function getOrderById(req, res) {
     const { id } = req.params;
     const orderId = parseInt(id, 10);
     if (!orderId || isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
+      return res.status(400).json({ message: "Mã đơn hàng không hợp lệ." });
     }
 
     const order = await findOrderByIdModel(orderId);
     if (!order) {
-      return res.status(404).json({ message: 'Không tìm thấy đơn hàng.' });
+      return res.status(404).json({ message: "Không tìm thấy đơn hàng." });
     }
 
     return res.status(200).json({
-      message: 'Lấy chi tiết đơn hàng thành công',
+      message: "Lấy chi tiết đơn hàng thành công",
       data: toOrderDTO(order),
     });
   } catch (error) {
-    console.error('[saleOrderController.getOrderById]', error);
+    console.error("[saleOrderController.getOrderById]", error);
     return res.status(500).json({
-      message: 'Lỗi máy chủ khi lấy chi tiết đơn hàng',
+      message: "Lỗi máy chủ khi lấy chi tiết đơn hàng",
       error: error.message,
     });
   }
@@ -245,10 +255,10 @@ async function deliverOrder(req, res) {
     const { id } = req.params;
     const orderId = parseInt(id, 10);
     if (!orderId || isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
+      return res.status(400).json({ message: "Mã đơn hàng không hợp lệ." });
     }
 
-    const updatedBy = req.user?.email || req.user?.full_name || 'Sales';
+    const updatedBy = req.user?.email || req.user?.full_name || "Sales";
     const order = await confirmDeliveryModel(orderId, {
       deliveryAddress: req.body.deliveryAddress,
       deliveryDate: req.body.deliveryDate,
@@ -257,13 +267,13 @@ async function deliverOrder(req, res) {
     });
 
     return res.status(200).json({
-      message: 'Kích hoạt giao hàng thành công',
+      message: "Kích hoạt giao hàng thành công",
       data: toOrderDTO(order),
     });
   } catch (error) {
-    console.error('[saleOrderController.deliverOrder]', error);
+    console.error("[saleOrderController.deliverOrder]", error);
     return res.status(400).json({
-      message: error.message || 'Lỗi khi kích hoạt giao hàng',
+      message: error.message || "Lỗi khi kích hoạt giao hàng",
       error: error.message,
     });
   }
@@ -278,20 +288,20 @@ async function completeOrder(req, res) {
     const { id } = req.params;
     const orderId = parseInt(id, 10);
     if (!orderId || isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
+      return res.status(400).json({ message: "Mã đơn hàng không hợp lệ." });
     }
 
-    const updatedBy = req.user?.email || req.user?.full_name || 'Sales';
+    const updatedBy = req.user?.email || req.user?.full_name || "Sales";
     const order = await completeDeliveryModel(orderId, { updatedBy });
 
     return res.status(200).json({
-      message: 'Hoàn tất đơn hàng thành công (COMPLETED)',
+      message: "Hoàn tất đơn hàng thành công (COMPLETED)",
       data: toOrderDTO(order),
     });
   } catch (error) {
-    console.error('[saleOrderController.completeOrder]', error);
+    console.error("[saleOrderController.completeOrder]", error);
     return res.status(400).json({
-      message: error.message || 'Lỗi khi hoàn tất đơn hàng',
+      message: error.message || "Lỗi khi hoàn tất đơn hàng",
       error: error.message,
     });
   }

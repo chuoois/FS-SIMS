@@ -174,6 +174,9 @@ async function createReadyOrderRequestFromCart({
       )
     );
 
+    // Xóa giỏ hàng trong cùng transaction: request tạo thành công thì giỏ rỗng.
+    await CartItem.destroy({ where: { cart_id: cart.cart_id }, transaction });
+
     await transaction.commit();
     return {
       requestId: orderRequest.request_id,

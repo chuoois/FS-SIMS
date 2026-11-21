@@ -1,4 +1,11 @@
-/* Tiện ích & hằng số dùng chung cho trang danh sách / chi tiết đơn hàng */
+/* Tiện ích & hằng số dùng chung cho trang danh sách / chi tiết đơn hàng
+ *
+ * Trạng thái đồng bộ với database (db_2026_fssims):
+ *   order_request  : PENDING, DRAFTING, DESIGNING, DESIGNED, CONFIRMED,
+ *                    CONTRACT_CREATED, CONVERTED, REJECTED, CANCELLED
+ *   customer_order : NEW, ASSIGNED, IN_PROGRESS, PENDING_APPROVAL,
+ *                    READY_TO_DELIVER, COMPLETED, CANCELLED
+ */
 
 export const formatVnd = (value) =>
   new Intl.NumberFormat('vi-VN', {
@@ -14,39 +21,42 @@ export const formatDate = (value) => {
 };
 
 export const statusNames = {
-  NEW: 'Mới tạo',
+  /* order_request */
   PENDING: 'Chờ sale xử lý',
-  REVIEWING: 'Sale đang xem',
-  REQUEST_CHANGE: 'Cần chỉnh sửa',
-  QUOTED: 'Đã báo giá',
-  APPROVED: 'Đã duyệt',
-  CONTRACT_SIGNED: 'Đã ký hợp đồng',
-  DESIGN_FINALIZED: 'Đã chốt thiết kế',
+  DRAFTING: 'Chờ chủ thiết kế',
+  DESIGNING: 'Đang thiết kế',
+  DESIGNED: 'Đã có bản vẽ',
   CONFIRMED: 'Đã xác nhận',
-  IN_PRODUCTION: 'Đang sản xuất',
-  READY_TO_DELIVER: 'Sẵn sàng giao',
-  DELIVERING: 'Đang giao hàng',
-  COMPLETED: 'Hoàn thành',
-  CANCELLED: 'Đã hủy',
+  CONTRACT_CREATED: 'Đã lập hợp đồng',
+  CONVERTED: 'Đã tạo đơn hàng',
   REJECTED: 'Đã từ chối',
+  /* customer_order */
+  NEW: 'Mới tạo',
+  ASSIGNED: 'Đã giao thợ',
+  IN_PROGRESS: 'Đang gia công',
+  PENDING_APPROVAL: 'Chờ duyệt thành phẩm',
+  READY_TO_DELIVER: 'Sẵn sàng giao',
+  COMPLETED: 'Hoàn thành',
+  /* dùng chung */
+  CANCELLED: 'Đã hủy',
 };
 
 export const statusClasses = {
-  NEW: 'bg-amber-100 text-amber-800',
   PENDING: 'bg-amber-100 text-amber-800',
-  REVIEWING: 'bg-blue-100 text-blue-800',
-  REQUEST_CHANGE: 'bg-orange-100 text-orange-800',
-  QUOTED: 'bg-violet-100 text-violet-800',
-  APPROVED: 'bg-emerald-100 text-emerald-800',
-  CONTRACT_SIGNED: 'bg-emerald-100 text-emerald-800',
-  DESIGN_FINALIZED: 'bg-emerald-100 text-emerald-800',
+  DRAFTING: 'bg-amber-100 text-amber-800',
+  DESIGNING: 'bg-blue-100 text-blue-800',
+  DESIGNED: 'bg-violet-100 text-violet-800',
   CONFIRMED: 'bg-emerald-100 text-emerald-800',
-  IN_PRODUCTION: 'bg-blue-100 text-blue-800',
+  CONTRACT_CREATED: 'bg-emerald-100 text-emerald-800',
+  CONVERTED: 'bg-emerald-100 text-emerald-800',
+  REJECTED: 'bg-red-100 text-red-800',
+  NEW: 'bg-amber-100 text-amber-800',
+  ASSIGNED: 'bg-blue-100 text-blue-800',
+  IN_PROGRESS: 'bg-blue-100 text-blue-800',
+  PENDING_APPROVAL: 'bg-orange-100 text-orange-800',
   READY_TO_DELIVER: 'bg-violet-100 text-violet-800',
-  DELIVERING: 'bg-violet-100 text-violet-800',
   COMPLETED: 'bg-emerald-100 text-emerald-800',
   CANCELLED: 'bg-red-100 text-red-800',
-  REJECTED: 'bg-red-100 text-red-800',
 };
 
 /* Nhóm trạng thái cho thanh lọc (giống các tab của Shopee) */
@@ -55,45 +65,46 @@ export const STATUS_TABS = [
   {
     key: 'WAITING',
     label: 'Chờ xử lý',
-    statuses: ['NEW', 'PENDING', 'REVIEWING', 'REQUEST_CHANGE', 'QUOTED'],
+    statuses: ['PENDING', 'DRAFTING', 'DESIGNING', 'DESIGNED', 'NEW'],
   },
   {
     key: 'PROCESSING',
     label: 'Đang thực hiện',
-    statuses: ['APPROVED', 'CONTRACT_SIGNED', 'DESIGN_FINALIZED', 'CONFIRMED', 'IN_PRODUCTION'],
+    statuses: [
+      'CONFIRMED',
+      'CONTRACT_CREATED',
+      'CONVERTED',
+      'ASSIGNED',
+      'IN_PROGRESS',
+      'PENDING_APPROVAL',
+    ],
   },
-  { key: 'DELIVERING', label: 'Đang giao', statuses: ['READY_TO_DELIVER', 'DELIVERING'] },
+  { key: 'DELIVERING', label: 'Sẵn sàng giao', statuses: ['READY_TO_DELIVER'] },
   { key: 'COMPLETED', label: 'Hoàn thành', statuses: ['COMPLETED'] },
   { key: 'CANCELLED', label: 'Đã hủy / từ chối', statuses: ['CANCELLED', 'REJECTED'] },
 ];
 
 /* Thanh tiến trình ở trang chi tiết */
-export const ORDER_STEPS = ['Đặt hàng', 'Xác nhận', 'Sản xuất', 'Giao hàng', 'Hoàn thành'];
-export const REQUEST_STEPS = ['Gửi yêu cầu', 'Sale xem xét', 'Báo giá', 'Đã duyệt'];
+export const ORDER_STEPS = ['Tạo đơn', 'Chuẩn bị', 'Gia công', 'Sẵn sàng giao', 'Hoàn thành'];
+export const REQUEST_STEPS = ['Gửi yêu cầu', 'Sale xác nhận', 'Lập hợp đồng', 'Tạo đơn hàng'];
 
 const ORDER_STEP_INDEX = {
   NEW: 0,
-  PENDING: 0,
-  REVIEWING: 0,
-  REQUEST_CHANGE: 0,
-  QUOTED: 0,
-  APPROVED: 1,
-  CONTRACT_SIGNED: 1,
-  DESIGN_FINALIZED: 1,
-  CONFIRMED: 1,
-  IN_PRODUCTION: 2,
+  ASSIGNED: 1,
+  IN_PROGRESS: 2,
+  PENDING_APPROVAL: 2,
   READY_TO_DELIVER: 3,
-  DELIVERING: 3,
   COMPLETED: 4,
 };
 
 const REQUEST_STEP_INDEX = {
-  NEW: 0,
   PENDING: 0,
-  REVIEWING: 1,
-  REQUEST_CHANGE: 1,
-  QUOTED: 2,
-  APPROVED: 3,
+  DRAFTING: 0,
+  DESIGNING: 0,
+  DESIGNED: 0,
+  CONFIRMED: 1,
+  CONTRACT_CREATED: 2,
+  CONVERTED: 3,
 };
 
 /* Trả về { steps, current, allDone } hoặc null nếu đã hủy / từ chối */
@@ -103,25 +114,25 @@ export const getProgress = (status, isRequest) => {
   const map = isRequest ? REQUEST_STEP_INDEX : ORDER_STEP_INDEX;
   const fallback = steps.length - 1;
   const current = map[status] ?? (isRequest ? fallback : 0);
-  const allDone = isRequest ? status === 'APPROVED' : status === 'COMPLETED';
+  const allDone = isRequest ? status === 'CONVERTED' : status === 'COMPLETED';
   return { steps, current, allDone };
 };
 
 /* Lời nhắn dễ hiểu cho khách theo từng trạng thái */
 export const statusHints = {
-  NEW: 'Đơn đã được tạo. Sale sẽ sớm tiếp nhận.',
   PENDING: 'Đang chờ sale tiếp nhận. Bạn không cần làm gì thêm.',
-  REVIEWING: 'Sale đang xem xét thông tin của bạn.',
-  REQUEST_CHANGE: 'Sale đề nghị chỉnh sửa thông tin. Vui lòng liên hệ sale để cập nhật.',
-  QUOTED: 'Sale đã gửi báo giá. Hãy kiểm tra giá bên dưới và phản hồi cho sale.',
-  APPROVED: 'Đã được duyệt. Sale sẽ liên hệ các bước tiếp theo.',
-  CONTRACT_SIGNED: 'Hợp đồng đã được ký.',
-  DESIGN_FINALIZED: 'Thiết kế đã được chốt.',
-  CONFIRMED: 'Đơn đã được xác nhận và chuẩn bị thực hiện.',
-  IN_PRODUCTION: 'Sản phẩm đang được sản xuất.',
-  READY_TO_DELIVER: 'Sản phẩm đã sẵn sàng, chờ giao đến bạn.',
-  DELIVERING: 'Đơn đang trên đường giao đến bạn.',
-  COMPLETED: 'Đơn hàng đã hoàn thành. Cảm ơn bạn đã tin tưởng Góc Nhà!',
-  CANCELLED: 'Đơn hàng này đã bị hủy.',
+  DRAFTING: 'Yêu cầu đã được chuyển đến chủ cửa hàng để làm bản vẽ.',
+  DESIGNING: 'Chủ cửa hàng đang thực hiện bản vẽ cho bạn.',
+  DESIGNED: 'Bản vẽ đã hoàn thành. Sale sẽ liên hệ để xác nhận với bạn.',
+  CONFIRMED: 'Sale đã xác nhận yêu cầu với bạn và sẽ lập hợp đồng.',
+  CONTRACT_CREATED: 'Hợp đồng đã được lập. Vui lòng liên hệ sale để ký.',
+  CONVERTED: 'Yêu cầu đã được chuyển thành đơn hàng.',
   REJECTED: 'Yêu cầu này đã bị từ chối.',
+  NEW: 'Đơn đã được tạo và chuyển đến cửa hàng để thực hiện.',
+  ASSIGNED: 'Đơn đã được giao cho thợ, đang chờ bắt đầu gia công.',
+  IN_PROGRESS: 'Sản phẩm đang được gia công.',
+  PENDING_APPROVAL: 'Sản phẩm đã gia công xong, đang chờ cửa hàng kiểm tra.',
+  READY_TO_DELIVER: 'Sản phẩm đã sẵn sàng, sale sẽ liên hệ để giao đến bạn.',
+  COMPLETED: 'Đơn hàng đã hoàn thành. Cảm ơn bạn đã tin tưởng Góc Nhà!',
+  CANCELLED: 'Đơn hàng hoặc yêu cầu này đã bị hủy.',
 };
