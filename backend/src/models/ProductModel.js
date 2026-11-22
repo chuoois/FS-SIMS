@@ -9,6 +9,7 @@ const { OrderRequestItem } = require('./OrderRequestItemModel');
 const { ContractItem } = require('./ContractItemModel');
 const { CustomerOrderItem } = require('./CustomerOrderItemModel');
 const { FinishedGoodsReceiptItem } = require('./FinishedGoodsReceiptItemModel');
+const { ProductionOrderItem } = require('./ProductionOrderItemModel');
 const { ProductSetItem } = require('./ProductSetItemModel');
 
 const Product = sequelize.define(
@@ -349,11 +350,20 @@ async function getProductsWithPagination({
  * Đếm số lần sản phẩm được sử dụng trong các giao dịch (đơn hàng, hợp đồng, giỏ hàng, gia công...)
  */
 async function countProductUsage(productId) {
-  const [cartCount, orderReqCount, contractCount, customerOrderCount, finishedGoodsCount, setItemCount] = await Promise.all([
+  const [
+    cartCount,
+    orderReqCount,
+    contractCount,
+    customerOrderCount,
+    productionOrderCount,
+    finishedGoodsCount,
+    setItemCount,
+  ] = await Promise.all([
     CartItem.count({ where: { product_id: productId } }).catch(() => 0),
     OrderRequestItem.count({ where: { product_id: productId } }).catch(() => 0),
     ContractItem.count({ where: { product_id: productId } }).catch(() => 0),
     CustomerOrderItem.count({ where: { product_id: productId } }).catch(() => 0),
+    ProductionOrderItem.count({ where: { product_id: productId } }).catch(() => 0),
     FinishedGoodsReceiptItem.count({ where: { product_id: productId } }).catch(() => 0),
     ProductSetItem.count({
       where: {
@@ -367,9 +377,17 @@ async function countProductUsage(productId) {
     orderReqCount,
     contractCount,
     customerOrderCount,
+    productionOrderCount,
     finishedGoodsCount,
     setItemCount,
-    totalUsage: cartCount + orderReqCount + contractCount + customerOrderCount + finishedGoodsCount + setItemCount,
+    totalUsage:
+      cartCount +
+      orderReqCount +
+      contractCount +
+      customerOrderCount +
+      productionOrderCount +
+      finishedGoodsCount +
+      setItemCount,
   };
 }
 
@@ -478,10 +496,19 @@ async function getProductMetadata() {
  * Thống kê nhanh tồn kho sản phẩm
  */
 async function getProductStockSummary() {
+  const availableExpr = sequelize.literal('(`Product`.`stock_quantity` - COALESCE(`Product`.`hold_quantity`, 0))');
+
   const totalProducts = await Product.count();
-  const outOfStock = await Product.count({ where: { stock_quantity: 0 } });
-  const lowStock = await Product.count({ where: { stock_quantity: { [Op.gt]: 0, [Op.lte]: 5 } } });
-  const inStock = await Product.count({ where: { stock_quantity: { [Op.gt]: 0 } } });
+  const outOfStock = await Product.count({ where: sequelize.where(availableExpr, '<=', 0) });
+  const lowStock = await Product.count({
+    where: {
+      [Op.and]: [
+        sequelize.where(availableExpr, '>', 0),
+        sequelize.where(availableExpr, '<=', 5),
+      ],
+    },
+  });
+  const inStock = await Product.count({ where: sequelize.where(availableExpr, '>', 0) });
 
   const totalQuantity = (await Product.sum('stock_quantity')) || 0;
   const totalHoldQuantity = (await Product.sum('hold_quantity')) || 0;
