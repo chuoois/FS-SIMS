@@ -679,10 +679,6 @@ CREATE TABLE IF NOT EXISTS customer_order (
     KEY idx_customer_order_customer (customer_account_id),
     KEY idx_customer_order_assigned (assigned_to),
     CONSTRAINT chk_customer_order_type CHECK (order_type IN ('CUSTOM', 'READY')),
-    CONSTRAINT chk_customer_order_status CHECK (status IN (
-        'NEW', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_APPROVAL',
-        'READY_TO_DELIVER', 'COMPLETED', 'CANCELLED'
-    )),
     CONSTRAINT fk_customer_order_contract
         FOREIGN KEY (contract_id) REFERENCES contract (contract_id)
         ON UPDATE RESTRICT ON DELETE RESTRICT,
