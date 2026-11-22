@@ -208,6 +208,7 @@ async function createProduct(req, res) {
       }
     }
 
+    productData.hold_quantity = 0;
     productData.createby = req.user?.email || 'SYSTEM';
 
     const newProduct = await createProductModel(productData);
@@ -300,6 +301,18 @@ async function updateProduct(req, res) {
       modifieby: req.user?.email || 'SYSTEM',
     };
 
+    // Kiểm tra số lượng tồn kho không được nhỏ hơn số lượng đang giữ chỗ
+    const holdQty = Number(currentProduct.hold_quantity || 0);
+    if (updateData.stock_quantity !== undefined && updateData.stock_quantity < holdQty) {
+      if (req.file) {
+        const publicId = getPublicIdFromUrl(imageUrl);
+        await deleteImage(publicId).catch(() => null);
+      }
+      return res.status(400).json({
+        message: `Số lượng tồn kho (${updateData.stock_quantity}) không được nhỏ hơn số lượng đang giữ chỗ (${holdQty}).`,
+      });
+    }
+
     await updateProductModel(productId, updateData);
 
     if (updateData.set_items !== undefined) {
@@ -343,6 +356,13 @@ async function deleteProduct(req, res) {
     if (!currentProduct) {
       return res.status(404).json({
         message: 'Không tìm thấy sản phẩm cần xóa',
+      });
+    }
+
+    const holdQty = Number(currentProduct.hold_quantity || 0);
+    if (holdQty > 0) {
+      return res.status(400).json({
+        message: `Không thể xóa sản phẩm do đang có ${holdQty} sản phẩm đang được giữ chỗ trong các đơn hàng hoặc hợp đồng. Bạn có thể chuyển trạng thái sang "Ngừng kinh doanh" (INACTIVE).`,
       });
     }
 

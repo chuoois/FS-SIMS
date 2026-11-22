@@ -303,7 +303,7 @@ async function convertRequestToContract({
         const riId = ri.request_item_id || ri.requestItemId;
         const riPid = ri.product_id || ri.productId;
         return (reqItemId && String(riId) === String(reqItemId)) ||
-               (productId && String(riPid) === String(productId));
+          (productId && String(riPid) === String(productId));
       });
 
       const len = item.length_cm ?? item.lengthCm ?? orig?.length_cm ?? orig?.lengthCm ?? null;
@@ -483,6 +483,7 @@ async function createSalesOrderRequest({
     // Tạo OrderRequest
     const orderRequest = await OrderRequest.create({
       request_code: requestCode,
+      source: 'OFFLINE',
       order_type: orderType || 'CUSTOM',
       request_type: 'SINGLE',
       customer_account_id: customerAccountId || 4,
