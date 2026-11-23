@@ -181,6 +181,13 @@ const getStatusBadge = (status) => {
           Đang sản xuất
         </span>
       );
+    case 'UNDER_INSPECTION':
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800 border border-orange-200">
+          <Clock className="h-3.5 w-3.5" />
+          Chờ nghiệm thu
+        </span>
+      );
     case 'READY_TO_DELIVER':
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-800 border border-purple-200">
@@ -696,14 +703,28 @@ export const OrdersPage = () => {
                     </td>
                     <td className="px-3 py-3.5 text-center">{getStatusBadge(o.status)}</td>
                     <td className="px-3 py-3.5 text-center pr-4 sm:pr-6">
-                      <button
-                        onClick={() => handleViewDetail(o)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 transition"
-                        title="Xem chi tiết đơn hàng"
-                      >
-                        <Eye className="h-3.5 w-3.5 text-stone-500" />
-                        <span>Chi tiết</span>
-                      </button>
+                      <div className="inline-flex items-center justify-center gap-1.5">
+                        {o.status === 'READY_TO_DELIVER' && (
+                          <button
+                            type="button"
+                            disabled={deliveryActionLoading}
+                            onClick={() => handleCompleteOrder(o.orderId)}
+                            className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 shadow-sm hover:bg-emerald-100 disabled:opacity-50 transition active:scale-95"
+                            title="Xác nhận hoàn tất đơn hàng"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                            <span>Hoàn tất</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleViewDetail(o)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 transition"
+                          title="Xem chi tiết đơn hàng"
+                        >
+                          <Eye className="h-3.5 w-3.5 text-stone-500" />
+                          <span>Chi tiết</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1124,18 +1145,7 @@ export const OrdersPage = () => {
             {/* Footer Modal */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 px-6 py-4 bg-stone-50 rounded-b-2xl">
               <div>
-                {selectedOrder.status === 'READY_TO_DELIVER' && (
-                  <button
-                    type="button"
-                    disabled={deliveryActionLoading}
-                    onClick={() => handleDeliverOrder(selectedOrder.orderId)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-800 disabled:opacity-50 transition active:scale-95"
-                  >
-                    <Truck className="h-4 w-4" />
-                    <span>Bắt đầu giao hàng</span>
-                  </button>
-                )}
-                {selectedOrder.status === 'DELIVERING' && (
+                {(selectedOrder.status === 'READY_TO_DELIVER' || selectedOrder.status === 'DELIVERING') && (
                   <button
                     type="button"
                     disabled={deliveryActionLoading}

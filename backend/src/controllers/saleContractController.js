@@ -73,10 +73,10 @@ function toRequestDTO(raw) {
       const itRawImages = (it.images && Array.isArray(it.images) && it.images.length > 0)
         ? it.images
         : (r.images || []).filter((img) => {
-            const rId = img.request_item_id || img.requestItemId;
-            const itId = it.request_item_id || it.requestItemId;
-            return rId && itId && Number(rId) === Number(itId);
-          });
+          const rId = img.request_item_id || img.requestItemId;
+          const itId = it.request_item_id || it.requestItemId;
+          return rId && itId && Number(rId) === Number(itId);
+        });
 
       return {
         requestItemId: it.request_item_id,
@@ -455,8 +455,8 @@ async function convertRequestToContract(req, res) {
     const statusCode = error.statusCode || (
       error.message && (
         error.message.includes('đã được chuyển') ? 409 :
-        error.message.includes('không tìm thấy') || error.message.includes('Không tìm thấy') ? 404 :
-        400
+          error.message.includes('không tìm thấy') || error.message.includes('Không tìm thấy') ? 404 :
+            400
       )
     ) || 500;
     return res.status(statusCode).json({
@@ -484,15 +484,22 @@ async function updateDesignFile(req, res) {
 
     const requestItemId = req.body.request_item_id ? parseInt(req.body.request_item_id, 10) : null;
     const uploadedUrl = req.file.path || req.file.url || req.file.secure_url;
+    const description = req.body.description || req.body.staff_note || null;
+    const designedBy = req.user?.user_account_id || req.user?.id || req.user?.sub;
+    const updatedBy = req.user?.email || req.user?.full_name || 'OWNER';
 
     const result = await updateDesignFileModel(requestId, {
       fileUrl: uploadedUrl,
+      imageUrl: uploadedUrl,
+      description,
       requestItemId,
-      createBy: req.user?.email || 'OWNER',
+      designedBy,
+      updatedBy,
+      createBy: updatedBy,
     });
 
     return res.status(200).json({
-      message: 'Tải lên bản vẽ thiết kế thành công',
+      message: 'Tải lên bản vẽ thiết kế thành công và đã cập nhật trạng thái yêu cầu sang DESIGNED',
       data: result,
     });
   } catch (error) {

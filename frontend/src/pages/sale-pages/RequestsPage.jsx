@@ -43,37 +43,38 @@ import {
   convertRequestToContract,
 } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
+import { OrderRequestStatusBadge } from '../../components/common/StatusBadge';
+import {
+  DesignGallery,
+  isOwnerDesignImage,
+  isPdfDesignUrl,
+  normalizeImg,
+  isOwnerDesignImg,
+  isPdfUrl,
+} from '../../components/common/DesignGallery';
+import {
+  formatVND,
+  formatDateVN,
+  formatDateTimeVN,
+  formatDate,
+  formatTime,
+} from '../../utils/formatters';
+
+const focusRing =
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-800';
 
 // ─── Helpers ──────────────────────────────────────────────
-const formatVND = (val) =>
-  val != null
-    ? new Intl.NumberFormat('vi-VN', {
-        style: 'currency',
-        currency: 'VND',
-        maximumFractionDigits: 0,
-      }).format(val)
-    : '—';
-
-const formatDate = (d) =>
-  d ? new Intl.DateTimeFormat('vi-VN').format(new Date(d)) : '—';
-
-const formatTime = (d) => {
-  if (!d) return '';
-  const date = new Date(d);
-  return isNaN(date.getTime())
-    ? ''
-    : date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-};
-
 const REQUEST_STATUS_OPTIONS = [
   { value: 'ALL', label: 'Tất cả trạng thái' },
-  { value: 'PENDING', label: 'Chờ xử lý' },
-  { value: 'REQUEST_CHANGE', label: 'Cần chỉnh sửa' },
-  { value: 'APPROVED', label: 'Đã duyệt sơ bộ' },
-  { value: 'DESIGN_FINALIZED', label: 'Đã chốt thiết kế' },
-  { value: 'PROCESSING', label: 'Đang xử lý' },
-  { value: 'CONVERTED', label: 'Đã chuyển HĐ' },
-  { value: 'REJECTED', label: 'Đã từ chối' },
+  { value: 'PENDING', label: 'Chờ tiếp nhận' },
+  { value: 'DRAFTING', label: 'Đang phác thảo' },
+  { value: 'DESIGNING', label: 'Đang thiết kế' },
+  { value: 'DESIGNED', label: 'Đã có bản vẽ' },
+  { value: 'CONFIRMED', label: 'Đã xác nhận' },
+  { value: 'CONTRACT_CREATED', label: 'Đã tạo hợp đồng' },
+  { value: 'CONVERTED', label: 'Đã chuyển đổi' },
+  { value: 'REJECTED', label: 'Từ chối' },
+  { value: 'CANCELLED', label: 'Đã hủy' },
 ];
 
 const ORDER_TYPE_OPTIONS = [
@@ -88,137 +89,6 @@ const SEARCH_BY_OPTIONS = [
   { value: 'REQUEST_CODE', label: 'Mã yêu cầu' },
   { value: 'PHONE', label: 'Số điện thoại' },
 ];
-
-// ─── Status Badge Đồng bộ Owner ────────────────────────────
-function RequestStatusBadge({ status }) {
-  switch (status) {
-    case 'PENDING':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-xs font-semibold">
-          <Clock className="h-3 w-3 text-amber-600" />
-          Chờ xử lý
-        </span>
-      );
-    case 'REQUEST_CHANGE':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-0.5 text-xs font-semibold">
-          <AlertTriangle className="h-3 w-3 text-orange-600" />
-          Yêu cầu sửa
-        </span>
-      );
-    case 'APPROVED':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 text-xs font-semibold">
-          <CheckCircle2 className="h-3 w-3 text-blue-600" />
-          Đã duyệt sơ bộ
-        </span>
-      );
-    case 'DESIGN_FINALIZED':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 text-xs font-semibold">
-          <Lock className="h-3 w-3 text-purple-600" />
-          Đã chốt thiết kế
-        </span>
-      );
-    case 'PROCESSING':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 text-stone-800 border border-stone-200 px-2.5 py-0.5 text-xs font-semibold">
-          Đang xử lý
-        </span>
-      );
-    case 'CONVERTED':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold">
-          <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-          Đã chuyển HĐ
-        </span>
-      );
-    case 'REJECTED':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 text-xs font-semibold">
-          <XCircle className="h-3 w-3 text-rose-600" />
-          Đã từ chối
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-block rounded-full bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700">
-          {status}
-        </span>
-      );
-  }
-}
-
-// ─── Modal 1: Chi tiết yêu cầu (Chuẩn Modal ManageProductsPage) ───
-const isOwnerDesignImg = (img) =>
-  Boolean(
-    img &&
-      typeof img === 'object' &&
-      (img.imageType === 'OWNER_DESIGN' ||
-        img.isOwnerDesign ||
-        (typeof img.createdBy === 'string' && img.createdBy.toUpperCase().includes('OWNER')) ||
-        (typeof img.imageUrl === 'string' && img.imageUrl.includes('design_files')))
-  );
-
-const isPdfUrl = (url = '') =>
-  typeof url === 'string' &&
-  (url.toLowerCase().includes('.pdf') || url.includes('/raw/upload/'));
-
-const normalizeImg = (img) =>
-  typeof img === 'string'
-    ? { imageUrl: img, isOwnerDesign: img.includes('design_files') }
-    : { ...img, imageUrl: img?.imageUrl || img?.image_url || '' };
-
-function RequestImageGrid({ images, badgeText, badgeClass, borderClass, emptyText, emptyClass, onPreview }) {
-  if (!images || images.length === 0) {
-    return <div className={emptyClass}>{emptyText}</div>;
-  }
-  return (
-    <div className="grid grid-cols-3 gap-2 mt-2">
-      {images.map((img, idx) => {
-        const isPdf = isPdfUrl(img.imageUrl);
-        return isPdf ? (
-          <a
-            key={img.imageId || img.requestImageId || idx}
-            href={img.imageUrl}
-            target="_blank"
-            rel="noreferrer"
-            className={`group relative flex flex-col items-center justify-center rounded-lg border bg-white aspect-square p-2 text-center shadow-2xs transition ${borderClass}`}
-          >
-            <FileText className="h-6 w-6 text-rose-600" />
-            <span className="mt-1 text-[10px] font-semibold text-stone-700">Mở file PDF</span>
-            <span className={`absolute top-1 left-1 rounded px-1.5 py-0.5 text-[9px] font-semibold text-white ${badgeClass}`}>
-              {badgeText}
-            </span>
-          </a>
-        ) : (
-          <div
-            key={img.imageId || img.requestImageId || idx}
-            className={`group relative overflow-hidden rounded-lg border bg-white aspect-square shadow-2xs transition ${borderClass}`}
-          >
-            <img
-              src={img.imageUrl}
-              alt={`${badgeText} ${idx + 1}`}
-              className="h-full w-full cursor-pointer object-cover transition group-hover:scale-105"
-              onClick={() => onPreview(img.imageUrl)}
-            />
-            <span className={`absolute top-1 left-1 rounded px-1.5 py-0.5 text-[9px] font-semibold text-white ${badgeClass}`}>
-              {badgeText}
-            </span>
-            <button
-              type="button"
-              onClick={() => onPreview(img.imageUrl)}
-              className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 group-hover:opacity-100 text-white text-[11px] font-medium gap-1 transition"
-              title="Phóng to"
-            >
-              <Maximize2 className="h-3.5 w-3.5" /> Xem lớn
-            </button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 function RequestDetailModal({ requestId, onClose, onEdit }) {
   const [detail, setDetail] = useState(null);
@@ -283,7 +153,7 @@ function RequestDetailModal({ requestId, onClose, onEdit }) {
               <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200 bg-stone-50">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-stone-600">Trạng thái:</span>
-                  <RequestStatusBadge status={detail.status} />
+                  <OrderRequestStatusBadge status={detail.status} size="lg" />
                 </div>
                 <div className="font-mono text-stone-500 text-xs">
                   Thời gian tạo: <span className="font-semibold text-stone-800">{formatDate(detail.createdAt)} lúc {formatTime(detail.createdAt)}</span>
@@ -451,15 +321,7 @@ function RequestDetailModal({ requestId, onClose, onEdit }) {
                                   {customerImgs.length} ảnh
                                 </span>
                               </div>
-                              <RequestImageGrid
-                                images={customerImgs}
-                                badgeText={directCustomerImgs.length === 0 && customerImgs.length > 0 ? 'Ảnh chung' : 'Khách gửi'}
-                                badgeClass="bg-sky-700/90"
-                                borderClass="border-sky-200 hover:border-sky-400"
-                                emptyText="Chưa có ảnh mẫu tham khảo."
-                                emptyClass="mt-2 rounded-lg border border-dashed border-sky-200 bg-sky-50/50 p-3 text-center text-[11px] text-sky-600"
-                                onPreview={setPreviewImg}
-                              />
+                              <DesignGallery images={customerImgs} badgeText={directCustomerImgs.length === 0 && customerImgs.length > 0 ? 'Ảnh chung' : 'Khách gửi'} badgeClassName="bg-sky-700/90" borderClassName="border-sky-200 hover:border-sky-400" emptyText="Chưa có ảnh mẫu tham khảo." emptyClassName="mt-2 rounded-lg border border-dashed border-sky-200 bg-sky-50/50 p-3 text-center text-[11px] text-sky-600" onPreview={setPreviewImg} />
                             </div>
 
                             <div className="rounded-xl border border-amber-300 bg-amber-50/40 p-3">
@@ -472,15 +334,7 @@ function RequestDetailModal({ requestId, onClose, onEdit }) {
                                   {ownerImgs.length} bản vẽ
                                 </span>
                               </div>
-                              <RequestImageGrid
-                                images={ownerImgs}
-                                badgeText="Bản vẽ xưởng"
-                                badgeClass="bg-amber-800/90"
-                                borderClass="border-amber-300 hover:border-amber-500"
-                                emptyText="Chủ xưởng chưa gửi bản vẽ thiết kế cho món này."
-                                emptyClass="mt-2 rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-3 text-center text-[11px] text-amber-700"
-                                onPreview={setPreviewImg}
-                              />
+                              <DesignGallery images={ownerImgs} badgeText="Bản vẽ xưởng" badgeClassName="bg-amber-800/90" borderClassName="border-amber-300 hover:border-amber-500" emptyText="Chủ xưởng chưa gửi bản vẽ thiết kế cho món này." emptyClassName="mt-2 rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-3 text-center text-[11px] text-amber-700" onPreview={setPreviewImg} />
                             </div>
                           </div>
                         )}
@@ -1010,7 +864,7 @@ export function RequestsPage() {
     const total = totalItems || requests.length;
     const pending = requests.filter((r) => r.status === 'PENDING').length;
     const change = requests.filter((r) => r.status === 'REQUEST_CHANGE').length;
-    const converted = requests.filter((r) => r.status === 'CONVERTED' || r.status === 'DESIGN_FINALIZED').length;
+    const converted = requests.filter((r) => r.status === 'CONVERTED' || r.status === 'DESIGN_FINALIZED' || r.status === 'DESIGNED').length;
     return { total, pending, change, converted };
   }, [requests, totalItems]);
 
@@ -1244,11 +1098,10 @@ export function RequestsPage() {
                       {/* Loại đơn */}
                       <td className="px-4 py-3">
                         <span
-                          className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${
-                            r.orderType === 'CUSTOM'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-stone-100 text-stone-700'
-                          }`}
+                          className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${r.orderType === 'CUSTOM'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-stone-100 text-stone-700'
+                            }`}
                         >
                           {r.orderType === 'CUSTOM' ? 'Đơn hàng theo yêu cầu' : 'Hàng có sẵn'}
                         </span>
@@ -1297,7 +1150,7 @@ export function RequestsPage() {
 
                       {/* Trạng thái */}
                       <td className="px-4 py-3 text-center">
-                        <RequestStatusBadge status={r.status} />
+                        <OrderRequestStatusBadge status={r.status} />
                         {r.status === 'REQUEST_CHANGE' && r.rejectReason && (
                           <p className="mt-1 text-[11px] font-medium text-orange-700 line-clamp-1 max-w-[220px] mx-auto" title={r.rejectReason}>
                             ⚠️ Sửa: {r.rejectReason}
@@ -1331,7 +1184,7 @@ export function RequestsPage() {
                           )}
 
                           {/* Nút Tạo hợp đồng */}
-                          {(r.status === 'PENDING' || r.status === 'APPROVED' || r.status === 'DESIGN_FINALIZED') && (
+                          {(r.status === 'APPROVED' || r.status === 'DESIGN_FINALIZED' || r.status === 'DESIGNED' || r.status === 'CONFIRMED') && (
                             <button
                               type="button"
                               onClick={() => setConvertRequest(r)}

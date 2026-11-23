@@ -25,6 +25,12 @@ import {
   Trash2,
   ShieldCheck,
   CreditCard,
+  Sparkles,
+  UploadCloud,
+  ZoomIn,
+  Info,
+  User,
+  Phone,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -35,42 +41,12 @@ import {
   uploadContractProof,
 } from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
+import { ContractStatusBadge } from '../../components/common/StatusBadge';
+import { formatVND, formatDateVN, formatDateTimeVN } from '../../utils/formatters';
+
+const focusRing =
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-800';
 import { PrintContractModal } from '../../components/common/PrintContractModal';
-
-const formatVND = (val) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(val || 0);
-
-const getContractBadge = (status) => {
-  switch (status) {
-    case 'SIGNED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Đã ký kết
-        </span>
-      );
-    case 'DRAFT':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
-          <Clock className="h-3.5 w-3.5" />
-          Biên bản chờ ký
-        </span>
-      );
-    case 'CANCELLED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800 border border-rose-200">
-          <XCircle className="h-3.5 w-3.5" />
-          Đã hủy
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700 border border-stone-200">
-          {status}
-        </span>
-      );
-  }
-};
 
 export const ContractsPage = () => {
   const navigate = useNavigate();
@@ -284,102 +260,170 @@ export const ContractsPage = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* ── Tiêu đề & Nút thao tác ───────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-            Quản Lý Hợp Đồng
-          </h1>
-          <p className="text-sm text-stone-500">
-            Biên bản hợp đồng bán hàng tại quầy (ký ngoài bản giấy) và trực tuyến
-          </p>
+    <div className="space-y-6 text-stone-900">
+      {/* ── 1. HEADER TRANG: QUẢN LÝ HỢP ĐỒNG (SALES CONTRACTS) ─────────── */}
+      <header className="flex flex-col gap-4 rounded-2xl border border-stone-200/90 bg-white p-5 shadow-sm transition sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-stone-900 text-amber-400 shadow-sm ring-1 ring-stone-900/10">
+            <FileText className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
+                Quản Lý Hợp Đồng
+              </h1>
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-900">
+                <Sparkles className="h-3 w-3 text-amber-700" />
+                Hồ sơ thương mại
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+              Biên bản hợp đồng bán lẻ tại quầy (ký ngoài giấy bằng bút mực) và hợp đồng đơn may đo theo yêu cầu.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Cụm nút thao tác */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
           <button
+            type="button"
             onClick={() => fetchContractsList()}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-50"
-            title="Tải lại danh sách"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs transition hover:bg-stone-50 hover:text-stone-900 active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+            title="Tải lại danh sách hợp đồng mới nhất"
           >
-            <RotateCw className={`h-4 w-4 ${loading ? 'animate-spin text-amber-700' : ''}`} />
+            <RotateCw className={`h-3.5 w-3.5 text-stone-500 ${loading ? 'animate-spin text-amber-700' : ''}`} />
             <span>Làm mới</span>
           </button>
+
           <button
+            type="button"
             onClick={() => navigate('/sale/create-order')}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-900 active:scale-95"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-amber-900 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-amber-950 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
           >
             <Plus className="h-4 w-4" />
             <span>Lập hợp đồng tại quầy</span>
           </button>
         </div>
+      </header>
+
+      {/* Dải thông tin quy trình ký kết */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-stone-200/80 bg-stone-50/70 px-4 py-2.5 text-xs text-stone-600">
+        <div className="flex items-center gap-1.5 font-medium">
+          <Printer className="h-4 w-4 text-stone-600" />
+          <span>Biên bản in giấy A4 ký tay trực tiếp ngoài quầy</span>
+        </div>
+        <div className="flex items-center gap-1.5 font-medium">
+          <Camera className="h-4 w-4 text-amber-700" />
+          <span>Chụp ảnh / scan chữ ký bút mực tải lên hệ thống</span>
+        </div>
+        <div className="flex items-center gap-1.5 font-medium">
+          <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+          <span>Xác nhận ký kết để khởi tạo đơn hàng chính thức</span>
+        </div>
       </div>
 
-      {/* ── Thống kê tổng quan (Cards) ─────────────────────── */}
+      {/* ── 2. DẢI THỐNG KÊ TỔNG QUAN (METRIC CARDS) ───────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Tổng số hợp đồng */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-2xl border border-stone-200/90 bg-white p-5 shadow-2xs transition hover:shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-stone-500">Tổng hợp đồng</span>
-            <div className="rounded-lg bg-stone-100 p-2 text-stone-700">
-              <FileText className="h-5 w-5" />
+            <span className="text-xs font-semibold text-stone-500">Tổng số hợp đồng</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-stone-100 text-stone-700">
+              <FileText className="h-4.5 w-4.5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-stone-900">{stats.total}</span>
-            <span className="text-xs text-stone-400">hợp đồng</span>
+            <span className="text-2xl font-extrabold text-stone-900 font-mono">{stats.total}</span>
+            <span className="text-xs text-stone-400">biên bản đã lập</span>
           </div>
         </div>
 
         {/* Chờ ký kết */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-2xl border border-amber-200/90 bg-amber-50/50 p-5 shadow-2xs transition hover:shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-amber-800">Biên bản chờ ký</span>
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-700">
-              <Clock className="h-5 w-5" />
+            <span className="text-xs font-bold text-amber-900">Biên bản chờ ký</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-800">
+              <Clock className="h-4.5 w-4.5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-900">{stats.draft}</span>
-            <span className="text-xs text-amber-600">chờ ký bút mực</span>
+            <span className="text-2xl font-extrabold text-amber-900 font-mono">{stats.draft}</span>
+            <span className="text-xs text-amber-700">chờ ký bút mực</span>
           </div>
         </div>
 
         {/* Đã ký kết */}
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/50 p-5 shadow-2xs transition hover:shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-emerald-800">Đã ký kết</span>
-            <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700">
-              <CheckCircle2 className="h-5 w-5" />
+            <span className="text-xs font-bold text-emerald-900">Đã ký kết hợp đồng</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+              <CheckCircle2 className="h-4.5 w-4.5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-900">{stats.signed}</span>
-            <span className="text-xs text-emerald-600">sẵn sàng tạo đơn</span>
+            <span className="text-2xl font-extrabold text-emerald-900 font-mono">{stats.signed}</span>
+            <span className="text-xs text-emerald-700">sẵn sàng tạo đơn</span>
           </div>
         </div>
 
         {/* Đã hủy */}
-        <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-2xl border border-rose-200/90 bg-rose-50/50 p-5 shadow-2xs transition hover:shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-rose-800">Đã hủy</span>
-            <div className="rounded-lg bg-rose-100 p-2 text-rose-700">
-              <XCircle className="h-5 w-5" />
+            <span className="text-xs font-bold text-rose-900">Hợp đồng đã hủy</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-100 text-rose-800">
+              <XCircle className="h-4.5 w-4.5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-rose-900">{stats.cancelled}</span>
-            <span className="text-xs text-rose-600">hợp đồng đã hủy</span>
+            <span className="text-2xl font-extrabold text-rose-900 font-mono">{stats.cancelled}</span>
+            <span className="text-xs text-rose-700">đã hủy bỏ</span>
           </div>
         </div>
       </div>
 
-      {/* ── Bộ lọc & Tìm kiếm ─────────────────────────────── */}
-      <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+      {/* ── 3. BỘ LỌC & TÌM KIẾM ─────────────────────────────── */}
+      <section className="rounded-2xl border border-stone-200/90 bg-white p-4.5 shadow-sm space-y-3.5">
+        {/* Hàng 1: Tabs chọn trạng thái nhanh */}
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-stone-100 pb-3">
+          {[
+            { key: 'ALL', label: 'Tất cả trạng thái', count: stats.total },
+            { key: 'DRAFT', label: 'Chờ ký', count: stats.draft },
+            { key: 'SIGNED', label: 'Đã ký kết', count: stats.signed },
+            { key: 'CANCELLED', label: 'Đã hủy', count: stats.cancelled },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(tab.key);
+                  setPage(1);
+                }}
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                  isActive
+                    ? 'bg-stone-900 text-white shadow-xs'
+                    : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.2 font-mono text-[10px] font-bold ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-stone-200 text-stone-700'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Hàng 2: Bộ tìm kiếm & Dropdown tiêu chí */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Dropdown tiêu chí + Ô tìm kiếm */}
-          <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-1 flex-col gap-2.5 sm:flex-row sm:items-center">
+            {/* Tiêu chí tìm kiếm */}
             <div className="w-full sm:w-48">
               <select
                 aria-label="Tiêu chí tìm kiếm hợp đồng"
@@ -388,15 +432,16 @@ export const ContractsPage = () => {
                   setSearchBy(e.target.value);
                   setPage(1);
                 }}
-                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 shadow-sm"
+                className="w-full rounded-xl border border-stone-200 bg-white py-2 px-3 text-xs font-medium text-stone-700 shadow-2xs transition focus:border-amber-600 focus:outline-none"
               >
-                <option value="ALL">🔍 Tất cả tiêu chí</option>
-                <option value="CUSTOMER_NAME">👤 Tên khách hàng</option>
-                <option value="CONTRACT_CODE">📄 Mã hợp đồng</option>
-                <option value="PHONE">📞 Số điện thoại</option>
+                <option value="ALL">Tất cả tiêu chí</option>
+                <option value="CUSTOMER_NAME">Tên khách hàng</option>
+                <option value="CONTRACT_CODE">Mã hợp đồng</option>
+                <option value="PHONE">Số điện thoại liên hệ</option>
               </select>
             </div>
 
+            {/* Input tìm kiếm */}
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
               <input
@@ -415,7 +460,7 @@ export const ContractsPage = () => {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-9 text-sm text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 shadow-sm"
+                className="w-full rounded-xl border border-stone-200 py-2 pl-9 pr-9 text-xs text-stone-900 placeholder:text-stone-400 shadow-2xs transition focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
               />
               {search && (
                 <button
@@ -425,7 +470,7 @@ export const ContractsPage = () => {
                     setPage(1);
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
-                  title="Xóa tìm kiếm"
+                  title="Xóa từ khóa tìm kiếm"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -433,37 +478,21 @@ export const ContractsPage = () => {
             </div>
           </div>
 
-          {/* Bộ lọc trạng thái & Nút đặt lại */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <select
-              aria-label="Lọc trạng thái hợp đồng"
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 shadow-sm"
+          {/* Nút đặt lại bộ lọc */}
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-700 shadow-2xs transition hover:bg-stone-100 hover:text-stone-900 active:scale-95"
             >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="DRAFT">Biên bản chờ ký</option>
-              <option value="SIGNED">Đã ký kết</option>
-              <option value="CANCELLED">Đã hủy</option>
-            </select>
-
-            {activeFilterCount > 0 && (
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                className="rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 transition shadow-sm"
-              >
-                Xóa bộ lọc ({activeFilterCount})
-              </button>
-            )}
-          </div>
+              <X className="h-3.5 w-3.5" />
+              <span>Xóa bộ lọc ({activeFilterCount})</span>
+            </button>
+          )}
         </div>
 
         {/* Tóm tắt kết quả */}
-        <div className="flex items-center justify-between text-xs text-stone-500 pt-3 border-t border-stone-100 mt-3">
+        <div className="flex items-center justify-between text-xs text-stone-500 pt-2 border-t border-stone-100">
           <span>
             Tìm thấy <strong className="font-bold text-stone-900">{pagination.totalItems}</strong> hợp đồng
             {search.trim() && (
@@ -476,20 +505,20 @@ export const ContractsPage = () => {
             </span>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* ── Bảng danh sách hợp đồng ───────────────────────── */}
-      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+      {/* ── 4. BẢNG DANH SÁCH HỢP ĐỒNG ───────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border border-stone-200/90 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
-            <thead className="bg-stone-50 font-semibold text-stone-700">
+          <table className="min-w-full divide-y divide-stone-200 text-left text-xs">
+            <thead className="bg-stone-50 font-bold text-stone-700 border-b border-stone-200">
               <tr>
                 <th className="py-3.5 pl-4 pr-3 sm:pl-6">Mã hợp đồng</th>
                 <th className="px-3 py-3.5">Khách hàng</th>
                 <th className="px-3 py-3.5">Số điện thoại</th>
-                <th className="px-3 py-3.5">Nguồn</th>
                 <th className="px-3 py-3.5 text-right">Tổng giá trị</th>
                 <th className="px-3 py-3.5 text-right">Đã đặt cọc</th>
+                <th className="px-3 py-3.5 text-right">Còn lại cần thu</th>
                 <th className="px-3 py-3.5 text-center">Trạng thái</th>
                 <th className="px-3 py-3.5 text-center pr-4 sm:pr-6">Thao tác</th>
               </tr>
@@ -498,123 +527,129 @@ export const ContractsPage = () => {
               {loading ? (
                 <tr>
                   <td colSpan="8" className="py-16 text-center text-stone-500">
-                    <RotateCw className="mx-auto h-6 w-6 animate-spin text-amber-800" />
-                    <p className="mt-2 text-xs">Đang tải danh sách hợp đồng...</p>
+                    <RotateCw className="mx-auto h-7 w-7 animate-spin text-amber-800" />
+                    <p className="mt-2 text-xs font-medium text-stone-600">Đang tải danh sách hợp đồng...</p>
                   </td>
                 </tr>
               ) : contracts.length === 0 ? (
                 <tr>
                   <td colSpan="8" className="py-16 text-center text-stone-500">
-                    <FileText className="mx-auto h-10 w-10 text-stone-300" />
-                    <p className="mt-2 text-sm font-semibold text-stone-800">Chưa có hợp đồng nào</p>
-                    <p className="mt-1 text-xs text-stone-500">
+                    <FileText className="mx-auto h-12 w-12 text-stone-300" />
+                    <p className="mt-3 text-sm font-bold text-stone-800">Chưa có hợp đồng nào</p>
+                    <p className="mt-1 text-xs text-stone-500 max-w-sm mx-auto">
                       {activeFilterCount > 0
                         ? 'Thử thay đổi từ khóa tìm kiếm hoặc bấm "Xóa bộ lọc" để xem toàn bộ danh sách.'
-                        : 'Hiện chưa có hợp đồng nào trong hệ thống.'}
+                        : 'Hiện chưa có biên bản hợp đồng nào trong hệ thống.'}
                     </p>
                     {activeFilterCount > 0 && (
                       <button
                         type="button"
                         onClick={handleResetFilters}
-                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-stone-50 px-3.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100"
+                        className="mt-3.5 inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 shadow-2xs transition"
                       >
                         <X className="h-3.5 w-3.5" />
-                        Xóa bộ lọc
+                        <span>Xóa bộ lọc</span>
                       </button>
                     )}
                   </td>
                 </tr>
               ) : (
-                contracts.map((c) => (
-                  <tr key={c.contractId} className="hover:bg-amber-50/30 transition">
-                    <td className="py-3.5 pl-4 pr-3 sm:pl-6 font-mono font-bold text-amber-900">
-                      {c.contractCode}
-                    </td>
-                    <td className="px-3 py-3.5 font-semibold text-stone-900">
-                      {c.customerName}
-                    </td>
-                    <td className="px-3 py-3.5 text-stone-600">
-                      {c.customerPhone}
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <span className="inline-flex items-center rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-700 border border-stone-200">
-                        {c.source === 'OFFLINE' ? 'Tại quầy' : 'Trực tuyến'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3.5 text-right font-bold text-stone-900">
-                      {formatVND(c.totalAmount)}
-                    </td>
-                    <td className="px-3 py-3.5 text-right font-semibold text-emerald-700">
-                      {formatVND(c.depositAmount)}
-                    </td>
-                    <td className="px-3 py-3.5 text-center">{getContractBadge(c.status)}</td>
-                    <td className="px-3 py-3.5 text-center pr-4 sm:pr-6">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleViewDetail(c)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-medium text-stone-700 shadow-2xs hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 transition"
-                          title="Xem chi tiết biên bản hợp đồng"
-                        >
-                          <Eye className="h-3.5 w-3.5 text-stone-500" />
-                          <span>Chi tiết</span>
-                        </button>
-                        <button
-                          onClick={() => handleOpenPrint(c)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-900 shadow-2xs hover:bg-amber-100 transition"
-                          title="In / Xuất hợp đồng bản giấy khổ A4"
-                        >
-                          <Printer className="h-3.5 w-3.5 text-amber-700" />
-                          <span>In HĐ</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                contracts.map((c) => {
+                  const remaining = Math.max(0, (c.totalAmount || 0) - (c.depositAmount || 0));
+                  return (
+                    <tr key={c.contractId} className="hover:bg-amber-50/40 transition">
+                      <td className="py-3.5 pl-4 pr-3 sm:pl-6 font-mono font-bold text-amber-900">
+                        {c.contractCode}
+                      </td>
+                      <td className="px-3 py-3.5 font-bold text-stone-900">
+                        {c.customerName}
+                      </td>
+                      <td className="px-3 py-3.5 font-mono text-stone-600">
+                        {c.customerPhone}
+                      </td>
+                      <td className="px-3 py-3.5 text-right font-extrabold text-stone-900">
+                        {formatVND(c.totalAmount)}
+                      </td>
+                      <td className="px-3 py-3.5 text-right font-bold text-emerald-800">
+                        {formatVND(c.depositAmount)}
+                      </td>
+                      <td className="px-3 py-3.5 text-right font-bold text-stone-900">
+                        {formatVND(remaining)}
+                      </td>
+                      <td className="px-3 py-3.5 text-center">
+                        {<ContractStatusBadge status={c.status} />}
+                      </td>
+                      <td className="px-3 py-3.5 text-center pr-4 sm:pr-6">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleViewDetail(c)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-50 hover:text-stone-900 transition"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-stone-500" />
+                            <span>Chi tiết</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPrint(c)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-900 shadow-2xs hover:bg-amber-100 transition"
+                            title="In / Xuất hợp đồng bản giấy khổ A4"
+                          >
+                            <Printer className="h-3.5 w-3.5 text-amber-800" />
+                            <span>In A4</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        <TablePagination
-          currentPage={pagination.currentPage || page}
-          totalPages={pagination.totalPages || 1}
-          totalItems={pagination.totalItems}
-          currentCount={contracts.length}
-          itemsPerPage={limit}
-          pageSizeOptions={[5, 10, 20, 50]}
-          onPageChange={(p) => setPage(p)}
-          onPageSizeChange={(newLimit) => {
-            setLimit(newLimit);
-            setPage(1);
-          }}
-          itemLabel="hợp đồng"
-          loading={loading}
-        />
+        <div className="p-3 border-t border-stone-200">
+          <TablePagination
+            currentPage={pagination.currentPage || page}
+            totalPages={pagination.totalPages || 1}
+            totalItems={pagination.totalItems}
+            currentCount={contracts.length}
+            itemsPerPage={limit}
+            pageSizeOptions={[5, 10, 20, 50]}
+            onPageChange={(p) => setPage(p)}
+            onPageSizeChange={(newLimit) => {
+              setLimit(newLimit);
+              setPage(1);
+            }}
+            itemLabel="hợp đồng"
+            loading={loading}
+          />
+        </div>
       </div>
 
-      {/* Modal In hợp đồng bản giấy A4 */}
+      {/* ── MODAL IN HỢP ĐỒNG BẢN GIẤY A4 (PrintContractModal) ─────────── */}
       <PrintContractModal
         isOpen={printModalOpen}
         onClose={() => setPrintModalOpen(false)}
         contract={contractToPrint}
       />
 
-      {/* ── Modal chi tiết & thao tác hợp đồng ──────────────── */}
+      {/* ── MODAL CHI TIẾT & THAO TÁC HỢP ĐỒNG ───────────────────────── */}
       {modalOpen && selectedContract && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="relative w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-stone-200 my-8 overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-stone-200 my-8 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
             {/* Header Modal */}
-            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-stone-800 bg-stone-900 px-6 py-4 text-white">
               <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-amber-100 p-2.5 text-amber-800">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/20 text-amber-300 ring-1 ring-amber-400/30">
                   <FileText className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-stone-900">
+                  <h2 className="text-base font-bold tracking-tight text-white">
                     Biên bản hợp đồng — {selectedContract.contractCode}
                   </h2>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    Khách hàng: {selectedContract.customerName} • SĐT: {selectedContract.customerPhone}
+                  <p className="text-xs text-stone-300 mt-0.5">
+                    Khách hàng: <strong>{selectedContract.customerName}</strong> • SĐT: <span className="font-mono">{selectedContract.customerPhone}</span>
                   </p>
                 </div>
               </div>
@@ -622,15 +657,16 @@ export const ContractsPage = () => {
                 <button
                   type="button"
                   onClick={() => handleOpenPrint(selectedContract)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-100 transition active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-1.5 text-xs font-bold text-amber-900 shadow-2xs hover:bg-amber-100 transition active:scale-95"
                   title="In bản giấy để ký ngoài bằng bút mực"
                 >
-                  <Printer className="h-3.5 w-3.5 text-amber-700" />
-                  <span>In bản giấy (A4)</span>
+                  <Printer className="h-4 w-4 text-amber-800" />
+                  <span>In bản giấy A4</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setModalOpen(false)}
-                  className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+                  className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-800 hover:text-white transition"
                   aria-label="Đóng"
                 >
                   <X className="h-5 w-5" />
@@ -639,26 +675,38 @@ export const ContractsPage = () => {
             </div>
 
             {/* Thân Modal */}
-            <div className="max-h-[72vh] overflow-y-auto px-6 py-5 space-y-5 text-sm text-stone-800">
+            <div className="max-h-[72vh] overflow-y-auto px-6 py-5 space-y-5 text-xs text-stone-800">
               {/* Banner hướng dẫn ký ngoài bản giấy */}
-              <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-950 space-y-3">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 font-bold text-amber-900 text-sm">
-                    <Printer className="h-4 w-4 text-amber-700" />
-                    <span>Ký hợp đồng ngoài quầy (Bản giấy in bằng bút mực)</span>
+                  <div className="flex items-center gap-2 font-bold text-amber-900 text-xs">
+                    <Printer className="h-4 w-4 text-amber-800" />
+                    <span>QUY TRÌNH KÝ HỢP ĐỒNG BẢN GIẤY TẠI SHOWROOM:</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleOpenPrint(selectedContract)}
-                    className="inline-flex items-center gap-1 rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-900 transition"
+                    className="inline-flex items-center gap-1 rounded-xl bg-amber-900 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-amber-950 transition active:scale-95"
                   >
                     <Printer className="h-3.5 w-3.5" />
-                    <span>In ngay</span>
+                    <span>In ngay bản A4</span>
                   </button>
                 </div>
-                <p className="text-xs text-stone-600">
-                  Hợp đồng mua bán được in ra giấy để hai bên ký bút mực trực tiếp, không sử dụng chữ ký số.
-                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] text-amber-950">
+                  <div className="bg-white/90 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="font-bold block mb-0.5">1. In hợp đồng</span>
+                    In 02 bản A4 cho Khách hàng &amp; Showroom lưu trữ.
+                  </div>
+                  <div className="bg-white/90 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="font-bold block mb-0.5">2. Ký bút mực</span>
+                    Hai bên ký tên trực tiếp bằng bút mực trên bản in giấy.
+                  </div>
+                  <div className="bg-white/90 p-2.5 rounded-xl border border-amber-200/60">
+                    <span className="font-bold block mb-0.5">3. Tải ảnh &amp; Ký</span>
+                    Chụp ảnh bản ký tải lên bên dưới để xác nhận ký kết.
+                  </div>
+                </div>
 
                 {/* Bằng chứng ảnh chụp hợp đồng đã ký */}
                 <div className="border-t border-amber-200/80 pt-3">
@@ -667,8 +715,9 @@ export const ContractsPage = () => {
                       Ảnh chụp / scan hợp đồng giấy đã ký <span className="text-rose-600 font-extrabold">* (Bắt buộc)</span>
                     </label>
                     {contractProofPreview && (
-                      <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Đã có ảnh bằng chứng
+                      <span className="text-xs font-bold text-emerald-800 flex items-center gap-1">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        Đã có ảnh bằng chứng
                       </span>
                     )}
                   </div>
@@ -683,7 +732,7 @@ export const ContractsPage = () => {
 
                   {selectedContract.status === 'DRAFT' ? (
                     contractProofPreview ? (
-                      <div className="flex flex-col sm:flex-row items-center gap-3 rounded-xl border border-amber-200 bg-white p-3 shadow-xs">
+                      <div className="flex flex-col sm:flex-row items-center gap-3.5 rounded-xl border border-amber-200 bg-white p-3.5 shadow-2xs">
                         <div
                           onClick={() => setProofPreviewModalOpen(true)}
                           className="group relative h-20 w-24 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-stone-200 bg-stone-100"
@@ -693,8 +742,8 @@ export const ContractsPage = () => {
                             alt="Ảnh hợp đồng đã ký"
                             className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                           />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
-                            <Eye className="h-4 w-4 text-white" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100 text-white">
+                            <Eye className="h-4 w-4" />
                           </div>
                         </div>
 
@@ -707,30 +756,33 @@ export const ContractsPage = () => {
                               Dung lượng: {(contractProofFile.size / 1024).toFixed(0)} KB
                             </p>
                           )}
-                          <p className="text-[11px] text-emerald-700">
+                          <p className="text-[11px] text-emerald-700 font-medium">
                             Ảnh sẽ được tải lên hệ thống khi xác nhận ký kết.
                           </p>
-                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 pt-1">
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                             <button
                               type="button"
                               onClick={() => setProofPreviewModalOpen(true)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100"
+                              className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-semibold text-stone-700 hover:bg-stone-100 transition"
                             >
-                              <Eye className="h-3 w-3" /> Xem ảnh lớn
+                              <Eye className="h-3 w-3" />
+                              <span>Xem ảnh lớn</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => contractFileInputRef.current?.click()}
-                              className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                              className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition"
                             >
-                              <Camera className="h-3 w-3" /> Đổi ảnh khác
+                              <Camera className="h-3 w-3" />
+                              <span>Đổi ảnh khác</span>
                             </button>
                             <button
                               type="button"
                               onClick={handleRemoveProofFile}
-                              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition"
                             >
-                              <Trash2 className="h-3 w-3" /> Xóa ảnh
+                              <Trash2 className="h-3 w-3" />
+                              <span>Xóa ảnh</span>
                             </button>
                           </div>
                         </div>
@@ -738,23 +790,23 @@ export const ContractsPage = () => {
                     ) : (
                       <div
                         onClick={() => contractFileInputRef.current?.click()}
-                        className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/50 p-4 text-center cursor-pointer transition hover:border-amber-500 hover:bg-amber-100/50"
+                        className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/50 p-5 text-center cursor-pointer transition hover:border-amber-500 hover:bg-amber-100/50"
                       >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-800 mb-2">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-900 mb-2">
                           <Camera className="h-5 w-5" />
                         </div>
                         <p className="text-xs font-bold text-amber-900">
                           Bấm vào đây để tải lên ảnh chụp / scan hợp đồng giấy đã ký
                         </p>
-                        <p className="text-[11px] text-stone-500 mt-0.5">
-                          Hỗ trợ file ảnh JPG, PNG, WEBP (Tối đa 10MB) &mdash; <span className="text-rose-600 font-semibold">Bắt buộc để xác nhận ký</span>
+                        <p className="text-[10px] text-stone-500 mt-0.5">
+                          Hỗ trợ JPG, PNG, WEBP (Tối đa 10MB) &bull; <span className="text-rose-600 font-bold">Bắt buộc để xác nhận ký kết</span>
                         </p>
                       </div>
                     )
                   ) : (
                     /* Đã ký (SIGNED) */
                     selectedContract.contractFileUrl ? (
-                      <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                      <div className="flex items-center gap-3.5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5">
                         <div
                           onClick={() => {
                             setContractProofPreview(selectedContract.contractFileUrl);
@@ -767,14 +819,14 @@ export const ContractsPage = () => {
                             alt="Ảnh bằng chứng hợp đồng đã ký"
                             className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                           />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
-                            <Eye className="h-4 w-4 text-white" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100 text-white">
+                            <Eye className="h-4 w-4" />
                           </div>
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
                             <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                            Hợp đồng đã có ảnh bằng chứng ký kết
+                            <span>Hợp đồng đã có ảnh bằng chứng ký kết</span>
                           </div>
                           <p className="text-[11px] text-stone-600 mt-0.5">
                             Lưu trữ bản scan / ảnh chụp chữ ký tươi trên hệ thống
@@ -785,9 +837,10 @@ export const ContractsPage = () => {
                               setContractProofPreview(selectedContract.contractFileUrl);
                               setProofPreviewModalOpen(true);
                             }}
-                            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 shadow-2xs border border-emerald-200 hover:bg-emerald-50"
+                            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-emerald-800 shadow-2xs border border-emerald-200 hover:bg-emerald-50 transition"
                           >
-                            <Eye className="h-3 w-3" /> Xem ảnh gốc kích thước đầy đủ
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Xem ảnh gốc kích thước đầy đủ</span>
                           </button>
                         </div>
                       </div>
@@ -797,37 +850,41 @@ export const ContractsPage = () => {
               </div>
 
               {/* Trạng thái & Khách hàng */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 rounded-xl border border-stone-200 bg-stone-50/70 p-4">
                 <div>
-                  <span className="text-xs text-stone-500 block">Trạng thái hợp đồng:</span>
-                  <div className="mt-1">{getContractBadge(selectedContract.status)}</div>
+                  <span className="text-[11px] text-stone-500 block mb-1">Trạng thái hợp đồng:</span>
+                  <div>{<ContractStatusBadge status={selectedContract.status} />}</div>
                 </div>
                 <div className="sm:text-right">
-                  <span className="text-xs text-stone-500 block">Khách hàng đại diện:</span>
-                  <p className="font-bold text-stone-900 mt-1">{selectedContract.customerName}</p>
-                  <p className="text-xs text-stone-600">{selectedContract.customerPhone}</p>
+                  <span className="text-[11px] text-stone-500 block mb-0.5">Khách hàng đại diện:</span>
+                  <p className="font-bold text-stone-900 text-xs">{selectedContract.customerName}</p>
+                  <p className="font-mono text-stone-600 text-xs">{selectedContract.customerPhone}</p>
                 </div>
               </div>
 
               {/* Tình trạng thanh toán */}
-              <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-3 flex items-center gap-1.5">
+              <div className="rounded-xl border border-amber-200/90 bg-amber-50/40 p-4">
+                <h3 className="text-xs font-bold text-amber-900 mb-3 flex items-center gap-1.5">
                   <CreditCard className="h-4 w-4 text-amber-800" />
-                  Giá trị hợp đồng & Đặt cọc
+                  <span>GIÁ TRỊ HỢP ĐỒNG &amp; ĐẶT CỌC:</span>
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                  <div className="rounded-lg bg-white p-3 border border-stone-200">
-                    <span className="text-xs text-stone-500 block">Tổng giá trị</span>
-                    <span className="text-base font-bold text-stone-900">{formatVND(selectedContract.totalAmount)}</span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="rounded-xl bg-white p-3 border border-stone-200 shadow-2xs">
+                    <span className="text-[11px] text-stone-500 block">Tổng giá trị:</span>
+                    <span className="text-sm font-extrabold text-stone-900 font-mono">
+                      {formatVND(selectedContract.totalAmount)}
+                    </span>
                   </div>
-                  <div className="rounded-lg bg-white p-3 border border-stone-200">
-                    <span className="text-xs text-stone-500 block">Tiền đặt cọc</span>
-                    <span className="text-base font-semibold text-emerald-700">{formatVND(selectedContract.depositAmount)}</span>
+                  <div className="rounded-xl bg-white p-3 border border-stone-200 shadow-2xs">
+                    <span className="text-[11px] text-stone-500 block">Tiền đặt cọc:</span>
+                    <span className="text-sm font-bold text-emerald-800 font-mono">
+                      {formatVND(selectedContract.depositAmount)}
+                    </span>
                   </div>
-                  <div className="rounded-lg bg-white p-3 border border-stone-200 col-span-2 sm:col-span-1">
-                    <span className="text-xs text-stone-500 block">Còn lại cần thu</span>
-                    <span className="text-base font-bold text-rose-600">
-                      {formatVND((selectedContract.totalAmount || 0) - (selectedContract.depositAmount || 0))}
+                  <div className="rounded-xl bg-white p-3 border border-stone-200 col-span-2 sm:col-span-1 shadow-2xs">
+                    <span className="text-[11px] text-stone-500 block">Còn lại cần thu:</span>
+                    <span className="text-sm font-extrabold text-stone-900 font-mono">
+                      {formatVND(Math.max(0, (selectedContract.totalAmount || 0) - (selectedContract.depositAmount || 0)))}
                     </span>
                   </div>
                 </div>
@@ -835,43 +892,49 @@ export const ContractsPage = () => {
 
               {/* Danh sách sản phẩm */}
               <div>
-                <h4 className="font-bold text-stone-900 mb-2.5 flex items-center gap-1.5 text-xs uppercase tracking-wider text-stone-600">
-                  <Package className="h-4 w-4 text-amber-700" />
-                  Danh sách sản phẩm trong hợp đồng
+                <h4 className="font-bold text-stone-900 mb-2 flex items-center gap-1.5 text-xs">
+                  <Package className="h-4 w-4 text-amber-800" />
+                  <span>DANH MỤC HÀNG HÓA VÀ DỊCH VỤ TRONG HỢP ĐỒNG:</span>
                 </h4>
                 <div className="rounded-xl border border-stone-200 overflow-hidden bg-white shadow-2xs">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-stone-50 text-stone-600 border-b border-stone-200 font-semibold">
+                    <thead className="bg-stone-50 text-stone-700 border-b border-stone-200 font-bold">
                       <tr>
-                        <th className="px-4 py-3">Sản phẩm</th>
-                        <th className="px-3 py-3 text-center">Số lượng</th>
-                        <th className="px-4 py-3 text-right">Đơn giá</th>
-                        <th className="px-4 py-3 text-right">Thành tiền</th>
+                        <th className="px-4 py-2.5">Sản phẩm</th>
+                        <th className="px-3 py-2.5 text-center">Số lượng</th>
+                        <th className="px-4 py-2.5 text-right">Đơn giá</th>
+                        <th className="px-4 py-2.5 text-right">Thành tiền</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
                       {(selectedContract.items || []).map((it, idx) => (
                         <tr key={idx} className="hover:bg-amber-50/20">
-                          <td className="px-4 py-3 font-semibold text-stone-900">{it.productName}</td>
-                          <td className="px-3 py-3 text-center font-bold text-stone-700">{it.quantity}</td>
-                          <td className="px-4 py-3 text-right text-stone-600">{formatVND(it.unitPrice)}</td>
-                          <td className="px-4 py-3 text-right font-bold text-amber-900">
-                            {formatVND(it.totalPrice)}
+                          <td className="px-4 py-2.5 font-bold text-stone-900">{it.productName}</td>
+                          <td className="px-3 py-2.5 text-center font-bold text-stone-700">{it.quantity}</td>
+                          <td className="px-4 py-2.5 text-right text-stone-600 font-mono">{formatVND(it.unitPrice)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold text-stone-900 font-mono">
+                            {formatVND(it.totalPrice || it.unitPrice * it.quantity)}
                           </td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="border-t border-stone-200 bg-stone-50/70 font-semibold">
+                    <tfoot className="border-t border-stone-200 bg-stone-50/70 font-bold">
                       <tr>
-                        <td colSpan="3" className="px-4 py-2.5 text-right text-stone-600">Tổng giá trị:</td>
-                        <td className="px-4 py-2.5 text-right font-extrabold text-amber-900">
+                        <td colSpan="3" className="px-4 py-2.5 text-right text-stone-600">Tổng giá trị hàng hóa:</td>
+                        <td className="px-4 py-2.5 text-right font-extrabold text-stone-900 font-mono text-sm">
                           {formatVND(selectedContract.totalAmount)}
                         </td>
                       </tr>
                       <tr>
-                        <td colSpan="3" className="px-4 py-2.5 text-right text-stone-600">Đã đặt cọc:</td>
-                        <td className="px-4 py-2.5 text-right font-bold text-emerald-800">
+                        <td colSpan="3" className="px-4 py-2.5 text-right text-emerald-800">Tiền đặt cọc tại quầy:</td>
+                        <td className="px-4 py-2.5 text-right font-bold text-emerald-800 font-mono">
                           {formatVND(selectedContract.depositAmount)}
+                        </td>
+                      </tr>
+                      <tr className="border-t border-stone-300">
+                        <td colSpan="3" className="px-4 py-2.5 text-right text-stone-900">Còn lại thu khi nhận hàng:</td>
+                        <td className="px-4 py-2.5 text-right font-extrabold text-stone-900 font-mono text-sm">
+                          {formatVND(Math.max(0, (selectedContract.totalAmount || 0) - (selectedContract.depositAmount || 0)))}
                         </td>
                       </tr>
                     </tfoot>
@@ -886,17 +949,17 @@ export const ContractsPage = () => {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95"
+                  className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-100 transition"
                 >
-                  Đóng
+                  Đóng lại
                 </button>
                 <button
                   type="button"
                   onClick={() => handleOpenPrint(selectedContract)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-2xs hover:bg-amber-100 transition active:scale-95"
                 >
-                  <Printer className="h-4 w-4 text-amber-700" />
-                  <span>In / Xuất bản giấy</span>
+                  <Printer className="h-4 w-4 text-amber-800" />
+                  <span>In bản giấy A4</span>
                 </button>
               </div>
 
@@ -911,13 +974,13 @@ export const ContractsPage = () => {
                           ? 'Vui lòng tải lên ảnh chụp bản hợp đồng đã ký trước khi xác nhận'
                           : 'Xác nhận khách hàng đã ký tên bằng bút mực trên bản giấy'
                       }
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500 transition active:scale-95"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-800 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-900 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500 transition active:scale-95"
                     >
                       <CheckCircle2 className="h-4 w-4" />
                       <span>{loadingAction ? 'Đang xác nhận...' : 'Xác nhận đã ký bản giấy'}</span>
                     </button>
                     {!contractProofFile && !contractProofPreview && !selectedContract.contractFileUrl && (
-                      <span className="text-[11px] font-medium text-rose-600">
+                      <span className="text-[10px] font-medium text-rose-600">
                         * Bắt buộc có ảnh bằng chứng hợp đồng đã ký
                       </span>
                     )}
@@ -927,7 +990,7 @@ export const ContractsPage = () => {
                   <button
                     disabled={loadingAction}
                     onClick={handleCreateOrder}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-900 disabled:opacity-50 transition active:scale-95"
+                    className="inline-flex items-center gap-2 rounded-xl bg-amber-900 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-amber-950 disabled:opacity-50 transition active:scale-95"
                   >
                     <Package className="h-4 w-4" />
                     <span>Tạo đơn hàng ngay</span>
@@ -940,25 +1003,25 @@ export const ContractsPage = () => {
         </div>
       )}
 
-      {/* Lightbox xem ảnh bằng chứng kích thước lớn */}
+      {/* ── LIGHTBOX XEM ẢNH BẰNG CHỨNG KÍCH THƯỚC LỚN ─────────────── */}
       {proofPreviewModalOpen && (contractProofPreview || selectedContract?.contractFileUrl) && (
         <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 p-4 backdrop-blur-xs"
           onClick={() => setProofPreviewModalOpen(false)}
         >
           <div
-            className="relative max-h-[90vh] max-w-4xl overflow-hidden rounded-2xl bg-stone-900 p-2 shadow-2xl"
+            className="relative max-h-[90vh] max-w-4xl overflow-hidden rounded-2xl bg-stone-900 p-2 shadow-2xl animate-in fade-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-stone-800 px-4 py-2 text-white">
+            <div className="flex items-center justify-between border-b border-stone-800 px-4 py-2.5 text-white">
               <span className="text-xs font-bold flex items-center gap-2">
                 <Camera className="h-4 w-4 text-amber-400" />
-                Ảnh chụp / bản scan bằng chứng hợp đồng đã ký
+                <span>Ảnh chụp bằng chứng hợp đồng đã ký bản giấy</span>
               </span>
               <button
                 type="button"
                 onClick={() => setProofPreviewModalOpen(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white"
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white transition"
               >
                 <X className="h-5 w-5" />
               </button>

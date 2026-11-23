@@ -1,55 +1,3 @@
--- =========================================================
--- FSSIMS - Database Initialization
--- Database: db_2026_fssims
---
--- File này tự động chạy khi container MySQL khởi tạo lần đầu
--- (mount vào /docker-entrypoint-initdb.d)
---
--- LUỒNG NGHIỆP VỤ
---
---  Vai trò:
---    Khách (CUSTOMER)   : gửi yêu cầu mua hàng sẵn (chỉ online)
---    Sale (SALES)       : tiếp nhận, xác nhận với khách, lập hợp đồng,
---                         tạo đơn, chốt hoàn thành với khách
---    Chủ (OWNER)        : thiết kế bản vẽ, bàn giao gia công, duyệt thành phẩm
---    Thợ (LEADERSTAFF)  : nhận đơn, gia công, báo hoàn thành
---
---  [1] ONLINE - hàng sẵn (online KHÔNG bán hàng custom)
---      khách thêm vào giỏ -> gửi yêu cầu (order_request: PENDING)
---      -> sale xác nhận với khách (CONFIRMED)
---      -> sale lập hợp đồng (contract DRAFT; request CONTRACT_CREATED)
---      -> cả 2 bên ký (contract SIGNED)
---      -> sale tạo đơn (customer_order NEW; request CONVERTED)
---
---  [2] OFFLINE - hàng custom (thiết kế theo yêu cầu)
---      sale tạo yêu cầu gửi chủ (DRAFTING) -> chủ làm bản vẽ (DESIGNING)
---      -> chủ gửi lại sale (DESIGNED) -> sale xác nhận với khách (CONFIRMED)
---      -> sale lập hợp đồng (CONTRACT_CREATED) -> cả 2 bên ký (SIGNED)
---      -> sale tạo đơn (NEW; request CONVERTED)
---
---  [3] OFFLINE - hàng sẵn (POS)
---      không có yêu cầu: sale lập hợp đồng (SIGNED ngay) + tạo đơn (NEW)
---
---  Từ khi đơn ở trạng thái NEW, cả 3 luồng giống nhau:
---      đơn NEW (chuyển đến chủ)
---      -> chủ giao thợ (ASSIGNED; production_order ASSIGNED)
---      -> thợ nhận và làm (IN_PROGRESS)
---      -> thợ báo xong (PENDING_APPROVAL; production_order SUBMITTED)
---      -> chủ duyệt (READY_TO_DELIVER; production_order COMPLETED)
---         (chủ không duyệt: đơn quay về IN_PROGRESS, lệnh về IN_PROGRESS)
---      -> sale xác nhận hoàn thành với khách (COMPLETED)
---
---  Mọi order đều xuất phát từ 1 hợp đồng đã ký.
---  Order có 2 loại: CUSTOM (hàng đặt làm) và READY (hàng sẵn).
---
--- [KHO & GIA CÔNG]
---  nhập nguyên vật liệu (material_receipt)  -> tăng raw_material.quantity_on_hand
---  tạo lệnh gia công (production_order)     -> làm cho đơn hàng hoặc làm hàng nhập kho
---  xuất nguyên vật liệu (material_issue)    -> giảm raw_material.quantity_on_hand
---  nhập kho thành phẩm (finished_goods_receipt) -> tăng product.stock_quantity
---  (số tồn do tầng service cập nhật khi phiếu chuyển sang CONFIRMED)
--- =========================================================
-
 CREATE DATABASE IF NOT EXISTS db_2026_fssims
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
@@ -249,10 +197,6 @@ CREATE TABLE IF NOT EXISTS product (
 
 -- =========================================================
 -- 9. product_set_item  (thành phần của một BỘ sản phẩm)
---     Ví dụ: bộ bàn ăn 6 ghế = 1 x "Bàn ăn A" + 6 x "Ghế ăn B"
---     set_product_id  -> product có product_type = 'SET'
---     item_product_id -> product có product_type = 'SINGLE'
---     (kiểm tra 2 điều kiện này ở tầng service)
 -- =========================================================
 CREATE TABLE IF NOT EXISTS product_set_item (
     set_item_id      BIGINT       NOT NULL AUTO_INCREMENT,
@@ -296,8 +240,6 @@ CREATE TABLE IF NOT EXISTS cart (
 
 -- =========================================================
 -- 11. cart_item  (sản phẩm trong giỏ)
---     Khi khách bấm "gửi yêu cầu": copy cart_item sang order_request_item
---     rồi xóa các dòng trong giỏ.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS cart_item (
     cart_item_id  BIGINT       NOT NULL AUTO_INCREMENT,
@@ -323,42 +265,11 @@ CREATE TABLE IF NOT EXISTS cart_item (
 
 -- =========================================================
 -- 12. order_request  (yêu cầu mua hàng)
---
---  source:
---    ONLINE  -> khách gửi từ giỏ hàng, luôn là READY (online không bán custom)
---    OFFLINE -> sale tạo cho khách tại cửa hàng, luôn là CUSTOM (cần chủ thiết kế)
---               (hàng sẵn mua tại cửa hàng đi theo luồng POS, không có request)
---
---  order_type:
---    READY  -> hàng sẵn
---    CUSTOM -> đặt làm riêng (sản phẩm đơn như tủ, hoặc bộ nhiều món)
---
---  request_type (chỉ có ý nghĩa với CUSTOM):
---    SINGLE = sản phẩm đơn (vd: 1 cái tủ), SET = bộ nhiều món (vd: bàn + ghế)
---
---  status (theo từng luồng):
---    ONLINE  : PENDING -> CONFIRMED -> CONTRACT_CREATED -> CONVERTED
---    OFFLINE : DRAFTING -> DESIGNING -> DESIGNED -> CONFIRMED
---              -> CONTRACT_CREATED -> CONVERTED
---    chung   : REJECTED | CANCELLED
---
---    PENDING          -> khách vừa gửi, chờ sale xử lý (ONLINE)
---    DRAFTING         -> sale đã tạo yêu cầu, gửi chủ (OFFLINE)
---    DESIGNING        -> chủ đang làm bản vẽ (OFFLINE)
---    DESIGNED         -> chủ xong bản vẽ, trả về sale (OFFLINE)
---    CONFIRMED        -> sale đã xác nhận yêu cầu với khách
---    CONTRACT_CREATED -> sale đã lập hợp đồng
---    CONVERTED        -> đã tạo đơn hàng
---    REJECTED         -> từ chối (reject_reason)
---    CANCELLED        -> hủy
---
---  Chi tiết từng món nằm ở order_request_item.
---  Bản vẽ của chủ lưu ở order_request_image (image_type = 'DESIGN').
 -- =========================================================
+
 CREATE TABLE IF NOT EXISTS order_request (
     request_id           BIGINT         NOT NULL AUTO_INCREMENT,
     request_code         VARCHAR(30)    NOT NULL,
-    source               VARCHAR(20)    NOT NULL,                  -- ONLINE / OFFLINE
     order_type           VARCHAR(20)    NOT NULL,                  -- READY / CUSTOM
     request_type         VARCHAR(20)    NOT NULL DEFAULT 'SINGLE', -- SINGLE / SET (CUSTOM)
     customer_account_id  BIGINT         NULL,                      -- OFFLINE: khách có thể chưa có tài khoản
@@ -409,11 +320,6 @@ CREATE TABLE IF NOT EXISTS order_request (
 
 -- =========================================================
 -- 13. order_request_item  (từng món trong yêu cầu)
---     READY  -> product_id = sản phẩm khách chọn từ giỏ, unit_price = giá lúc gửi
---     CUSTOM -> mô tả món khách muốn đặt; product_id (nếu có) là sản phẩm gốc
---               để tùy chỉnh theo. Các cột category/room/material/color là
---               mong muốn của khách, có thể để trống.
---     CUSTOM SINGLE có 1 dòng, CUSTOM SET có nhiều dòng.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS order_request_item (
     request_item_id  BIGINT        NOT NULL AUTO_INCREMENT,
@@ -465,9 +371,6 @@ CREATE TABLE IF NOT EXISTS order_request_item (
 
 -- =========================================================
 -- 14. order_request_image  (ảnh tham khảo của khách / bản vẽ của chủ)
---     image_type:
---       REFERENCE -> ảnh tham khảo (khách hoặc sale đính kèm)
---       DESIGN    -> bản vẽ do chủ thiết kế (luồng OFFLINE custom)
 -- =========================================================
 CREATE TABLE IF NOT EXISTS order_request_image (
     request_image_id  BIGINT       NOT NULL AUTO_INCREMENT,
@@ -495,27 +398,10 @@ CREATE TABLE IF NOT EXISTS order_request_image (
 
 -- =========================================================
 -- 15. contract  (hợp đồng)
---
---  source:
---    ONLINE  -> tạo từ yêu cầu online (hàng sẵn), bắt buộc có request_id
---    OFFLINE -> tạo tại cửa hàng:
---                 CUSTOM: có request_id (yêu cầu đã có bản vẽ, đã xác nhận với khách)
---                 READY (POS): không có request_id
---
---  contract_type: CUSTOM / READY  (order tạo ra sẽ mang đúng loại này)
---
---  status:
---    DRAFT     -> đã lập, chờ 2 bên ký
---    SIGNED    -> cả 2 bên đã ký (bắt buộc có signed_date); POS tạo thẳng SIGNED
---    CANCELLED -> hủy, không ký nữa
---
---  Thông tin khách lưu snapshot (khách offline có thể không có tài khoản).
---  Tiền dùng BIGINT vì giá trị hợp đồng có thể vượt 2,1 tỷ.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS contract (
     contract_id          BIGINT        NOT NULL AUTO_INCREMENT,
     contract_code        VARCHAR(30)   NOT NULL,
-    source               VARCHAR(20)   NOT NULL,            -- ONLINE / OFFLINE
     contract_type        VARCHAR(20)   NOT NULL,            -- CUSTOM / READY
     request_id           BIGINT        NULL,
     customer_account_id  BIGINT        NULL,
@@ -546,13 +432,7 @@ CREATE TABLE IF NOT EXISTS contract (
     CONSTRAINT chk_contract_type CHECK (contract_type IN ('CUSTOM', 'READY')),
     CONSTRAINT chk_contract_status CHECK (status IN ('DRAFT', 'SIGNED', 'CANCELLED')),
     CONSTRAINT chk_contract_signed CHECK (status <> 'SIGNED' OR signed_date IS NOT NULL),
-    CONSTRAINT chk_contract_source CHECK (
-        (source = 'ONLINE'  AND contract_type = 'READY'  AND request_id IS NOT NULL)
-        OR
-        (source = 'OFFLINE' AND contract_type = 'CUSTOM' AND request_id IS NOT NULL)
-        OR
-        (source = 'OFFLINE' AND contract_type = 'READY'  AND request_id IS NULL)
-    ),
+    CONSTRAINT chk_contract_custom_request CHECK (contract_type <> 'CUSTOM' OR request_id IS NOT NULL),
     CONSTRAINT fk_contract_request
         FOREIGN KEY (request_id) REFERENCES order_request (request_id)
         ON UPDATE RESTRICT ON DELETE RESTRICT,
@@ -567,11 +447,6 @@ CREATE TABLE IF NOT EXISTS contract (
 
 -- =========================================================
 -- 16. contract_item  (các món ghi trong hợp đồng, kèm giá chốt)
---     Có request : copy từ order_request_item (request_item_id có giá trị)
---     POS        : sale nhập trực tiếp, hàng sẵn -> product_id
---     Hàng custom: product_id để trống, thông số món (loại, phòng, chất liệu,
---                  màu, kích thước + mô tả) để xưởng dựa vào sản xuất.
---     Một dòng không được vừa có product_id vừa có request_item_id.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS contract_item (
     contract_item_id  BIGINT        NOT NULL AUTO_INCREMENT,
@@ -629,26 +504,6 @@ CREATE TABLE IF NOT EXISTS contract_item (
 
 -- =========================================================
 -- 17. customer_order  (đơn hàng - "order" là từ khóa nên đặt tên customer_order)
---
---  Order luôn được tạo từ 1 hợp đồng đã ký (mỗi hợp đồng tối đa 1 order),
---  do sale tạo. assigned_to = sale phụ trách đơn.
---  (thợ được giao nằm ở production_order.assigned_to)
---
---  order_type:
---    CUSTOM -> hàng đặt làm riêng
---    READY  -> hàng sẵn
---
---  status:
---    NEW              -> sale vừa tạo, chuyển đến chủ
---    ASSIGNED         -> chủ đã bàn giao cho thợ gia công
---    IN_PROGRESS      -> thợ đã nhận và đang xử lý
---    PENDING_APPROVAL -> thợ làm xong, chờ chủ duyệt
---    READY_TO_DELIVER -> chủ đã duyệt, sẵn sàng bàn giao
---    COMPLETED        -> sale xác nhận hoàn thành với khách
---    CANCELLED        -> hủy
---  Chủ không duyệt: PENDING_APPROVAL -> IN_PROGRESS (thợ làm lại).
---
---  Tiền dùng BIGINT vì đơn custom có thể vượt 2,1 tỷ.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS customer_order (
     order_id             BIGINT        NOT NULL AUTO_INCREMENT,
@@ -693,10 +548,6 @@ CREATE TABLE IF NOT EXISTS customer_order (
 
 -- =========================================================
 -- 18. customer_order_item  (các món trong đơn hàng, copy từ contract_item)
---     item_name, unit_price là snapshot tại thời điểm tạo order.
---     product_id có giá trị với hàng sẵn.
---     Hàng custom: copy thông số (loại, phòng, chất liệu, màu, kích thước)
---     từ contract_item để xưởng sản xuất đúng yêu cầu khách.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS customer_order_item (
     order_item_id     BIGINT        NOT NULL AUTO_INCREMENT,
@@ -800,11 +651,6 @@ CREATE TABLE IF NOT EXISTS supplier (
 
 -- =========================================================
 -- 20. raw_material  (nguyên vật liệu gỗ trong kho: gỗ sồi, óc chó, thông, xoài, cao su, tếch...)
---     Khác với product_material (chất liệu của sản phẩm thành phẩm).
---     material_id: trỏ tới loại gỗ tương ứng trong bảng product_material.
---     Số lượng dùng INT nên chọn đơn vị chuẩn (BOARD - tấm/thanh, M3...).
---     quantity_on_hand: tồn kho hiện tại, do service cập nhật khi phiếu nhập/xuất
---     được CONFIRMED. min_quantity: mức tồn tối thiểu để cảnh báo sắp hết.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS raw_material (
     raw_material_id   BIGINT         NOT NULL AUTO_INCREMENT,
@@ -832,7 +678,6 @@ CREATE TABLE IF NOT EXISTS raw_material (
 
 -- =========================================================
 -- 21. material_receipt  (phiếu nhập nguyên vật liệu vào kho)
---     status: DRAFT -> CONFIRMED (cộng tồn kho) | CANCELLED
 -- =========================================================
 CREATE TABLE IF NOT EXISTS material_receipt (
     receipt_id     BIGINT        NOT NULL AUTO_INCREMENT,
@@ -890,19 +735,6 @@ CREATE TABLE IF NOT EXISTS material_receipt_item (
 
 -- =========================================================
 -- 23. production_order  (lệnh gia công)
---
---  production_type:
---    CUSTOM -> làm cho đơn hàng custom (bắt buộc có order_id)
---    READY  -> xử lý cho đơn hàng sẵn (bắt buộc có order_id)
---    STOCK  -> làm hàng sẵn để nhập kho (order_id để trống)
---
---  status:
---    ASSIGNED    -> chủ đã giao cho thợ, chờ thợ nhận
---    IN_PROGRESS -> thợ đã nhận, đang làm
---    SUBMITTED   -> thợ báo xong, chờ chủ duyệt
---    COMPLETED   -> chủ đã duyệt
---    CANCELLED   -> hủy
---  Chủ không duyệt: SUBMITTED -> IN_PROGRESS (thợ làm lại).
 -- =========================================================
 CREATE TABLE IF NOT EXISTS production_order (
     production_id    BIGINT        NOT NULL AUTO_INCREMENT,
@@ -944,9 +776,6 @@ CREATE TABLE IF NOT EXISTS production_order (
 
 -- =========================================================
 -- 24. production_order_item  (món cần gia công trong lệnh)
---     CUSTOM / READY -> order_item_id (món trong đơn hàng)
---     STOCK          -> product_id (sản phẩm trong danh mục sẽ nhập kho)
---     Mỗi dòng chỉ trỏ tới đúng 1 trong 2.
 -- =========================================================
 CREATE TABLE IF NOT EXISTS production_order_item (
     production_item_id  BIGINT        NOT NULL AUTO_INCREMENT,
@@ -984,7 +813,6 @@ CREATE TABLE IF NOT EXISTS production_order_item (
 
 -- =========================================================
 -- 25. material_issue  (phiếu xuất nguyên vật liệu khỏi kho cho gia công)
---     status: DRAFT -> CONFIRMED (trừ tồn kho) | CANCELLED
 -- =========================================================
 CREATE TABLE IF NOT EXISTS material_issue (
     issue_id       BIGINT        NOT NULL AUTO_INCREMENT,
@@ -1040,8 +868,6 @@ CREATE TABLE IF NOT EXISTS material_issue_item (
 
 -- =========================================================
 -- 27. finished_goods_receipt  (phiếu nhập kho thành phẩm sau gia công)
---     Chỉ dành cho lệnh gia công STOCK (service kiểm tra).
---     status: DRAFT -> CONFIRMED (cộng product.stock_quantity) | CANCELLED
 -- =========================================================
 CREATE TABLE IF NOT EXISTS finished_goods_receipt (
     fg_receipt_id  BIGINT        NOT NULL AUTO_INCREMENT,
@@ -1107,8 +933,6 @@ ON DUPLICATE KEY UPDATE
 
 -- =========================================================
 -- 2. USER ACCOUNT
--- Mật khẩu mặc định: 123456
--- Thay hash bên dưới bằng kết quả bcryptjs
 -- =========================================================
 
 SET @password_hash = '$2a$10$Q6QRFUpuVvp9nNvMIxv2SOBygeu2OX8Thnp5ReJJpZmN3StSCJeIC';

@@ -12,7 +12,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * @returns {{ isValid: boolean, error?: string, value?: object }}
  */
 function validateCreateProductionOrderInput(data = {}) {
-  const { order_id, planned_start, planned_end } = data;
+  const { order_id, planned_start, planned_end, assigned_to, assignedTo } = data;
 
   // 1. Kiểm tra order_id (bắt buộc, số nguyên dương)
   if (order_id === undefined || order_id === null || String(order_id).trim() === '') {
@@ -37,12 +37,19 @@ function validateCreateProductionOrderInput(data = {}) {
     return { isValid: false, error: 'Ngày kết thúc dự kiến phải lớn hơn hoặc bằng ngày bắt đầu.' };
   }
 
+  const rawAssigned = assigned_to !== undefined && assigned_to !== null && String(assigned_to).trim() !== ''
+    ? assigned_to
+    : assignedTo;
+  const parsedAssigned = rawAssigned ? Number(rawAssigned) : null;
+  const finalAssignedTo = parsedAssigned && !isNaN(parsedAssigned) && parsedAssigned > 0 ? parsedAssigned : null;
+
   return {
     isValid: true,
     value: {
       order_id: oId,
       planned_start: planned_start.trim(),
       planned_end: planned_end.trim(),
+      assigned_to: finalAssignedTo,
     },
   };
 }

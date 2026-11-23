@@ -10,6 +10,8 @@ import {
   X,
 } from 'lucide-react';
 import { getMyOrders } from '../../services/customerOrderService';
+import { CustomerOrderStatusBadge } from '../../components/common/StatusBadge';
+import { formatVND, formatDateVN } from '../../utils/formatters';
 import {
   STATUS_TABS,
   formatDate,
@@ -36,16 +38,7 @@ const getPages = (current, total) => {
 };
 
 /* ---------- Thành phần nhỏ ---------- */
-const StatusBadge = ({ status }) => (
-  <span
-    className={`inline-flex shrink-0 px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
-      statusClasses[status] || 'bg-stone-100 text-stone-700'
-    }`}
-  >
-    {statusNames[status] || status}
-  </span>
-);
-
+const StatusBadge = ({ status }) => <CustomerOrderStatusBadge status={status} size="sm" />;
 const Thumb = ({ src, alt }) =>
   src ? (
     <img src={src} alt={alt} className="size-16 shrink-0 bg-stone-100 object-cover sm:size-20" />

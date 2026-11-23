@@ -11,6 +11,7 @@
 // =========================================================
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Hammer,
   Plus,
@@ -56,64 +57,18 @@ import {
   inspectProductionOrder,
 } from '../../services/productionOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
-
-// Format ngày tháng hiển thị
-const formatDate = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-// Huy hiệu trạng thái lệnh gia công
-const StatusBadge = ({ status }) => {
-  switch (status) {
-    case 'DRAFT':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
-          <Clock className="h-3.5 w-3.5" />
-          Chờ sản xuất
-        </span>
-      );
-    case 'IN_PROGRESS':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
-          <Hammer className="h-3.5 w-3.5" />
-          Đang gia công
-        </span>
-      );
-    case 'COMPLETED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Hoàn thành
-        </span>
-      );
-    case 'CANCELLED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
-          <XCircle className="h-3.5 w-3.5" />
-          Đã hủy
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700">
-          {status}
-        </span>
-      );
-  }
-};
+import { ProductionOrderStatusBadge } from '../../components/common/StatusBadge';
+import { formatDateVN as formatDate } from '../../utils/formatters';
 
 export const ManageProductionOrdersPage = () => {
+  let location = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    location = useLocation();
+  } catch {
+    location = null;
+  }
+
   // ── States ────────────────────────────────────────────────
   const [productionOrders, setProductionOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -187,6 +142,7 @@ export const ManageProductionOrdersPage = () => {
     order_id: '',
     planned_start: '',
     planned_end: '',
+    assigned_to: '',
   });
 
   const [assignForm, setAssignForm] = useState({
@@ -213,22 +169,28 @@ export const ManageProductionOrdersPage = () => {
 
   // Tự động mở modal Tạo lệnh gia công nếu chuyển sang từ trang Quản lý đơn hàng (?orderId=...)
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location?.search) {
+    let oId = null;
+    if (location?.search) {
+      const sp = new URLSearchParams(location.search);
+      oId = sp.get('orderId');
+    } else if (location?.state?.orderId) {
+      oId = location.state.orderId;
+    } else if (typeof window !== 'undefined' && window.location?.search) {
       const sp = new URLSearchParams(window.location.search);
-      const oId = sp.get('orderId');
-      if (oId) {
-        const today = new Date().toISOString().slice(0, 10);
-        const nextTwoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        setCreateForm((prev) => ({
-          ...prev,
-          order_id: String(oId),
-          planned_start: prev.planned_start || today,
-          planned_end: prev.planned_end || nextTwoWeeks,
-        }));
-        setIsCreateOpen(true);
-      }
+      oId = sp.get('orderId');
     }
-  }, []);
+    if (oId) {
+      const today = new Date().toISOString().slice(0, 10);
+      const nextTwoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      setCreateForm((prev) => ({
+        ...prev,
+        order_id: String(oId),
+        planned_start: prev.planned_start || today,
+        planned_end: prev.planned_end || nextTwoWeeks,
+      }));
+      setIsCreateOpen(true);
+    }
+  }, [location]);
 
   // ── Tải danh sách lệnh gia công ───────────────────────────
   const fetchProductionOrders = useCallback(async () => {
@@ -261,7 +223,7 @@ export const ManageProductionOrdersPage = () => {
   // Thống kê nhanh từ danh sách hiện tại
   const stats = useMemo(() => {
     const total = pagination.totalItems || productionOrders.length;
-    const draft = productionOrders.filter((po) => po.status === 'DRAFT').length;
+    const draft = productionOrders.filter((po) => po.status === 'DRAFT' || po.status === 'ASSIGNED').length;
     const inProgress = productionOrders.filter((po) => po.status === 'IN_PROGRESS').length;
     const completed = productionOrders.filter((po) => po.status === 'COMPLETED').length;
     const cancelled = productionOrders.filter((po) => po.status === 'CANCELLED').length;
@@ -294,6 +256,7 @@ export const ManageProductionOrdersPage = () => {
       order_id: '',
       planned_start: today,
       planned_end: nextTwoWeeks,
+      assigned_to: '',
     });
     setIsCreateOpen(true);
   };
@@ -324,6 +287,7 @@ export const ManageProductionOrdersPage = () => {
         order_id: Number(createForm.order_id),
         planned_start: createForm.planned_start,
         planned_end: createForm.planned_end,
+        assigned_to: createForm.assigned_to ? Number(createForm.assigned_to) : undefined,
       });
 
       toast.success(res?.message || 'Tạo lệnh gia công thành công');
@@ -659,7 +623,7 @@ export const ManageProductionOrdersPage = () => {
               className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
             >
               <option value="ALL">Tất cả trạng thái</option>
-              <option value="DRAFT">Chờ sản xuất (DRAFT)</option>
+              <option value="DRAFT">Chờ sản xuất (ASSIGNED / DRAFT)</option>
               <option value="IN_PROGRESS">Đang gia công (IN_PROGRESS)</option>
               <option value="COMPLETED">Hoàn thành (COMPLETED)</option>
               <option value="CANCELLED">Đã hủy (CANCELLED)</option>
@@ -729,7 +693,7 @@ export const ManageProductionOrdersPage = () => {
                       {/* Loại lệnh */}
                       <td className="whitespace-nowrap px-3 py-3.5">
                         <span className="inline-block rounded-md bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-700">
-                          {order.production_type === 'CUSTOM' ? 'Hàng đặt làm' : 'Hàng nhập kho'}
+                          {order.production_type === 'CUSTOM' ? 'Hàng đặt làm' : order.production_type === 'READY' ? 'Hàng sẵn có' : 'Hàng nhập kho'}
                         </span>
                       </td>
 
@@ -783,7 +747,7 @@ export const ManageProductionOrdersPage = () => {
 
                       {/* Trạng thái */}
                       <td className="whitespace-nowrap px-3 py-3.5 text-center">
-                        <StatusBadge status={order.status} />
+                        <ProductionOrderStatusBadge status={order.status} />
                       </td>
 
                       {/* Thao tác */}
@@ -885,7 +849,7 @@ export const ManageProductionOrdersPage = () => {
                 <div>
                   <h3 className="text-lg font-bold text-stone-900">Tạo Lệnh Gia Công</h3>
                   <p className="text-xs text-stone-500">
-                    Chọn đơn hàng CUSTOM đang xử lý để giao cho xưởng sản xuất
+                    Chọn đơn hàng đang xử lý để giao cho xưởng sản xuất
                   </p>
                 </div>
               </div>
@@ -907,7 +871,7 @@ export const ManageProductionOrdersPage = () => {
                   <div className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2">
                     <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
                     <span>
-                      Hiện không có đơn hàng đặt làm (CUSTOM) nào ở trạng thái Đang xử lý cần tạo lệnh gia công.
+                      Hiện không có đơn hàng nào ở trạng thái Đang xử lý cần tạo lệnh gia công.
                     </span>
                   </div>
                 ) : (
@@ -920,7 +884,7 @@ export const ManageProductionOrdersPage = () => {
                     className="mt-1.5 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
                     required
                   >
-                    <option value="">-- Chọn đơn hàng CUSTOM --</option>
+                    <option value="">-- Chọn đơn hàng cần giao việc --</option>
                     {eligibleOrders.map((ord) => (
                       <option key={ord.order_id} value={ord.order_id}>
                         {ord.order_code} - {ord.contact_name} (
@@ -929,6 +893,33 @@ export const ManageProductionOrdersPage = () => {
                     ))}
                   </select>
                 )}
+              </div>
+
+              {/* Chọn Trưởng nhóm / Tổ trưởng sản xuất */}
+              <div>
+                <label htmlFor="create-leader-select" className="block text-sm font-semibold text-stone-700">
+                  Trưởng nhóm / Tổ trưởng sản xuất <span className="text-stone-400 font-normal text-xs">(Có thể phân công ngay)</span>
+                </label>
+                <select
+                  id="create-leader-select"
+                  value={createForm.assigned_to}
+                  onChange={(e) =>
+                    setCreateForm((prev) => ({ ...prev, assigned_to: e.target.value }))
+                  }
+                  className="mt-1.5 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                >
+                  <option value="">-- Để trống (Chủ xưởng phân công sau) --</option>
+                  {staffLeaders.map((ldr) => {
+                    const ldrId = ldr.user_account_id || ldr.userAccountId;
+                    const name = ldr.full_name || ldr.fullName;
+                    const contact = ldr.phone_number || ldr.phoneNumber || ldr.email;
+                    return (
+                      <option key={ldrId} value={ldrId}>
+                        {name} ({contact})
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               {/* Ngày bắt đầu & kết thúc */}
@@ -1149,9 +1140,9 @@ export const ManageProductionOrdersPage = () => {
                     <h3 className="text-lg font-bold text-stone-900">
                       Chi Tiết Lệnh #{detailOrder.production_code}
                     </h3>
-                    <StatusBadge status={detailOrder.status} />
+                    <ProductionOrderStatusBadge status={detailOrder.status} />
                     <span className="rounded-md bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-600">
-                      {detailOrder.production_type === 'CUSTOM' ? 'Hàng đặt làm theo yêu cầu' : 'Hàng sản xuất kho'}
+                      {detailOrder.production_type === 'CUSTOM' ? 'Hàng đặt làm theo yêu cầu' : detailOrder.production_type === 'READY' ? 'Hàng sẵn có xuất xưởng' : 'Hàng sản xuất kho'}
                     </span>
                   </div>
                   <p className="text-xs text-stone-500 mt-0.5">
@@ -1529,7 +1520,7 @@ export const ManageProductionOrdersPage = () => {
                       <h3 className="text-lg font-bold text-stone-900">
                         Hồ Sơ Ảnh & Duyệt Nghiệm Thu — Lệnh #{imageModalOrder.production_code}
                       </h3>
-                      <StatusBadge status={imageModalOrder.status} />
+                      <ProductionOrderStatusBadge status={imageModalOrder.status} />
                     </div>
                     <p className="text-xs text-stone-500 mt-0.5">
                       Bản vẽ thiết kế đối chiếu trực tiếp với ảnh thành phẩm từ xưởng thợ

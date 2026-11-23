@@ -43,9 +43,10 @@ import {
   getLeaderOrderDetail,
 } from '../../services/leaderStaffService';
 import { TablePagination } from '../../components/common/TablePagination';
+import { formatVND, formatDateVN } from '../../utils/formatters';
 
-const formatVND = (val) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(val || 0);
+const focusRing =
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-800';
 
 const getStatusBadge = (status, rejectReason) => {
   // Nếu IN_PRODUCTION có rejectReason => hiển thị đặc biệt

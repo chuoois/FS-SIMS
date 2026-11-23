@@ -9,16 +9,32 @@ const {
   mapOrderItemDesignFields,
 } = require('./saleOrderValidator');
 
-const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED', 'CANCELLED'];
+const VALID_STATUSES = [
+  'NEW',
+  'CONFIRMED',
+  'ASSIGNED',
+  'IN_PRODUCTION',
+  'IN_PROGRESS',
+  'PROCESSING',
+  'UNDER_INSPECTION',
+  'PENDING_APPROVAL',
+  'READY_TO_DELIVER',
+  'DELIVERING',
+  'COMPLETED',
+  'CANCELLED',
+];
 
 const STATUS_LABELS = {
-  NEW: 'Mới',
+  NEW: 'Mới tạo',
   CONFIRMED: 'Đã xác nhận',
-  IN_PRODUCTION: 'Đang xử lý',
-  PROCESSING: 'Đang xử lý',
-  UNDER_INSPECTION: 'Đang xử lý',
-  READY_TO_DELIVER: 'Đang xử lý',
-  DELIVERING: 'Đang xử lý',
+  ASSIGNED: 'Đã giao thợ',
+  IN_PRODUCTION: 'Đang gia công',
+  IN_PROGRESS: 'Đang gia công',
+  PROCESSING: 'Đang gia công',
+  UNDER_INSPECTION: 'Chờ duyệt nghiệm thu',
+  PENDING_APPROVAL: 'Chờ duyệt nghiệm thu',
+  READY_TO_DELIVER: 'Sẵn sàng giao',
+  DELIVERING: 'Đang giao hàng',
   COMPLETED: 'Hoàn thành',
   CANCELLED: 'Đã hủy',
 };
@@ -32,10 +48,13 @@ const ORDER_TYPE_LABELS = {
 const NEXT_ORDER_STATUS = {
   NEW: 'CONFIRMED',
   CONFIRMED: 'IN_PRODUCTION',
-  IN_PRODUCTION: 'COMPLETED',
-  PROCESSING: 'COMPLETED',
-  UNDER_INSPECTION: 'COMPLETED',
-  READY_TO_DELIVER: 'COMPLETED',
+  ASSIGNED: 'IN_PRODUCTION',
+  IN_PRODUCTION: 'UNDER_INSPECTION',
+  IN_PROGRESS: 'UNDER_INSPECTION',
+  PROCESSING: 'UNDER_INSPECTION',
+  UNDER_INSPECTION: 'READY_TO_DELIVER',
+  PENDING_APPROVAL: 'READY_TO_DELIVER',
+  READY_TO_DELIVER: 'DELIVERING',
   DELIVERING: 'COMPLETED',
 };
 

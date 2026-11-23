@@ -12,6 +12,8 @@ import {
   UserRound,
 } from 'lucide-react';
 import { getMyOrderById, getMyOrderRequestById } from '../../services/customerOrderService';
+import { CustomerOrderStatusBadge, OrderRequestStatusBadge } from '../../components/common/StatusBadge';
+import { formatVND, formatDateVN } from '../../utils/formatters';
 import {
   formatDate,
   formatVnd,
@@ -209,13 +211,11 @@ export const CustomerOrderDetailPage = () => {
           </h1>
           {order && (
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <span
-                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                  statusClasses[order.status] || 'bg-stone-700 text-white'
-                }`}
-              >
-                {statusNames[order.status] || order.status}
-              </span>
+              {isRequest ? (
+                <OrderRequestStatusBadge status={order.status} size="lg" />
+              ) : (
+                <CustomerOrderStatusBadge status={order.status} size="lg" />
+              )}
               <span className="text-xs text-stone-300">
                 {isRequest ? 'Gửi ngày' : 'Đặt ngày'} {formatDate(order.createdAt)}
               </span>

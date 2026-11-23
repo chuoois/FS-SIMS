@@ -31,6 +31,11 @@ import {
   Send,
   Maximize2,
   Ruler,
+  Sparkles,
+  DollarSign,
+  Check,
+  Info,
+  ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -43,14 +48,10 @@ import {
   createRequestColor,
 } from '../../services/saleOrderService';
 import { CreatableCombobox } from '../../components/common/CreatableCombobox';
+import { formatVND, formatDateVN } from '../../utils/formatters';
 
-const formatVND = (amount) => {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(amount || 0);
-};
+const focusRing =
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-800';
 
 // Tính ngày hoàn thiện tối thiểu (cách hôm nay ít nhất 10 ngày)
 const getMinExpectedDate = (days = 10) => {
@@ -64,13 +65,6 @@ const formatDateInputStr = (dateObj) => {
   const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
   const dd = String(dateObj.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-};
-
-const formatDateVN = (dateObj) => {
-  const dd = String(dateObj.getDate()).padStart(2, '0');
-  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const yyyy = dateObj.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
 };
 
 export const CreateOrderRequestPage = () => {
@@ -125,6 +119,8 @@ export const CreateOrderRequestPage = () => {
 
   // Modal xem ảnh phóng to (Lightbox)
   const [previewModalImg, setPreviewModalImg] = useState(null);
+  const previewImageModal = previewModalImg;
+  const setPreviewImageModal = setPreviewModalImg;
 
   // Modal tóm tắt thông tin trước khi gửi
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
@@ -574,95 +570,138 @@ export const CreateOrderRequestPage = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* ── Top Header chuẩn ManageProductsPage ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-            {editId ? 'Chỉnh sửa đơn theo yêu cầu' : 'Tạo đơn theo yêu cầu'}
-          </h1>
+    <div className="space-y-6 pb-12 text-stone-900">
+      {/* ── 1. HEADER TRANG: TẠO ĐƠN THEO YÊU CẦU (BESPOKE WOODCRAFT) ─────────── */}
+      <header className="flex flex-col gap-4 rounded-2xl border border-stone-200/90 bg-white p-5 shadow-sm transition sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-stone-900 text-amber-400 shadow-sm ring-1 ring-stone-900/10">
+            <Ruler className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
+                {editId ? 'Chỉnh Sửa Đơn Theo Yêu Cầu' : 'Tạo Đơn Hàng Theo Yêu Cầu'}
+              </h1>
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-900">
+                <Sparkles className="h-3 w-3 text-amber-700" />
+                {editId ? 'Cập nhật thiết kế' : 'May đo đồ gỗ nội thất'}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+              Hồ sơ tiếp nhận may đo &amp; đóng mới theo kích thước thực tế: đính kèm bản vẽ phác thảo và gửi Chủ xưởng duyệt thiết kế.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        {/* Cụm nút điều hướng & làm mới */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
           <button
             type="button"
             onClick={() => navigate('/sale/requests')}
-            className="inline-flex items-center rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs transition hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
           >
-            Danh sách yêu cầu
+            <FileText className="h-3.5 w-3.5 text-stone-500" />
+            <span>Danh sách yêu cầu</span>
           </button>
 
           <button
             type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs transition hover:bg-stone-100 hover:text-stone-900 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+            title="Tải lại danh mục vật liệu và dữ liệu mới nhất"
           >
-            <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Làm mới
+            <RotateCw className={`h-3.5 w-3.5 text-stone-500 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>Làm mới</span>
           </button>
+        </div>
+      </header>
+
+      {/* Dải thông tin quy trình may đo xưởng */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-stone-200/80 bg-stone-50/70 px-4 py-2.5 text-xs text-stone-600">
+        <div className="flex items-center gap-1.5 font-medium">
+          <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+          <span>Đo đạc kích thước thực tế (D x R x C cm)</span>
+        </div>
+        <div className="flex items-center gap-1.5 font-medium">
+          <ShieldCheck className="h-4 w-4 text-amber-700" />
+          <span>Đính kèm ảnh phác thảo / bản vẽ riêng cho từng món</span>
+        </div>
+        <div className="flex items-center gap-1.5 font-medium">
+          <Package className="h-4 w-4 text-stone-600" />
+          <span>Chủ xưởng (Owner) tiếp nhận, ra bản vẽ và báo giá chính thức</span>
         </div>
       </div>
 
-      {/* ── Banner cảnh báo nếu đang sửa theo phản hồi từ Owner ── */}
+      {/* ── 2. BANNER CẢNH BÁO NẾU ĐANG SỬA THEO PHẢN HỒI TỪ OWNER ── */}
       {editRejectReason && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <h4 className="text-sm font-bold text-amber-950">
-              Chủ xưởng yêu cầu chỉnh sửa thiết kế / thông số kỹ thuật:
-            </h4>
-            <div className="rounded-lg bg-white p-3 border border-amber-200 text-xs text-amber-900 font-medium">
-              {editRejectReason}
+        <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-5 shadow-sm space-y-2">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-900">
+              <AlertTriangle className="h-5 w-5 text-amber-800" />
             </div>
-            <p className="text-xs text-amber-800 italic">
-              Vui lòng cập nhật lại thông số đo đạc hoặc bổ sung bản vẽ cho sản phẩm trước khi bấm gửi duyệt lại.
-            </p>
+            <div className="space-y-1.5 flex-1">
+              <h4 className="text-sm font-bold text-amber-950">
+                Chủ xưởng yêu cầu chỉnh sửa thiết kế / thông số kỹ thuật:
+              </h4>
+              <div className="rounded-xl bg-white p-3.5 border border-amber-200/90 text-xs text-amber-900 font-medium leading-relaxed shadow-2xs">
+                {editRejectReason}
+              </div>
+              <p className="text-xs text-amber-800 italic flex items-center gap-1">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                <span>Vui lòng kiểm tra lại kích thước đo đạc hoặc đính kèm bản vẽ mới trước khi bấm gửi duyệt lại.</span>
+              </p>
+            </div>
           </div>
         </div>
       )}
 
       {loadingEditData && (
-        <div className="flex items-center justify-center p-12 bg-white rounded-xl border border-stone-200 shadow-sm">
-          <RotateCw className="h-6 w-6 animate-spin text-stone-400" />
+        <div className="flex items-center justify-center p-12 bg-white rounded-2xl border border-stone-200 shadow-sm">
+          <RotateCw className="h-6 w-6 animate-spin text-amber-800" />
           <span className="ml-3 text-sm font-medium text-stone-600">Đang tải thông tin đơn yêu cầu cần chỉnh sửa...</span>
         </div>
       )}
 
       <form onSubmit={handleValidateAndOpenSummary} className="space-y-6">
-        {/* ── KHU VỰC 1: THÔNG TIN KHÁCH HÀNG ── */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 border-b border-stone-200 pb-3">
-            <User className="h-4 w-4 text-amber-700" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-stone-900">
-              1. Thông tin khách hàng
-            </h2>
+        {/* ── KHU VỰC 1: HỒ SƠ ĐƠN HÀNG & THÔNG TIN KHÁCH HÀNG ── */}
+        <section className="rounded-2xl border border-stone-200/90 bg-white p-6 shadow-sm space-y-5">
+          <div className="flex items-center gap-2.5 border-b border-stone-100 pb-3.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-900">
+              <User className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-stone-900">
+                1. Hồ sơ Đơn hàng &amp; Khách hàng
+              </h2>
+              <p className="text-[11px] text-stone-500">Thông tin liên hệ của khách và địa điểm giao hàng lắp đặt</p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5">
             {/* Tên đơn hàng duy nhất */}
             <div className="md:col-span-3">
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Tên đơn hàng
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                Tên đơn hàng / Tên dự án may đo
               </label>
-              <div className="relative mt-1">
+              <div className="relative">
                 <FileText className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <input
                   type="text"
                   value={customerInfo.title}
                   onChange={(e) => setCustomerInfo((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="VD: May đo nội thất phòng khách & phòng ngủ căn hộ A12"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none font-medium"
+                  placeholder="VD: May đo nội thất phòng khách & phòng ngủ căn hộ A12 Sunrise City"
+                  className="w-full rounded-xl border border-stone-200 py-2.5 pl-9 pr-3 text-xs font-medium text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 placeholder-stone-400"
                 />
               </div>
             </div>
 
             {/* Họ tên khách hàng */}
             <div>
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Họ tên khách hàng <span className="text-red-500">*</span>
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                Họ và tên khách hàng <span className="text-red-500">*</span>
               </label>
-              <div className="relative mt-1">
+              <div className="relative">
                 <User className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <input
                   type="text"
@@ -670,99 +709,112 @@ export const CreateOrderRequestPage = () => {
                   value={customerInfo.contactName}
                   onChange={(e) => setCustomerInfo((p) => ({ ...p, contactName: e.target.value }))}
                   placeholder="VD: Nguyễn Văn A"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 py-2.5 pl-9 pr-3 text-xs text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 placeholder-stone-400"
                 />
               </div>
             </div>
 
             {/* Số điện thoại */}
             <div>
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Số điện thoại <span className="text-red-500">*</span>
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                Số điện thoại liên hệ <span className="text-red-500">*</span>
               </label>
-              <div className="relative mt-1">
+              <div className="relative">
                 <Phone className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <input
-                  type="text"
+                  type="tel"
                   required
                   value={customerInfo.contactPhone}
                   onChange={(e) => setCustomerInfo((p) => ({ ...p, contactPhone: e.target.value }))}
-                  placeholder="VD: 0912345678"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none font-mono"
+                  placeholder="0912345678"
+                  className="w-full rounded-xl border border-stone-200 py-2.5 pl-9 pr-3 font-mono text-xs text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 placeholder-stone-400"
                 />
               </div>
             </div>
 
             {/* Email khách hàng */}
             <div>
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Email
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                Địa chỉ Email
               </label>
-              <div className="relative mt-1">
+              <div className="relative">
                 <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <input
                   type="email"
                   value={customerInfo.contactEmail}
                   onChange={(e) => setCustomerInfo((p) => ({ ...p, contactEmail: e.target.value }))}
-                  placeholder="VD: khachhang@gmail.com"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
+                  placeholder="khachhang@gmail.com"
+                  className="w-full rounded-xl border border-stone-200 py-2.5 pl-9 pr-3 text-xs text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 placeholder-stone-400"
                 />
               </div>
             </div>
 
             {/* Địa chỉ giao hàng */}
             <div className="md:col-span-2">
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Địa chỉ giao hàng
+              <label className="text-xs font-semibold text-stone-700 block mb-1">
+                Địa chỉ giao hàng &amp; Lắp đặt
               </label>
-              <div className="relative mt-1">
+              <div className="relative">
                 <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <input
                   type="text"
                   value={customerInfo.deliveryAddress}
                   onChange={(e) => setCustomerInfo((p) => ({ ...p, deliveryAddress: e.target.value }))}
                   placeholder="VD: Căn hộ A12-04 Chung cư Sunrise, 123 Nguyễn Hữu Thọ, Q.7, TP.HCM"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 py-2.5 pl-9 pr-3 text-xs text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 placeholder-stone-400"
                 />
               </div>
             </div>
 
             {/* Ngày mong muốn hoàn thiện */}
             <div>
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Ngày mong muốn hoàn thiện
-              </label>
-              <div className="relative mt-1">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-stone-700 block">
+                  Ngày hẹn hoàn thiện
+                </label>
+                <span className="text-[10px] font-bold text-amber-800">&ge; 10 ngày tới</span>
+              </div>
+              <div className="relative">
                 <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                 <input
                   type="date"
                   min={minExpectedDateStr}
                   value={customerInfo.expectedDate}
                   onChange={(e) => setCustomerInfo((p) => ({ ...p, expectedDate: e.target.value }))}
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
+                  className="w-full rounded-xl border border-stone-200 py-2.5 pl-9 pr-3 text-xs text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
                 />
               </div>
               <p className="mt-1 text-[11px] text-stone-500">
-                Tối thiểu 10 ngày kể từ ngày tạo (từ ngày {formatDateVN(minExpectedDate)}).
+                Tối thiểu 10 ngày kể từ hôm nay (từ {formatDateVN(minExpectedDate)}).
               </p>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* ── KHU VỰC 2: CHI TIẾT SẢN PHẨM ── */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-3 gap-3">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-amber-700" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-stone-900">
-                2. Thông số kỹ thuật
-              </h2>
+        {/* ── KHU VỰC 2: DANH MỤC SẢN PHẨM MAY ĐO / ĐẶT ĐÓNG ── */}
+        <section className="rounded-2xl border border-stone-200/90 bg-white p-6 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-stone-100 pb-3.5 gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-900">
+                <Layers className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-stone-900">
+                    2. Danh mục Sản phẩm Đặt đóng theo Yêu cầu
+                  </h2>
+                  <span className="rounded-full bg-amber-100 border border-amber-200 px-2.5 py-0.5 text-xs font-bold text-amber-900">
+                    {items.length} sản phẩm
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-500">Khai báo kích thước đo đạc, chất liệu gỗ và bản vẽ phác thảo từng món</p>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={handleAddItem}
-              className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white shadow transition hover:bg-stone-800 shrink-0"
+              className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-stone-800 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 active:scale-95"
             >
               <Plus className="h-4 w-4" />
               <span>Thêm sản phẩm ({items.length + 1})</span>
@@ -770,20 +822,20 @@ export const CreateOrderRequestPage = () => {
           </div>
 
           {/* Danh sách sản phẩm */}
-          <div className="space-y-4">
+          <div className="space-y-6">
             {items.map((it, index) => (
               <div
                 key={it.id}
-                className="rounded-xl border border-stone-200 bg-stone-50/80 p-5 space-y-4 transition"
+                className="rounded-2xl border border-stone-200/90 bg-stone-50/60 p-5 space-y-5 transition duration-200 hover:border-amber-300 hover:bg-stone-50/90 shadow-2xs"
               >
                 {/* Header sản phẩm */}
-                <div className="flex items-center justify-between border-b border-stone-200 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-white text-xs font-bold">
-                      {index + 1}
+                <div className="flex items-center justify-between border-b border-stone-200/80 pb-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-stone-900 text-white text-xs font-bold shrink-0">
+                      #{index + 1}
                     </span>
-                    <h3 className="text-sm font-bold text-stone-900">
-                      Sản phẩm {index + 1}: {it.itemName || 'Sản phẩm mới'}
+                    <h3 className="text-sm font-bold text-stone-900 truncate">
+                      {it.itemName ? `Sản phẩm ${index + 1}: ${it.itemName}` : `Sản phẩm may đo #${index + 1}`}
                     </h3>
                   </div>
 
@@ -791,10 +843,11 @@ export const CreateOrderRequestPage = () => {
                     <button
                       type="button"
                       onClick={() => handleRemoveItem(it.id)}
-                      className="text-xs text-rose-600 hover:text-rose-700 p-1 rounded hover:bg-rose-50 flex items-center gap-1 font-medium transition"
+                      className="text-xs text-rose-600 hover:text-rose-700 px-2.5 py-1 rounded-lg hover:bg-rose-50 flex items-center gap-1 font-semibold transition"
+                      title="Xóa món sản phẩm này khỏi đơn yêu cầu"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      <span>Xóa</span>
+                      <span>Xóa món</span>
                     </button>
                   )}
                 </div>
@@ -803,10 +856,10 @@ export const CreateOrderRequestPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
                   {/* Tên sản phẩm */}
                   <div className="md:col-span-2">
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Tên sản phẩm <span className="text-red-500">*</span>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Tên sản phẩm may đo <span className="text-red-500">*</span>
                     </label>
-                    <div className="relative mt-1">
+                    <div className="relative">
                       <Package className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
                       <input
                         type="text"
@@ -814,20 +867,20 @@ export const CreateOrderRequestPage = () => {
                         value={it.itemName}
                         onChange={(e) => handleItemChange(it.id, 'itemName', e.target.value)}
                         placeholder="VD: Tủ quần áo 4 cánh lùa kịch trần"
-                        className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm font-medium focus:border-stone-900 focus:outline-none bg-white"
+                        className="w-full rounded-xl border border-stone-200 py-2.5 pl-9 pr-3 text-xs font-medium text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 bg-white placeholder-stone-400"
                       />
                     </div>
                   </div>
 
                   {/* Danh mục */}
                   <div>
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Danh mục
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Danh mục sản phẩm
                     </label>
                     <select
                       value={it.categoryId}
                       onChange={(e) => handleItemChange(it.id, 'categoryId', e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none bg-white"
+                      className="w-full rounded-xl border border-stone-200 py-2.5 px-3 text-xs text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none bg-white"
                     >
                       <option value="">-- Chọn danh mục --</option>
                       {metadata.categories.map((c, idx) => (
@@ -840,17 +893,17 @@ export const CreateOrderRequestPage = () => {
 
                   {/* Phòng / Không gian */}
                   <div>
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Phòng
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Không gian phòng
                     </label>
                     <select
-                      value={it.roomId}
-                      onChange={(e) => handleItemChange(it.id, 'roomId', e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none bg-white"
+                      value={it.roomName}
+                      onChange={(e) => handleItemChange(it.id, 'roomName', e.target.value)}
+                      className="w-full rounded-xl border border-stone-200 py-2.5 px-3 text-xs text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none bg-white"
                     >
                       <option value="">-- Chọn không gian --</option>
                       {metadata.rooms.map((r, idx) => (
-                        <option key={r.roomId || r.room_id || idx} value={r.roomId || r.room_id}>
+                        <option key={r.roomId || r.room_id || idx} value={r.roomName}>
                           {r.roomName}
                         </option>
                       ))}
@@ -858,37 +911,41 @@ export const CreateOrderRequestPage = () => {
                   </div>
 
                   {/* Chất liệu / Loại gỗ (cho phép chọn hoặc thêm mới) */}
-                  <CreatableCombobox
-                    id={`item-material-${it.id}`}
-                    label="Chất liệu"
-                    value={it.materialId}
-                    options={metadata.materials}
-                    valueKey="materialId"
-                    labelKey="materialName"
-                    placeholder="Chọn hoặc gõ để tìm/thêm chất liệu..."
-                    onChange={(val) => handleItemChange(it.id, 'materialId', val)}
-                    onCreate={handleCreateMaterial}
-                  />
+                  <div className="md:col-span-2">
+                    <CreatableCombobox
+                      id={`item-material-${it.id}`}
+                      label="Chất liệu / Loại gỗ xưởng"
+                      value={it.materialId}
+                      options={metadata.materials}
+                      valueKey="materialId"
+                      labelKey="materialName"
+                      placeholder="Chọn hoặc gõ để tìm/thêm chất liệu gỗ mới..."
+                      onChange={(val) => handleItemChange(it.id, 'materialId', val)}
+                      onCreate={handleCreateMaterial}
+                    />
+                  </div>
 
                   {/* Màu sắc / Màu sơn (cho phép chọn hoặc thêm mới kèm mã màu) */}
-                  <CreatableCombobox
-                    id={`item-color-${it.id}`}
-                    label="Màu sắc"
-                    isColor
-                    value={it.colorId}
-                    options={metadata.colors}
-                    valueKey="colorId"
-                    labelKey="colorName"
-                    colorKey="hexValue"
-                    placeholder="Chọn hoặc gõ để tìm/thêm màu sắc..."
-                    onChange={(val) => handleItemChange(it.id, 'colorId', val)}
-                    onCreate={handleCreateColor}
-                  />
+                  <div>
+                    <CreatableCombobox
+                      id={`item-color-${it.id}`}
+                      label="Màu sắc / Vân sơn hoàn thiện"
+                      isColor
+                      value={it.colorId}
+                      options={metadata.colors}
+                      valueKey="colorId"
+                      labelKey="colorName"
+                      colorKey="hexValue"
+                      placeholder="Chọn màu hoặc gõ thêm..."
+                      onChange={(val) => handleItemChange(it.id, 'colorId', val)}
+                      onCreate={handleCreateColor}
+                    />
+                  </div>
 
                   {/* Số lượng */}
                   <div>
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Số lượng <span className="text-red-500">*</span>
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Số lượng đặt <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -896,42 +953,55 @@ export const CreateOrderRequestPage = () => {
                       required
                       value={it.quantity}
                       onChange={(e) => handleItemChange(it.id, 'quantity', e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm font-semibold focus:border-stone-900 focus:outline-none bg-white"
+                      className="w-full rounded-xl border border-stone-200 py-2.5 px-3 text-xs font-bold text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none bg-white"
                     />
                   </div>
 
                   {/* Đơn giá ước tính */}
-                  <div>
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Đơn giá ước tính (VNĐ)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="50000"
-                      value={it.unitPrice}
-                      onChange={(e) => handleItemChange(it.id, 'unitPrice', e.target.value)}
-                      placeholder="VD: 15000000"
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none bg-white"
-                    />
-                    {it.unitPrice > 0 && (
-                      <span className="block text-[11px] text-stone-500 font-medium mt-0.5">
-                        ≈ {formatVND(it.unitPrice)}
-                      </span>
-                    )}
+                  <div className="md:col-span-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-stone-700 block">
+                        Đơn giá dự kiến tạm tính (VND)
+                      </label>
+                      {it.unitPrice > 0 && (
+                        <span className="text-xs font-bold text-amber-900">
+                          Thành tiền: {formatVND((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1))}
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <DollarSign className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                      <input
+                        type="number"
+                        min="0"
+                        step="50000"
+                        value={it.unitPrice}
+                        onChange={(e) => handleItemChange(it.id, 'unitPrice', e.target.value)}
+                        placeholder="VD: 15000000 (Chủ xưởng sẽ báo giá chính thức khi duyệt bản vẽ)"
+                        className="w-full rounded-xl border border-stone-200 py-2.5 pl-9 pr-3 text-xs font-mono font-bold text-amber-900 shadow-2xs transition focus:border-amber-600 focus:outline-none bg-white placeholder-stone-400"
+                      />
+                    </div>
                   </div>
 
                   {/* KÍCH THƯỚC KỸ THUẬT ĐO ĐẠC (CM) */}
-                  <div className="md:col-span-4 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
-                    <div className="flex items-center gap-1.5 mb-2.5">
-                      <Ruler className="h-4 w-4 text-stone-600" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-stone-800">
-                        Kích thước (cm)
+                  <div className="md:col-span-4 rounded-xl border border-amber-200/90 bg-amber-50/40 p-4 shadow-2xs">
+                    <div className="flex items-center justify-between mb-3 border-b border-amber-200/60 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Ruler className="h-4 w-4 text-amber-800" />
+                        <span className="text-xs font-bold text-stone-900">
+                          Kích thước đo đạc thực tế (Quy chuẩn cm)
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-amber-900 font-semibold">
+                        {[it.lengthCm, it.widthCm, it.heightCm].filter(Boolean).length > 0
+                          ? `${it.lengthCm || 0} x ${it.widthCm || 0} x ${it.heightCm || 0} cm`
+                          : 'Dài x Rộng x Cao'}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label className="text-xs font-semibold uppercase text-stone-600 block">
+                        <label className="text-[11px] font-semibold text-stone-700 block mb-1">
                           Chiều dài (cm)
                         </label>
                         <input
@@ -940,12 +1010,12 @@ export const CreateOrderRequestPage = () => {
                           value={it.lengthCm}
                           onChange={(e) => handleItemChange(it.id, 'lengthCm', e.target.value)}
                           placeholder="VD: 220"
-                          className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm font-mono focus:border-stone-900 focus:outline-none"
+                          className="w-full rounded-lg border border-stone-200 p-2 text-xs font-mono font-bold text-stone-900 bg-white shadow-2xs transition focus:border-amber-600 focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-semibold uppercase text-stone-600 block">
-                          Chiều rộng (cm)
+                        <label className="text-[11px] font-semibold text-stone-700 block mb-1">
+                          Chiều rộng / Độ sâu (cm)
                         </label>
                         <input
                           type="number"
@@ -953,11 +1023,11 @@ export const CreateOrderRequestPage = () => {
                           value={it.widthCm}
                           onChange={(e) => handleItemChange(it.id, 'widthCm', e.target.value)}
                           placeholder="VD: 60"
-                          className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm font-mono focus:border-stone-900 focus:outline-none"
+                          className="w-full rounded-lg border border-stone-200 p-2 text-xs font-mono font-bold text-stone-900 bg-white shadow-2xs transition focus:border-amber-600 focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="text-xs font-semibold uppercase text-stone-600 block">
+                        <label className="text-[11px] font-semibold text-stone-700 block mb-1">
                           Chiều cao (cm)
                         </label>
                         <input
@@ -966,7 +1036,7 @@ export const CreateOrderRequestPage = () => {
                           value={it.heightCm}
                           onChange={(e) => handleItemChange(it.id, 'heightCm', e.target.value)}
                           placeholder="VD: 260"
-                          className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm font-mono focus:border-stone-900 focus:outline-none"
+                          className="w-full rounded-lg border border-stone-200 p-2 text-xs font-mono font-bold text-stone-900 bg-white shadow-2xs transition focus:border-amber-600 focus:outline-none"
                         />
                       </div>
                     </div>
@@ -974,47 +1044,49 @@ export const CreateOrderRequestPage = () => {
 
                   {/* Mô tả chi tiết & Yêu cầu kỹ thuật */}
                   <div className="md:col-span-4">
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Mô tả chi tiết
+                    <label className="text-xs font-semibold text-stone-700 block mb-1">
+                      Mô tả chi tiết &amp; Yêu cầu phụ kiện xưởng
                     </label>
                     <textarea
                       rows={2}
                       value={it.technicalNotes}
                       onChange={(e) => handleItemChange(it.id, 'technicalNotes', e.target.value)}
-                      placeholder="VD: Cánh kính viền nhôm đen, bản lề giảm chấn Hafele, đèn LED cảm ứng thanh nhôm âm tủ..."
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none bg-white"
+                      placeholder="VD: Cánh kính viền nhôm đen, bản lề giảm chấn Hafele, đèn LED cảm ứng thanh nhôm âm tủ, khoang để vali kịch trần..."
+                      className="w-full rounded-xl border border-stone-200 p-2.5 text-xs text-stone-900 shadow-2xs transition focus:border-amber-600 focus:outline-none bg-white placeholder-stone-400"
                     />
                   </div>
 
                   {/* ── MỤC ẢNH THIẾT KẾ & BẢN VẼ RIÊNG CỦA MÓN NÀY ── */}
-                  <div className="md:col-span-4 rounded-xl border border-stone-200 bg-white p-4 space-y-3 shadow-xs">
+                  <div className="md:col-span-4 rounded-xl border border-stone-200 bg-white p-4 space-y-3 shadow-2xs">
                     <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <ImageIcon className="h-4 w-4 text-stone-700" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-stone-800">
-                          3. Hình ảnh thiết kế 
+                      <div className="flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4 text-amber-800" />
+                        <span className="text-xs font-bold text-stone-900">
+                          Ảnh thiết kế, mặt bằng &amp; Bản vẽ phác thảo
                         </span>
-                        <span className="rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px] font-bold text-stone-700 ml-1">
+                        <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-bold text-amber-900">
                           {it.images.length} ảnh
                         </span>
                       </div>
-                      <span className="text-xs text-stone-400">
-                        Sản phẩm {index + 1}
+                      <span className="text-[11px] text-stone-400 font-medium">
+                        Dành riêng cho sản phẩm #{index + 1}
                       </span>
                     </div>
 
-                    {/* Dropzone tải ảnh chuẩn ManageProductsPage */}
-                    <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 p-5 text-center hover:bg-stone-50 transition">
+                    {/* Dropzone tải ảnh chuẩn xưởng */}
+                    <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 p-5 text-center transition hover:border-amber-400 hover:bg-amber-50/20">
                       {it.uploading ? (
                         <>
-                          <RotateCw className="h-7 w-7 animate-spin text-stone-400" />
-                          <span className="mt-1.5 text-xs font-medium text-stone-700">Đang tải ảnh lên...</span>
+                          <RotateCw className="h-7 w-7 animate-spin text-amber-800" />
+                          <span className="mt-2 text-xs font-semibold text-stone-800">Đang tải ảnh lên hệ thống...</span>
                         </>
                       ) : (
                         <>
-                          <Upload className="h-7 w-7 text-stone-400" />
-                          <span className="mt-1.5 text-xs font-medium text-stone-700">Tải ảnh lên</span>
-                          <span className="text-[11px] text-stone-400">JPG, PNG, WEBP (Tối đa 5MB)</span>
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-900 mb-1">
+                            <Upload className="h-5 w-5" />
+                          </div>
+                          <span className="text-xs font-bold text-stone-800">Bấm để chọn ảnh hoặc kéo thả vào đây</span>
+                          <span className="text-[10px] text-stone-400 mt-0.5">Hỗ trợ JPG, PNG, WEBP (Tối đa 10MB mỗi ảnh)</span>
                         </>
                       )}
                       <input
@@ -1033,46 +1105,43 @@ export const CreateOrderRequestPage = () => {
                     </label>
 
                     {/* Danh sách ảnh thu nhỏ của riêng món này */}
-                    {it.images.length > 0 ? (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5 pt-1">
-                        {it.images.map((img) => (
+                    {it.images.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 pt-1">
+                        {it.images.map((img, imgIdx) => (
                           <div
                             key={img.id}
-                            className="group relative rounded-lg border border-stone-200 bg-stone-50 overflow-hidden shadow-2xs"
+                            className="group relative aspect-square rounded-xl border border-stone-200 bg-stone-100 overflow-hidden shadow-2xs transition hover:border-amber-400"
                           >
                             <img
                               src={img.imageUrl}
-                              alt="Bản vẽ"
-                              className="h-20 w-full object-cover cursor-pointer transition group-hover:scale-105"
-                              onClick={() => setPreviewModalImg(img.imageUrl)}
+                              alt={`Bản vẽ ${imgIdx + 1}`}
+                              className="h-full w-full object-cover"
                             />
-
-                            {/* Nút phóng to */}
-                            <button
-                              type="button"
-                              onClick={() => setPreviewModalImg(img.imageUrl)}
-                              className="absolute top-1 left-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 transition shadow"
-                              title="Phóng to"
-                            >
-                              <Maximize2 className="h-3 w-3" />
-                            </button>
-
-                            {/* Nút xóa ảnh */}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItemImage(it.id, img.id)}
-                              className="absolute top-1 right-1 rounded-full bg-rose-600 p-1 text-white hover:bg-rose-700 transition shadow"
-                              title="Xóa ảnh"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            {/* Overlay hover nút xem to và xóa */}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 p-1">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewImageModal(img.imageUrl)}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 text-stone-800 hover:bg-white hover:text-stone-900 shadow transition"
+                                title="Phóng to ảnh"
+                              >
+                                <Maximize2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItemImage(it.id, img.id)}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-600 text-white hover:bg-rose-700 shadow transition"
+                                title="Xóa ảnh này"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[9px] font-mono text-white backdrop-blur-2xs">
+                              #{imgIdx + 1}
+                            </span>
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-[11px] text-stone-400 italic">
-                        Chưa có ảnh cho sản phẩm này.
-                      </p>
                     )}
                   </div>
                 </div>
@@ -1080,144 +1149,189 @@ export const CreateOrderRequestPage = () => {
             ))}
           </div>
 
-          {/* Tổng tiền dự kiến */}
-          <div className="flex flex-col sm:flex-row items-center justify-between rounded-xl bg-stone-50 p-4 border border-stone-200">
-            <span className="text-xs text-stone-700">
-              Tổng số lượng: <strong className="text-stone-900 font-bold">{items.reduce((s, i) => s + (Number(i.quantity) || 0), 0)} sản phẩm</strong>
-            </span>
-            <div className="flex items-center gap-2 mt-2 sm:mt-0">
-              <span className="text-xs text-stone-600">Tổng kinh phí dự kiến:</span>
-              <span className="text-lg font-bold text-stone-900 font-mono">
-                {formatVND(totalEstimatedAmount)}
+          {/* Nút thêm sản phẩm lớn ở chân danh sách */}
+          <button
+            type="button"
+            onClick={handleAddItem}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-stone-300 py-3.5 text-xs font-bold text-stone-700 hover:border-amber-500 hover:bg-amber-50/40 hover:text-amber-900 transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Thêm sản phẩm may đo tiếp theo ({items.length + 1})</span>
+          </button>
+        </section>
+
+        {/* ── 3. KHỐI TỔNG KẾT DỰ TOÁN & NÚT HÀNH ĐỘNG CUỐI TRANG ── */}
+        <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-stone-800 bg-stone-900 p-5 text-white shadow-md">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                Tổng kết dự toán tạm tính
+              </span>
+              <span className="rounded-full bg-stone-800 px-2 py-0.5 text-[11px] font-bold text-stone-300">
+                {items.length} sản phẩm
               </span>
             </div>
+            <p className="text-[11px] text-stone-400">
+              Chủ xưởng sẽ kiểm duyệt chi tiết bản vẽ kỹ thuật và phản hồi báo giá chính thức.
+            </p>
           </div>
-        </div>
 
-        {/* ── NÚT HÀNH ĐỘNG CUỐI TRANG ── */}
+          <div className="text-left sm:text-right">
+            <span className="text-[11px] text-stone-400 block">Kinh phí ước tính:</span>
+            <span className="font-mono text-xl sm:text-2xl font-extrabold text-amber-300">
+              {formatVND(totalEstimatedAmount)}
+            </span>
+          </div>
+        </section>
+
+        {/* Cụm nút hành động */}
         <div className="flex items-center justify-end gap-3 pt-2">
           <button
             type="button"
             onClick={() => navigate('/sale/requests')}
-            className="inline-flex items-center rounded-lg border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+            className="rounded-xl border border-stone-200 bg-white px-5 py-3 text-xs font-bold text-stone-700 shadow-2xs transition hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
           >
-            Hủy bỏ
+            Hủy bỏ / Quay lại
           </button>
+
           <button
             type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-stone-800"
+            className="inline-flex items-center gap-2 rounded-xl bg-amber-900 px-6 py-3 text-xs font-bold tracking-wide text-white shadow-md transition hover:bg-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 active:scale-[0.99]"
           >
             <Send className="h-4 w-4" />
-            <span>{editId ? 'Cập nhật & Gửi lại cho Chủ xưởng' : 'Kiểm Tra & Gửi Chủ Xưởng Thẩm Định'}</span>
+            <span>Kiểm tra & Gửi yêu cầu thiết kế</span>
           </button>
         </div>
       </form>
 
       {/* ── MODAL PHÓNG TO HÌNH ẢNH ── */}
-      {previewModalImg && (
+      {previewImageModal && (
         <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setPreviewModalImg(null)}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 p-4 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setPreviewImageModal(null)}
         >
-          <div className="relative max-h-[90vh] max-w-[90vw]">
-            <img src={previewModalImg} alt="Phóng to bản vẽ" className="max-h-[85vh] rounded-xl shadow-2xl object-contain" />
-            <button
-              onClick={() => setPreviewModalImg(null)}
-              className="absolute -top-3 -right-3 rounded-full bg-white p-1 text-stone-800 shadow-xl hover:bg-stone-100"
-            >
-              <X className="h-5 w-5" />
-            </button>
+          <div
+            className="relative max-h-[90vh] max-w-4xl overflow-hidden rounded-2xl bg-stone-900 p-2 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-800 px-4 py-2 text-white">
+              <span className="text-xs font-bold flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-amber-400" />
+                <span>Chi tiết hình ảnh phác thảo / bản vẽ</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewImageModal(null)}
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-800 hover:text-white transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex max-h-[80vh] items-center justify-center overflow-auto p-2">
+              <img
+                src={previewImageModal}
+                alt="Chi tiết bản vẽ"
+                className="max-h-[75vh] w-auto max-w-full rounded-xl object-contain"
+              />
+            </div>
           </div>
         </div>
       )}
 
       {/* ── MODAL TÓM TẮT THÔNG TIN TRƯỚC KHI GỬI CHÍNH THỨC ── */}
       {summaryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-stone-900">
             {/* Header Modal */}
-            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
-              <div className="flex items-center gap-2.5">
-                <h3 className="text-lg font-bold text-stone-900">
-                  Xác nhận thông tin yêu cầu trước khi gửi Chủ xưởng
-                </h3>
+            <div className="flex items-center justify-between border-b border-stone-800 bg-stone-900 px-6 py-4 text-white">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/20 text-amber-300 ring-1 ring-amber-400/30">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold tracking-tight text-white">
+                    Kiểm Tra Hồ Sơ Yêu Cầu May Đo
+                  </h3>
+                  <p className="text-xs text-stone-300">
+                    Đối chiếu thông số đo đạc &amp; bản vẽ kỹ thuật trước khi gửi Chủ xưởng duyệt
+                  </p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => setSummaryModalOpen(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-800 hover:text-white transition"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Nội dung tóm tắt */}
-            <div className="p-6 text-xs text-stone-800 space-y-4">
+            <div className="overflow-y-auto p-6 text-xs text-stone-700 space-y-5">
               {/* Thông tin khách hàng */}
-              <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-4">
-                <div className="flex items-center justify-between mb-3 border-b border-stone-200/60 pb-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-stone-600">
-                    Thông tin khách hàng
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5">
-                  <div className="col-span-2">
-                    <span className="text-xs font-semibold uppercase text-stone-500">Tên đơn hàng</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm">
-                      {customerInfo.title.trim() || `${customerInfo.contactName} - Đơn may đo nội thất`}
-                    </p>
+              <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4">
+                <h4 className="font-bold text-stone-900 border-b border-stone-200 pb-2 mb-3 flex items-center gap-2">
+                  <User className="h-4 w-4 text-amber-800" />
+                  <span>HỒ SƠ KHÁCH HÀNG &amp; TIẾN ĐỘ:</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  <div>
+                    <span className="text-stone-500">Tên đơn hàng: </span>
+                    <strong className="text-stone-900">{customerInfo.title || 'May đo đồ gỗ nội thất'}</strong>
                   </div>
                   <div>
-                    <span className="text-xs font-semibold uppercase text-stone-500">Ngày mong muốn</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm">{customerInfo.expectedDate || 'Thỏa thuận'}</p>
+                    <span className="text-stone-500">Họ tên khách: </span>
+                    <strong className="text-stone-900">{customerInfo.contactName}</strong>
                   </div>
                   <div>
-                    <span className="text-xs font-semibold uppercase text-stone-500">Khách hàng</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm">{customerInfo.contactName}</p>
+                    <span className="text-stone-500">Số điện thoại: </span>
+                    <strong className="font-mono text-stone-900">{customerInfo.contactPhone}</strong>
                   </div>
                   <div>
-                    <span className="text-xs font-semibold uppercase text-stone-500">Số điện thoại</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm font-mono">{customerInfo.contactPhone}</p>
+                    <span className="text-stone-500">Email: </span>
+                    <span className="text-stone-800">{customerInfo.contactEmail || '---'}</span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-stone-500">Địa chỉ giao hàng: </span>
+                    <span className="text-stone-900 font-medium">{customerInfo.deliveryAddress || '---'}</span>
                   </div>
                   <div>
-                    <span className="text-xs font-semibold uppercase text-stone-500">Loại đơn</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm">
-                      {customerInfo.orderType === 'CUSTOM' ? 'Đơn hàng theo yêu cầu' : 'Theo mẫu sẵn'}
-                    </p>
-                  </div>
-                  <div className="col-span-3 border-t border-stone-200/60 pt-2">
-                    <span className="text-xs font-semibold uppercase text-stone-500">Địa chỉ giao hàng</span>
-                    <p className="mt-1 font-semibold text-stone-900">{customerInfo.deliveryAddress || 'Chưa cung cấp'}</p>
+                    <span className="text-stone-500">Hẹn ngày hoàn thiện: </span>
+                    <strong className="text-amber-900 font-mono">
+                      {customerInfo.expectedDate ? formatDateVN(new Date(customerInfo.expectedDate)) : 'Theo tiến độ xưởng'}
+                    </strong>
                   </div>
                 </div>
               </div>
 
               {/* Bảng sản phẩm & Ảnh riêng từng món */}
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-stone-600 block">
-                  Danh sách sản phẩm ({items.length} sản phẩm)
-                </span>
-                <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs">
+              <div>
+                <h4 className="font-bold text-stone-900 mb-2.5 flex items-center justify-between">
+                  <span>DANH MỤC SẢN PHẨM MAY ĐO ({items.length} món):</span>
+                  <span className="text-[11px] text-stone-500 font-normal">Kèm bản vẽ phác thảo &amp; kích thước cm</span>
+                </h4>
+                <div className="overflow-x-auto rounded-xl border border-stone-200">
                   <table className="w-full text-left text-xs">
-                    <thead className="border-b border-stone-200 bg-stone-50/75 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                    <thead className="bg-stone-100 text-stone-700 font-bold border-b border-stone-200">
                       <tr>
-                        <th className="px-3.5 py-2.5 text-center w-10">STT</th>
-                        <th className="px-3.5 py-2.5">Sản phẩm & Ảnh</th>
-                        <th className="px-3.5 py-2.5">Kích thước (D × R × C)</th>
-                        <th className="px-3.5 py-2.5 text-center">SL</th>
-                        <th className="px-3.5 py-2.5 text-right">Đơn giá ước tính</th>
-                        <th className="px-3.5 py-2.5 text-right">Thành tiền</th>
+                        <th className="p-2.5 text-center w-10">#</th>
+                        <th className="p-2.5">Tên món &amp; Bản vẽ</th>
+                        <th className="p-2.5">Kích thước (D x R x C)</th>
+                        <th className="p-2.5 text-center">SL</th>
+                        <th className="p-2.5 text-right">Đơn giá</th>
+                        <th className="p-2.5 text-right">Thành tiền</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-stone-200">
+                    <tbody className="divide-y divide-stone-100">
                       {items.map((it, idx) => {
                         const dim = [it.lengthCm, it.widthCm, it.heightCm].filter(Boolean).join(' x ');
                         const unitPrice = Number(it.unitPrice) || 0;
                         const qty = Number(it.quantity) || 1;
                         return (
-                          <tr key={it.id} className="hover:bg-stone-50/60">
-                            <td className="px-3.5 py-2.5 text-center text-stone-400 font-mono align-top">{idx + 1}</td>
-                            <td className="px-3.5 py-2.5 align-top">
-                              <p className="font-semibold text-stone-900 text-sm">{it.itemName}</p>
+                          <tr key={it.id} className="hover:bg-stone-50/70">
+                            <td className="p-2.5 text-center text-stone-400 font-mono align-top">{idx + 1}</td>
+                            <td className="p-2.5 align-top">
+                              <p className="font-bold text-stone-900 text-xs">{it.itemName}</p>
                               {it.technicalNotes && (
                                 <p className="text-[11px] text-stone-500 italic mt-0.5 max-w-xs truncate">
                                   {it.technicalNotes}
@@ -1226,39 +1340,46 @@ export const CreateOrderRequestPage = () => {
                               {/* Hiển thị ảnh của riêng món này */}
                               {it.images && it.images.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {it.images.map((img) => (
+                                  {it.images.map((img, iIdx) => (
                                     <img
-                                      key={img.id}
+                                      key={img.id || iIdx}
                                       src={img.imageUrl}
-                                      alt="Ảnh sản phẩm"
-                                      className="h-10 w-10 object-cover rounded border border-stone-200 shadow-2xs"
+                                      alt="Bản vẽ"
+                                      className="h-10 w-10 object-cover rounded-lg border border-stone-200 shadow-2xs"
                                     />
                                   ))}
                                 </div>
                               )}
                             </td>
-                            <td className="px-3.5 py-2.5 text-stone-700 font-mono align-top font-bold text-amber-900">
+                            <td className="p-2.5 text-amber-900 font-mono font-bold align-top">
                               {dim ? `${dim} cm` : 'Theo thực tế'}
                             </td>
-                            <td className="px-3.5 py-2.5 text-center font-bold align-top">{qty}</td>
-                            <td className="px-3.5 py-2.5 text-right align-top">{formatVND(unitPrice)}</td>
-                            <td className="px-3.5 py-2.5 text-right font-bold text-stone-900 align-top">
+                            <td className="p-2.5 text-center font-bold align-top text-stone-900">{qty}</td>
+                            <td className="p-2.5 text-right align-top text-stone-700">{formatVND(unitPrice)}</td>
+                            <td className="p-2.5 text-right font-bold text-stone-900 align-top">
                               {formatVND(unitPrice * qty)}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
-                    <tfoot className="border-t border-stone-200 bg-stone-50/70 font-semibold">
+                    <tfoot className="border-t border-stone-200 bg-stone-50 font-bold">
                       <tr>
-                        <td colSpan="5" className="px-3.5 py-2.5 text-right text-stone-600">Tổng kinh phí ước tính:</td>
-                        <td className="px-3.5 py-2.5 text-right text-stone-900 text-sm font-bold font-mono">
+                        <td colSpan="5" className="p-2.5 text-right text-stone-600">Tổng kinh phí ước tính:</td>
+                        <td className="p-2.5 text-right text-amber-900 font-mono text-sm font-extrabold">
                           {formatVND(totalEstimatedAmount)}
                         </td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
+              </div>
+
+              {/* Ghi chú quy trình tiếp theo */}
+              <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-3 text-[11px] text-stone-600 leading-relaxed">
+                <strong className="text-stone-800">Quy trình xử lý tiếp theo: </strong>
+                Sau khi gửi, đơn yêu cầu sẽ được chuyển sang trạng thái <strong>PENDING</strong> (Chờ duyệt).
+                Chủ xưởng sẽ kiểm tra kỹ tính khả thi, phân bổ thợ mộc thiết kế bản vẽ 2D/3D chi tiết, và phản hồi phê duyệt để Sales tiến hành tạo hợp đồng bán lẻ cho khách.
               </div>
             </div>
 
@@ -1267,7 +1388,7 @@ export const CreateOrderRequestPage = () => {
               <button
                 type="button"
                 onClick={() => setSummaryModalOpen(false)}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 font-medium text-stone-700 hover:bg-stone-50 text-sm"
+                className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-100 transition"
               >
                 Chỉnh sửa lại
               </button>
@@ -1275,20 +1396,19 @@ export const CreateOrderRequestPage = () => {
                 type="button"
                 onClick={handleConfirmSubmit}
                 disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-5 py-2 font-semibold text-white shadow hover:bg-stone-800 disabled:opacity-50 text-sm"
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-900 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-950 disabled:opacity-50 active:scale-95"
               >
-                <span hidden={!submitting} className={submitting ? 'inline-flex' : 'hidden'} aria-hidden="true">
-                  <RotateCw className="h-4 w-4 animate-spin" />
-                </span>
-                <span hidden={submitting} className={submitting ? 'hidden' : 'inline-flex'} aria-hidden="true">
-                  <Send className="h-4 w-4" />
-                </span>
-                <span hidden={!submitting} className={submitting ? 'inline' : 'hidden'}>
-                  Đang gửi...
-                </span>
-                <span hidden={submitting} className={submitting ? 'hidden' : 'inline'}>
-                  Xác nhận gửi Chủ xưởng
-                </span>
+                {submitting ? (
+                  <>
+                    <RotateCw className="h-4 w-4 animate-spin" />
+                    <span>Đang gửi yêu cầu...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    <span>Xác nhận gửi Chủ xưởng</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

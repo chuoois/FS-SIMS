@@ -47,96 +47,34 @@ import {
   isPdfDesignUrl,
 } from '../../components/common/DesignGallery';
 import { TablePagination } from '../../components/common/TablePagination';
+import { OrderRequestStatusBadge } from '../../components/common/StatusBadge';
+import { formatVND as formatCurrency, formatDateVN as formatDate, formatDateTimeVN as formatDateTime } from '../../utils/formatters';
 
 // ─── Hằng số ──────────────────────────────────────────────
-const STATUSES = ['ALL', 'PENDING', 'PROCESSING', 'CONVERTED', 'REJECTED'];
+const STATUSES = [
+  'ALL',
+  'PENDING',
+  'DRAFTING',
+  'DESIGNING',
+  'DESIGNED',
+  'CONFIRMED',
+  'CONTRACT_CREATED',
+  'CONVERTED',
+  'REJECTED',
+];
 
 const STATUS_LABELS = {
   PENDING: 'Chờ xử lý',
-  PROCESSING: 'Đang xử lý',
+  DRAFTING: 'Chờ thiết kế',
+  DESIGNING: 'Đang thiết kế',
+  DESIGNED: 'Đã gửi bản vẽ',
+  CONFIRMED: 'Đã chốt / duyệt',
+  CONTRACT_CREATED: 'Đã lập hợp đồng',
   CONVERTED: 'Đã chuyển HĐ',
   REJECTED: 'Đã từ chối',
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
-
-// ─── Helpers ──────────────────────────────────────────────
-const formatCurrency = (amount) => {
-  if (amount === undefined || amount === null || isNaN(amount)) return '0 ₫';
-  return Number(amount).toLocaleString('vi-VN') + ' ₫';
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-const formatDateTime = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-// ─── Huy hiệu trạng thái yêu cầu ──────────────────────────
-function StatusBadge({ status }) {
-  switch (status) {
-    case 'PENDING':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
-          <Clock className="h-3.5 w-3.5" />
-          Chờ xử lý
-        </span>
-      );
-    case 'PROCESSING':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
-          <Clock className="h-3.5 w-3.5" />
-          Đang xử lý
-        </span>
-      );
-    case 'CONVERTED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Đã chuyển HĐ
-        </span>
-      );
-    case 'REJECTED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
-          <XCircle className="h-3.5 w-3.5" />
-          Đã từ chối
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700">
-          {status}
-        </span>
-      );
-  }
-}
 
 // ─── Huy hiệu trạng thái bản thiết kế (đếm số ảnh từ order_request_image) ─
 function DesignStatusBadge({ count = 0 }) {
@@ -674,7 +612,7 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                   <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 border border-violet-200">
                     Đặt theo yêu cầu 
                   </span>
-                  <StatusBadge status={detail.status} />
+                  <OrderRequestStatusBadge status={detail.status} />
                 </div>
               </div>
 
@@ -1180,7 +1118,7 @@ export function ManageCustomerRequestsPage() {
                         />
                       </td>
                       <td className="whitespace-nowrap px-3 py-3.5">
-                        <StatusBadge status={req.status} />
+                        <OrderRequestStatusBadge status={req.status} />
                       </td>
                       <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
                         <button

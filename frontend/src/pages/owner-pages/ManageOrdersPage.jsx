@@ -37,6 +37,7 @@ import {
   Hammer,
   Image as ImageIcon,
   FileUp,
+  Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -46,19 +47,32 @@ import {
   getOrderDetail,
   cancelOrder as cancelOrderApi,
   updateOrderStatus as updateOrderStatusApi,
-  getStaffLeaders,
-  assignLeaderToOrder,
 } from '../../services/orderManagementService';
 import { TablePagination } from '../../components/common/TablePagination';
+import { CustomerOrderStatusBadge } from '../../components/common/StatusBadge';
+import { formatVND as formatCurrency, formatDateVN as formatDate, formatDateTimeVN as formatDateTime } from '../../utils/formatters';
 
 // ─── Hằng số ──────────────────────────────────────────────
-const STATUSES = ['ALL', 'NEW', 'CONFIRMED', 'IN_PRODUCTION', 'COMPLETED', 'CANCELLED'];
+const STATUSES = [
+  'ALL',
+  'NEW',
+  'CONFIRMED',
+  'IN_PRODUCTION',
+  'UNDER_INSPECTION',
+  'READY_TO_DELIVER',
+  'DELIVERING',
+  'COMPLETED',
+  'CANCELLED',
+];
 const ORDER_TYPES = ['ALL', 'READY', 'CUSTOM'];
 
 const STATUS_LABELS = {
   NEW: 'Mới',
   CONFIRMED: 'Đã xác nhận',
-  IN_PRODUCTION: 'Đang xử lý',
+  IN_PRODUCTION: 'Đang gia công',
+  UNDER_INSPECTION: 'Chờ nghiệm thu',
+  READY_TO_DELIVER: 'Sẵn sàng giao',
+  DELIVERING: 'Đang giao hàng',
   COMPLETED: 'Hoàn thành',
   CANCELLED: 'Đã hủy',
 };
@@ -73,114 +87,28 @@ const ORDER_TYPE_LABELS = {
 const NEXT_STATUS_CONFIG = {
   NEW: {
     nextStatus: 'CONFIRMED',
-    actionLabel: 'Xác nhận đơn',
+    actionLabel: 'Tiếp nhận đơn',
     nextLabel: 'Đã xác nhận',
     buttonClass: 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100',
     icon: CheckCircle2,
   },
-  CONFIRMED: {
-    nextStatus: 'IN_PRODUCTION',
-    actionLabel: 'Chuyển xử lý',
-    nextLabel: 'Đang xử lý',
-    buttonClass: 'border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100',
-    icon: RefreshCw,
-  },
-  IN_PRODUCTION: {
+  READY_TO_DELIVER: {
     nextStatus: 'COMPLETED',
-    actionLabel: 'Hoàn thành đơn',
+    actionLabel: 'Xác nhận hoàn thành',
     nextLabel: 'Hoàn thành',
     buttonClass: 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
     icon: CheckCircle2,
   },
 };
 
-// ─── Định dạng tiền tệ VNĐ ─────────────────────────────────
-const formatCurrency = (amount) => {
-  if (amount === undefined || amount === null || isNaN(amount)) return '0 ₫';
-  return Number(amount).toLocaleString('vi-VN') + ' ₫';
-};
-
-// ─── Định dạng ngày tháng ─────────────────────────────────
-const formatDateTime = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    return timeStr + ' - ' + dateStr;
-  } catch {
-    return dateString;
-  }
-};
-const formatDate = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-// ─── Huy hiệu trạng thái đơn hàng ─────────────────────────
-const StatusBadge = ({ status }) => {
-  switch (status) {
-    case 'NEW':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700 border border-stone-200">
-          <Clock className="h-3.5 w-3.5" />
-          Mới
-        </span>
-      );
-    case 'CONFIRMED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
-          <Clock className="h-3.5 w-3.5" />
-          Đã xác nhận
-        </span>
-      );
-    case 'IN_PRODUCTION':
-    case 'PROCESSING':
-    case 'UNDER_INSPECTION':
-    case 'READY_TO_DELIVER':
-    case 'DELIVERING':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Đang xử lý
-        </span>
-      );
-    case 'COMPLETED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Hoàn thành
-        </span>
-      );
-    case 'CANCELLED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
-          <XCircle className="h-3.5 w-3.5" />
-          Đã hủy
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700">
-          {STATUS_LABELS[status] || status}
-        </span>
-      );
-  }
-};
-
 // ─── Modal Chi tiết đơn hàng ──────────────────────────────
-function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId }) {
+function OrderDetailModal({
+  order,
+  onClose,
+  onAdvanceStatus,
+  advanceLoadingId,
+  onGoToProductionOrders,
+}) {
   const [previewImg, setPreviewImg] = useState(null);
   if (!order) return null;
   const nextConfig = NEXT_STATUS_CONFIG[order.status];
@@ -230,7 +158,7 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-stone-50 p-4 border border-stone-200">
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-stone-500">Trạng thái hiện tại:</span>
-              <StatusBadge status={order.status} />
+              <CustomerOrderStatusBadge status={order.status} />
             </div>
             <div className="flex items-center gap-3">
               {nextConfig && (
@@ -238,14 +166,53 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
                   onClick={() => onAdvanceStatus(order)}
                   disabled={isAdvancing}
                   className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
-                  title={`Chuyển trạng thái sang ${nextConfig.nextLabel}`}
+                  title={nextConfig.actionLabel}
                 >
                   {isAdvancing ? (
                     <RotateCw className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <NextIcon className="h-3.5 w-3.5" />
                   )}
-                  <span>Chuyển sang: {nextConfig.actionLabel}</span>
+                  <span>{nextConfig.actionLabel}</span>
+                </button>
+              )}
+              {order.status === 'CONFIRMED' && onGoToProductionOrders && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onGoToProductionOrders(order);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+                  title="Chuyển sang trang Quản lý Lệnh Gia Công để giao việc cho thợ"
+                >
+                  <Hammer className="h-3.5 w-3.5" />
+                  <span>Giao việc cho thợ</span>
+                </button>
+              )}
+              {order.status === 'IN_PRODUCTION' && onGoToProductionOrders && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onGoToProductionOrders(order);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 shadow-sm transition hover:bg-blue-100 active:scale-95"
+                  title="Xem tiến độ và lệnh gia công tại xưởng"
+                >
+                  <Hammer className="h-3.5 w-3.5" />
+                  <span>Lệnh gia công</span>
+                </button>
+              )}
+              {order.status === 'UNDER_INSPECTION' && onGoToProductionOrders && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onGoToProductionOrders(order);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-800 shadow-sm transition hover:bg-orange-100 active:scale-95"
+                  title="Kiểm tra ảnh thành phẩm và duyệt nghiệm thu chất lượng"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-orange-600" />
+                  <span>Duyệt nghiệm thu</span>
                 </button>
               )}
               <div className="flex items-center gap-3 text-xs text-stone-500">
@@ -549,14 +516,53 @@ function OrderDetailModal({ order, onClose, onAdvanceStatus, advanceLoadingId })
                 onClick={() => onAdvanceStatus(order)}
                 disabled={isAdvancing}
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
-                title={`Chuyển trạng thái sang ${nextConfig.nextLabel}`}
+                title={nextConfig.actionLabel}
               >
                 {isAdvancing ? (
                   <RotateCw className="h-4 w-4 animate-spin" />
                 ) : (
-                  <NextIcon className="h-4 w-4" />
+                  <CheckCircle2 className="h-4 w-4" />
                 )}
                 <span>{nextConfig.actionLabel}</span>
+              </button>
+            )}
+            {order.status === 'CONFIRMED' && onGoToProductionOrders && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onGoToProductionOrders(order);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+                title="Chuyển sang trang Quản lý Lệnh Gia Công để giao việc cho thợ"
+              >
+                <Hammer className="h-4 w-4" />
+                <span>Giao việc cho thợ</span>
+              </button>
+            )}
+            {order.status === 'IN_PRODUCTION' && onGoToProductionOrders && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onGoToProductionOrders(order);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-800 shadow-sm transition hover:bg-blue-100 active:scale-95"
+                title="Xem tiến độ và lệnh gia công tại xưởng"
+              >
+                <Hammer className="h-4 w-4" />
+                <span>Lệnh gia công</span>
+              </button>
+            )}
+            {order.status === 'UNDER_INSPECTION' && onGoToProductionOrders && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onGoToProductionOrders(order);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800 shadow-sm transition hover:bg-orange-100 active:scale-95"
+                title="Kiểm tra ảnh thành phẩm và duyệt nghiệm thu chất lượng"
+              >
+                <CheckCircle2 className="h-4 w-4 text-orange-600" />
+                <span>Duyệt nghiệm thu</span>
               </button>
             )}
           </div>
@@ -657,7 +663,6 @@ export function ManageOrdersPage() {
   // Filters & Phân trang
   const [search, setSearch] = useState('');
   const [searchBy, setSearchBy] = useState('ALL'); // 'ALL' | 'CUSTOMER_NAME' | 'ORDER_CODE' | 'PHONE'
-  const [leadersLoading, setLeadersLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [orderTypeFilter, setOrderTypeFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -692,65 +697,6 @@ export function ManageOrdersPage() {
       });
     } else if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'test') {
       window.location.href = targetUrl;
-    }
-  };
-
-  // Modal Phân công Tổ trưởng
-  const [assignLeaderOrder, setAssignLeaderOrder] = useState(null);
-  const [leaders, setLeaders] = useState([]);
-  const [staffList, setStaffList] = useState([]);
-  const [selectedLeaderId, setSelectedLeaderId] = useState('');
-  const [selectedStaffId, setSelectedStaffId] = useState('');
-  const [assignNote, setAssignNote] = useState('');
-  const [assignLoading, setAssignLoading] = useState(false);
-
-  const handleOpenAssignLeader = async (order) => {
-    setAssignLeaderOrder(order);
-    try {
-      const res = await getStaffLeaders();
-      const list = res.leaders || res.data || (Array.isArray(res) ? res : []);
-      const rawStf = res.staff || res.allStaff || res.data || [];
-      const stf = rawStf.filter((s) => (s.roleCode === 'SALES' || s.roleId === 2) && s.roleCode !== 'LEADERSTAFF');
-      setLeaders(list);
-      setStaffList(stf);
-      setSelectedStaffId('');
-      const existingLeaderId = order.assignedTo || order.assigned_to || order.leaderId;
-      if (existingLeaderId && list.some((l) => (l.userAccountId || l.user_account_id) == existingLeaderId)) {
-        setSelectedLeaderId(existingLeaderId);
-      } else if (list.length > 0) {
-        setSelectedLeaderId(list[0].userAccountId || list[0].user_account_id);
-      } else {
-        setSelectedLeaderId('');
-      }
-    } catch (err) {
-      console.error('Lỗi khi tải danh sách tổ trưởng:', err);
-      toast.error('Không thể tải danh sách Tổ trưởng/Quản lý.');
-    }
-  };
-
-  const handleConfirmAssignLeader = async (e) => {
-    e.preventDefault();
-    if (!assignLeaderOrder) return;
-    if (!selectedLeaderId) {
-      toast.error('Vui lòng chọn Tổ trưởng / Quản lý xưởng cần giao việc.');
-      return;
-    }
-    try {
-      setAssignLoading(true);
-      await assignLeaderToOrder(assignLeaderOrder.orderId, {
-        leaderId: selectedLeaderId,
-        assigned_to: selectedLeaderId,
-        staffId: selectedStaffId || undefined,
-        note: assignNote,
-      });
-      toast.success('Đã phân công Tổ trưởng cho đơn hàng #' + assignLeaderOrder.orderCode);
-      setAssignLeaderOrder(null);
-      setAssignNote('');
-      fetchOrders();
-    } catch (err) {
-      toast.error(err.response?.data?.message || err.message || 'Không thể phân công Tổ trưởng.');
-    } finally {
-      setAssignLoading(false);
     }
   };
 
@@ -1131,7 +1077,7 @@ export function ManageOrdersPage() {
 
                       {/* Trạng thái hiện tại */}
                       <td className="whitespace-nowrap px-3 py-3.5 text-center">
-                        <StatusBadge status={order.status} />
+                        <CustomerOrderStatusBadge status={order.status} />
                       </td>
 
                       {/* Tài chính & Thu tiền */}
@@ -1153,26 +1099,13 @@ export function ManageOrdersPage() {
                       {/* Thao tác */}
                       <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
                         <div className="inline-flex items-center justify-center gap-1.5">
-                          {/* Nút Lệnh gia công -> Chuyển sang trang Quản Lý Lệnh Gia Công cho đơn đặt làm CUSTOM */}
-                          {(order.orderType === 'CUSTOM' || order.order_type === 'CUSTOM') &&
-                            (order.status === 'CONFIRMED' || order.status === 'IN_PRODUCTION' || order.status === 'UNDER_INSPECTION') && (
-                            <button
-                              onClick={() => handleGoToProductionOrders(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
-                              title="Chuyển sang trang Quản lý lệnh gia công để theo dõi gia công và duyệt nghiệm thu"
-                            >
-                              <Hammer className="h-3.5 w-3.5" />
-                              <span>{order.status === 'UNDER_INSPECTION' ? 'Lệnh gia công' : 'Giao việc'}</span>
-                            </button>
-                          )}
-
-                          {/* Nút chuyển trạng thái kế tiếp (quy trình tuần tự) */}
-                          {nextConfig && order.status !== 'UNDER_INSPECTION' && (
+                          {/* 1. Nếu có cấu hình trạng thái kế tiếp (NEW hoặc READY_TO_DELIVER): Nút Thao tác tuần tự */}
+                          {nextConfig && (
                             <button
                               onClick={() => handleAdvanceStatus(order)}
                               disabled={isAdvancing}
                               className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
-                              title={`Chuyển sang ${nextConfig.nextLabel}`}
+                              title={nextConfig.actionLabel}
                             >
                               {isAdvancing ? (
                                 <RotateCw className="h-3.5 w-3.5 animate-spin" />
@@ -1180,6 +1113,42 @@ export function ManageOrdersPage() {
                                 <NextIcon className="h-3.5 w-3.5" />
                               )}
                               <span>{nextConfig.actionLabel}</span>
+                            </button>
+                          )}
+
+                          {/* 2. Nếu đơn đã tiếp nhận CONFIRMED: Nút Giao việc cho thợ (chuyển sang Quản lý Lệnh Gia Công) */}
+                          {order.status === 'CONFIRMED' && (
+                            <button
+                              onClick={() => handleGoToProductionOrders(order)}
+                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+                              title="Chuyển sang trang Quản lý Lệnh Gia Công để giao việc cho thợ"
+                            >
+                              <Hammer className="h-3.5 w-3.5" />
+                              <span>Giao việc cho thợ</span>
+                            </button>
+                          )}
+
+                          {/* 3. Nếu đơn đang gia công IN_PRODUCTION: Nút Lệnh gia công */}
+                          {order.status === 'IN_PRODUCTION' && (
+                            <button
+                              onClick={() => handleGoToProductionOrders(order)}
+                              className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 shadow-sm transition hover:bg-blue-100 active:scale-95"
+                              title="Xem tiến độ và lệnh gia công tại xưởng"
+                            >
+                              <Hammer className="h-3.5 w-3.5" />
+                              <span>Lệnh gia công</span>
+                            </button>
+                          )}
+
+                          {/* 4. Nếu đơn chờ nghiệm thu UNDER_INSPECTION: Nút Duyệt nghiệm thu */}
+                          {order.status === 'UNDER_INSPECTION' && (
+                            <button
+                              onClick={() => handleGoToProductionOrders(order)}
+                              className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800 shadow-sm transition hover:bg-orange-100 active:scale-95"
+                              title="Kiểm tra ảnh thành phẩm và duyệt nghiệm thu chất lượng"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 text-orange-600" />
+                              <span>Duyệt nghiệm thu</span>
                             </button>
                           )}
 
@@ -1238,6 +1207,7 @@ export function ManageOrdersPage() {
           onClose={() => setDetailOrder(null)}
           onAdvanceStatus={handleAdvanceStatus}
           advanceLoadingId={advanceLoadingId}
+          onGoToProductionOrders={handleGoToProductionOrders}
         />
       )}
 
@@ -1248,118 +1218,6 @@ export function ManageOrdersPage() {
           onConfirm={handleCancelConfirm}
           onClose={() => setCancelOrder(null)}
         />
-      )}
-
-      {/* ── Modal Phân công Tổ trưởng ── */}
-      {assignLeaderOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="text-base font-bold text-stone-900 mb-2 flex items-center gap-2">
-              <Hammer className="h-5 w-5 text-amber-800" />
-              Phân công Tổ trưởng sản xuất #{assignLeaderOrder.orderCode}
-            </h3>
-            <p className="text-xs text-stone-500 mb-4">
-              Chọn Tổ trưởng xưởng chịu trách nhiệm bám sát bản vẽ kỹ thuật đã khóa và quản lý tiến độ gia công.
-            </p>
-            <form onSubmit={handleConfirmAssignLeader} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-stone-700 mb-1">
-                  Chọn Tổ trưởng / Quản lý xưởng: <span className="text-rose-500">*</span>
-                </label>
-                {leadersLoading ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 text-stone-600 text-xs">
-                    <RotateCw className="h-4 w-4 animate-spin text-amber-800" />
-                    <span>Đang tải danh sách Tổ trưởng xưởng...</span>
-                  </div>
-                ) : leaders.length === 0 ? (
-                  <div className="space-y-2">
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800 text-xs">
-                      Chưa tìm thấy tài khoản Tổ trưởng/Quản lý nào đang hoạt động.
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => loadLeaders()}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 hover:underline"
-                    >
-                      <RotateCw className="h-3 w-3" /> Thử tải lại danh sách
-                    </button>
-                  </div>
-                ) : (
-                  <select
-                    value={selectedLeaderId}
-                    onChange={(e) => setSelectedLeaderId(e.target.value)}
-                    className="w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-amber-800 focus:outline-none bg-white font-medium"
-                    required
-                  >
-                    <option value="">-- Chọn Tổ trưởng xưởng --</option>
-                    {leaders.map((ldr) => {
-                      const ldrId = ldr.userAccountId || ldr.user_account_id;
-                      const name = ldr.fullName || ldr.full_name;
-                      const contact = ldr.phoneNumber || ldr.phone_number || ldr.email;
-                      return (
-                        <option key={ldrId} value={ldrId}>
-                          {name} ({contact})
-                        </option>
-                      );
-                    })}
-                  </select>
-                )}
-              </div>
-              {/* Chọn Thợ / Nhân viên kỹ thuật đồng hành */}
-              <div>
-                <label className="block font-semibold text-stone-700 mb-1">
-                  Thợ chính / Nhân viên kỹ thuật phụ trách: <span className="text-stone-400 text-[11px] font-normal">(Tùy chọn)</span>
-                </label>
-                <select
-                  value={selectedStaffId}
-                  onChange={(e) => setSelectedStaffId(e.target.value)}
-                  className="w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-amber-800 focus:outline-none bg-white font-medium"
-                >
-                  <option value="">-- Để trống (Tổ trưởng tự phân công) --</option>
-                  {staffList.map((stf) => {
-                    const stfId = stf.userAccountId || stf.user_account_id;
-                    const name = stf.fullName || stf.full_name;
-                    const role = stf.roleName || stf.roleCode || 'Nhân sự';
-                    const contact = stf.phoneNumber || stf.phone_number || stf.email;
-                    return (
-                      <option key={stfId} value={stfId}>
-                        {name} ({role}{contact ? ` - ${contact}` : ''})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-<div>
-                <label className="block font-semibold text-stone-700 mb-1">
-                  Ghi chú chỉ đạo cho xưởng:
-                </label>
-                <textarea
-                  rows="2"
-                  value={assignNote}
-                  onChange={(e) => setAssignNote(e.target.value)}
-                  placeholder="Ghi chú về thời hạn hoặc tiêu chuẩn đóng gói..."
-                  className="w-full rounded-lg border border-stone-200 p-2 text-xs focus:border-amber-800 focus:outline-none"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setAssignLeaderOrder(null)}
-                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={assignLoading || leaders.length === 0}
-                  className="rounded-lg bg-amber-800 px-5 py-2 font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition shadow-sm"
-                >
-                  {assignLoading ? 'Đang giao...' : 'Xác nhận giao việc'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
     </div>
   );

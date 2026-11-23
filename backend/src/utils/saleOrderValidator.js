@@ -271,7 +271,6 @@ function toContractDTO(raw) {
   return {
     contractId: contract.contract_id,
     contractCode: contract.contract_code,
-    source: contract.source,
     contractType: contract.contract_type,
     requestId: contract.request_id,
     customerAccountId: contract.customer_account_id,
