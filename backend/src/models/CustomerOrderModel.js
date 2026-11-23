@@ -203,14 +203,18 @@ async function createOrderFromContract(contractId, { assignedTo, createBy } = {}
           );
         }
 
-        // Trừ tồn kho thực tế của sản phẩm
-        await prod.decrement('stock_quantity', { by: item.quantity, transaction });
-
-        // Đồng thời nhả / trừ số lượng đang giữ chỗ (hold_quantity)
+        // Cập nhật đồng thời tồn kho thực tế và số lượng giữ chỗ trong 1 câu lệnh để không vi phạm chk_product_hold (hold_quantity <= stock_quantity)
         const holdToDeduct = Math.min(currentHold, item.quantity);
-        if (holdToDeduct > 0) {
-          await prod.decrement('hold_quantity', { by: holdToDeduct, transaction });
-        }
+        const newStock = Math.max(0, currentStock - item.quantity);
+        const newHold = Math.max(0, currentHold - holdToDeduct);
+
+        await prod.update(
+          {
+            stock_quantity: newStock,
+            hold_quantity: newHold,
+          },
+          { transaction }
+        );
       }
     }
 
