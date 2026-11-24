@@ -18,6 +18,12 @@ jest.mock('../src/models/SaleRequestModel', () => ({
   convertRequestToContract: jest.fn(),
 }));
 
+jest.mock('../src/models/OrderRequestModel', () => ({
+  OrderRequest: {
+    update: jest.fn().mockResolvedValue([1]),
+  },
+}));
+
 const {
   createOfflineContract: createOfflineContractModel,
   signContract: signContractModel,
@@ -28,6 +34,8 @@ const {
 const {
   convertRequestToContract: convertRequestToContractModel,
 } = require('../src/models/SaleRequestModel');
+
+const { OrderRequest } = require('../src/models/OrderRequestModel');
 
 const {
   createOfflineContract,
@@ -276,6 +284,37 @@ describe('saleContractController', () => {
         })
       );
       expect(signContractModel).not.toHaveBeenCalled();
+    });
+
+    test('UTCID5 - SALE signs contract linked to an order request and updates order_request status to CONVERTED', async () => {
+      // Arrange
+      const req = createRequest({
+        params: { id: '55' },
+        file: { path: 'https://res.cloudinary.com/fssims/contracts/signed_proof_55.jpg' },
+        body: { signed_place: 'Góc Nhà Store' },
+      });
+      const res = createResponse();
+      const mockSignedContract = {
+        contract_id: 55,
+        contract_code: 'CT-20261120-0055',
+        request_id: 201,
+        status: 'SIGNED',
+        contract_file_url: 'https://res.cloudinary.com/fssims/contracts/signed_proof_55.jpg',
+        signed_place: 'Góc Nhà Store',
+        items: [],
+      };
+      signContractModel.mockResolvedValue(mockSignedContract);
+      OrderRequest.update.mockResolvedValue([1]);
+
+      // Act
+      await signContract(req, res);
+
+      // Assert
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(OrderRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'CONVERTED' }),
+        { where: { request_id: 201 } }
+      );
     });
 
     test('UTCID4 - Returns 400 Bad Request when contract ID param is not a valid number', async () => {

@@ -7,7 +7,6 @@ const { UserAccount } = require('./userAccount.model');
 const Contract = sequelize.define('Contract', {
   contract_id: { type: DataTypes.BIGINT, allowNull: false, primaryKey: true, autoIncrement: true },
   contract_code: { type: DataTypes.STRING(30), allowNull: false },
-  source: { type: DataTypes.STRING(20), allowNull: false },
   contract_type: { type: DataTypes.STRING(20), allowNull: false },
   request_id: { type: DataTypes.BIGINT, allowNull: true, references: { model: 'order_request', key: 'request_id' } },
   customer_account_id: { type: DataTypes.BIGINT, allowNull: true, references: { model: 'user_account', key: 'user_account_id' } },
@@ -154,7 +153,6 @@ async function createOfflineContract({
     const contract = await Contract.create(
       {
         contract_code: contractCode,
-        source: 'OFFLINE',
         contract_type: 'READY',
         request_id: null,
         customer_account_id: customerAccountId || null,
@@ -223,6 +221,16 @@ async function signContract(contractId, { signedPlace, signedBy, modifieBy, cont
   if (contractFileUrl) contract.contract_file_url = contractFileUrl;
 
   await contract.save();
+
+  // Đồng thời cập nhật trạng thái của order_request thành CONVERTED nếu hợp đồng gắn với yêu cầu đặt hàng
+  if (contract.request_id) {
+    const { OrderRequest } = require('./OrderRequestModel');
+    await OrderRequest.update(
+      { status: 'CONVERTED', modifieby: modifieBy || 'STAFF' },
+      { where: { request_id: contract.request_id } }
+    );
+  }
+
   return findContractById(contractId);
 }
 

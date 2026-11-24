@@ -185,7 +185,7 @@ async function findRequestById(requestId) {
  * Chuyển đổi request thành hợp đồng (DRAFT).
  * - Cho phép sale điền/sửa thông tin khách hàng (tên, SĐT, địa chỉ giao hàng)
  * - Cho phép sale chỉnh sửa giỏ hàng (số lượng, đơn giá)
- * - Tạo contract mới với source = 'ONLINE', contract_type = order_type của request
+ * - Tạo contract mới với contract_type = order_type của request
  * - Tạo ContractItem từ các OrderRequestItem / items cập nhật
  * - Cập nhật request: bổ sung địa chỉ, tên, SĐT và status → 'CONVERTED'
  * - Gắn request_id vào contract
@@ -274,7 +274,6 @@ async function convertRequestToContract({
     // Tạo contract
     const contract = await Contract.create({
       contract_code: contractCode,
-      source: 'ONLINE',
       contract_type: request.order_type || 'READY',
       request_id: requestId,
       customer_account_id: request.customer_account_id || null,
@@ -372,7 +371,7 @@ async function convertRequestToContract({
     }
 
     // Cập nhật trạng thái và thông tin bổ sung cho request
-    request.status = 'CONVERTED';
+    request.status = 'DRAFT';
     request.approved_at = new Date();
     request.modifieby = createBy;
     if (finalCustomerAddress) request.delivery_address = finalCustomerAddress;
@@ -483,7 +482,6 @@ async function createSalesOrderRequest({
     // Tạo OrderRequest
     const orderRequest = await OrderRequest.create({
       request_code: requestCode,
-      source: 'OFFLINE',
       order_type: orderType || 'CUSTOM',
       request_type: 'SINGLE',
       customer_account_id: customerAccountId || 4,
@@ -496,7 +494,7 @@ async function createSalesOrderRequest({
       budget_min: budgetMin || null,
       budget_max: budgetMax || null,
       expected_date: expectedDate || null,
-      status: 'PENDING',
+      status: 'DESIGNING',
       createby: createdBy || 'Sales',
     }, { transaction });
 
@@ -745,7 +743,7 @@ async function reviewOrderRequest(requestId, action, { reason, note, reviewedBy 
     throw new Error('Không tìm thấy yêu cầu thiết kế.');
   }
 
-  const validActions = ['REQUEST_CHANGE', 'REJECT', 'APPROVE', 'FINALIZE_DESIGN'];
+  const validActions = ['REQUEST_CHANGE', 'REJECT', 'APPROVE', 'CONFIRM', 'FINALIZE_DESIGN'];
   if (!validActions.includes(action)) {
     throw new Error(`Hành động "${action}" không hợp lệ. Các hành động hợp lệ: ${validActions.join(', ')}.`);
   }
@@ -781,11 +779,12 @@ async function reviewOrderRequest(requestId, action, { reason, note, reviewedBy 
         }
       }
     }
-  } else if (action === 'APPROVE') {
-    updateData.status = 'APPROVED';
+  } else if (action === 'APPROVE' || action === 'CONFIRM') {
+    updateData.status = 'CONFIRMED';
+    updateData.approved_at = new Date();
     if (note) updateData.staff_note = note;
   } else if (action === 'FINALIZE_DESIGN') {
-    updateData.status = 'DESIGN_FINALIZED';
+    updateData.status = 'DESIGNED';
     updateData.approved_at = new Date();
     if (note) updateData.staff_note = note;
   }
@@ -817,7 +816,8 @@ module.exports = {
  *   + Ghi chú/mô tả lưu vào trường description của order_request
  * Chỉ OWNER mới được gọi hàm này
  */
-async function updateDesignFile(requestId, { requestItemId, description, imageUrl, updatedBy }) {
+async function updateDesignFile(requestId, { requestItemId, description, imageUrl, fileUrl, updatedBy, designedBy }) {
+  const finalImageUrl = imageUrl || fileUrl;
   const request = await OrderRequest.findByPk(requestId);
   if (!request) {
     const err = new Error('Không tìm thấy yêu cầu.');
@@ -852,7 +852,7 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
     await targetItem.save();
 
     // 2. Lưu ảnh thiết kế gắn trực tiếp với sản phẩm này
-    if (imageUrl) {
+    if (finalImageUrl) {
       const maxSort = (await OrderRequestImage.max('sort_order', {
         where: {
           request_id: requestId,
@@ -862,7 +862,8 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
       await OrderRequestImage.create({
         request_id: requestId,
         request_item_id: requestItemId,
-        image_url: imageUrl,
+        image_url: finalImageUrl,
+        image_type: 'DESIGN',
         sort_order: (maxSort || 0) + 1,
         createby: updatedBy || null,
       });
@@ -873,7 +874,7 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
       request.description = description.trim();
     }
 
-    if (imageUrl) {
+    if (finalImageUrl) {
       const maxSort = (await OrderRequestImage.max('sort_order', {
         where: {
           request_id: requestId,
@@ -883,13 +884,23 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
       await OrderRequestImage.create({
         request_id: requestId,
         request_item_id: null,
-        image_url: imageUrl,
+        image_url: finalImageUrl,
+        image_type: 'DESIGN',
         sort_order: (maxSort || 0) + 1,
         createby: updatedBy || null,
       });
     }
   }
 
+  // Tự động chuyển trạng thái yêu cầu sang DESIGNED (Chủ đã hoàn tất bản vẽ gửi sang Sale)
+  // và ghi nhận thông tin Chủ thiết kế cùng thời điểm
+  if (request.status !== 'CONVERTED' && request.status !== 'REJECTED') {
+    request.status = 'DESIGNED';
+  }
+  if (designedBy) {
+    request.designed_by = designedBy;
+  }
+  request.designed_at = new Date();
   request.modifieby = updatedBy || null;
   await request.save();
 

@@ -189,7 +189,7 @@ async function findCustomerById(customerId) {
   // Lịch sử hợp đồng (contract)
   try {
     contracts = await sequelize.query(
-      `SELECT contract_id, contract_code, source, contract_type, status,
+      `SELECT contract_id, contract_code, contract_type, status,
               total_amount, deposit_amount, signed_date, createdate
        FROM contract
        WHERE customer_account_id = :id

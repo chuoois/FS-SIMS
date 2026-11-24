@@ -9,7 +9,6 @@ const { Product } = require('./ProductModel');
 const OrderRequest = sequelize.define('OrderRequest', {
     request_id: { type: DataTypes.BIGINT, allowNull: false, primaryKey: true, autoIncrement: true },
     request_code: { type: DataTypes.STRING(30), allowNull: false },
-    source: { type: DataTypes.STRING(20), allowNull: false },
     order_type: { type: DataTypes.STRING(20), allowNull: false },
     request_type: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'SINGLE' },
     customer_account_id: { type: DataTypes.BIGINT, allowNull: false, references: { model: 'user_account', key: 'user_account_id' } },
@@ -150,7 +149,6 @@ async function createReadyOrderRequestFromCart({
 
     const orderRequest = await OrderRequest.create({
       request_code: createRequestCode(),
-      source: 'ONLINE',
       order_type: 'READY',
       request_type: 'SINGLE',
       customer_account_id: customerAccountId,

@@ -194,7 +194,7 @@ async function createOrderFromContract(contractId, { assignedTo, createBy } = {}
 
         // Nếu sản phẩm đã được giữ chỗ trong hợp đồng/yêu cầu thì số lượng khả dụng kiểm tra là currentStock.
         // Nếu chưa được giữ chỗ thì số lượng khả dụng = currentStock - currentHold.
-        const isAlreadyHeld = Boolean(contract.request_id || contract.source === 'ONLINE' || currentHold >= item.quantity);
+        const isAlreadyHeld = Boolean(contract.request_id || currentHold >= item.quantity);
         const availableStock = isAlreadyHeld ? currentStock : Math.max(0, currentStock - currentHold);
 
         if (availableStock < item.quantity) {
@@ -652,16 +652,32 @@ async function findCustomerOrderRequestById(requestId, customerAccountId) {
 // Các hàm bổ sung cho Manage Order (Owner / Sales)
 // ============================================================
 
-const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED', 'CANCELLED'];
+const VALID_STATUSES = [
+  'NEW',
+  'CONFIRMED',
+  'ASSIGNED',
+  'IN_PRODUCTION',
+  'IN_PROGRESS',
+  'PROCESSING',
+  'UNDER_INSPECTION',
+  'PENDING_APPROVAL',
+  'READY_TO_DELIVER',
+  'DELIVERING',
+  'COMPLETED',
+  'CANCELLED'
+];
 
 const ALLOWED_NEXT_STATUSES = {
-  NEW: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['IN_PRODUCTION', 'CANCELLED'],
-  IN_PRODUCTION: ['COMPLETED', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'CANCELLED'],
-  PROCESSING: ['COMPLETED', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'CANCELLED'],
-  UNDER_INSPECTION: ['READY_TO_DELIVER', 'IN_PRODUCTION', 'CANCELLED'],
-  READY_TO_DELIVER: ['DELIVERING', 'COMPLETED', 'CANCELLED'],
-  DELIVERING: ['COMPLETED', 'CANCELLED'],
+  NEW: ['CONFIRMED', 'ASSIGNED', 'CANCELLED'],
+  CONFIRMED: ['IN_PRODUCTION', 'IN_PROGRESS', 'CANCELLED'],
+  ASSIGNED: ['IN_PRODUCTION', 'IN_PROGRESS', 'CANCELLED'],
+  IN_PRODUCTION: ['UNDER_INSPECTION', 'PENDING_APPROVAL', 'CANCELLED'],
+  IN_PROGRESS: ['UNDER_INSPECTION', 'PENDING_APPROVAL', 'CANCELLED'],
+  PROCESSING: ['UNDER_INSPECTION', 'CANCELLED'],
+  UNDER_INSPECTION: ['READY_TO_DELIVER', 'IN_PRODUCTION', 'IN_PROGRESS', 'CANCELLED'],
+  PENDING_APPROVAL: ['READY_TO_DELIVER', 'IN_PRODUCTION', 'IN_PROGRESS', 'CANCELLED'],
+  READY_TO_DELIVER: ['COMPLETED', 'DELIVERING', 'CANCELLED'],
+  DELIVERING: ['COMPLETED', 'READY_TO_DELIVER', 'CANCELLED'],
 };
 
 const NEXT_ORDER_STATUS = {
@@ -670,7 +686,7 @@ const NEXT_ORDER_STATUS = {
   IN_PRODUCTION: 'UNDER_INSPECTION',
   PROCESSING: 'UNDER_INSPECTION',
   UNDER_INSPECTION: 'READY_TO_DELIVER',
-  READY_TO_DELIVER: 'DELIVERING',
+  READY_TO_DELIVER: 'COMPLETED',
   DELIVERING: 'COMPLETED',
 };
 
@@ -1029,7 +1045,7 @@ async function completeDelivery(orderId, { updatedBy } = {}) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
   if (order.status !== 'DELIVERING' && order.status !== 'READY_TO_DELIVER') {
-    throw new Error('Chỉ có thể hoàn tất khi đơn hàng đang trong quá trình giao hàng.');
+    throw new Error('Chỉ có thể hoàn tất khi đơn hàng đã sẵn sàng giao (READY_TO_DELIVER) hoặc đang giao hàng.');
   }
 
   await order.update({

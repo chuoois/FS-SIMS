@@ -55,13 +55,18 @@ const Supplier = sequelize.define(
     timestamps: true,
     createdAt: 'createdate',
     updatedAt: 'modifiedate',
-    indexes: [{ name: 'uk_supplier_code', unique: true, fields: ['supplier_code'] }],
+    indexes: [
+      { name: 'uk_supplier_code', unique: true, fields: ['supplier_code'] },
+      { name: 'uk_supplier_phone', unique: true, fields: ['phone_number'] },
+    ],
   },
 );
 
 // =========================================================
 // Repository / Query Functions (Data Access Layer)
 // =========================================================
+
+const isSequelizeModel = (m) => Boolean(m && typeof m.belongsTo === 'function');
 
 /**
  * Tìm nhà cung cấp theo ID
@@ -77,6 +82,23 @@ async function findSupplierByCode(supplierCode) {
   if (!supplierCode) return null;
   return Supplier.findOne({
     where: { supplier_code: supplierCode.trim() },
+    raw: true,
+  });
+}
+
+/**
+ * Tìm nhà cung cấp theo số điện thoại (phone_number)
+ * @param {string} phoneNumber
+ * @param {number|string} [excludeSupplierId]
+ */
+async function findSupplierByPhone(phoneNumber, excludeSupplierId = null) {
+  if (!phoneNumber || !phoneNumber.trim()) return null;
+  const whereClause = { phone_number: phoneNumber.trim() };
+  if (excludeSupplierId) {
+    whereClause.supplier_id = { [Op.ne]: Number(excludeSupplierId) };
+  }
+  return Supplier.findOne({
+    where: whereClause,
     raw: true,
   });
 }
@@ -127,10 +149,18 @@ async function getSuppliersWithPagination({ search, status, page = 1, limit = 10
  * Lấy chi tiết nhà cung cấp kèm lịch sử phiếu nhập kho
  */
 async function getSupplierWithReceiptHistory(supplierId) {
-  const MaterialReceiptModel =
-    sequelize.models.MaterialReceipt || require('./MaterialReceiptModel').MaterialReceipt;
+  let MaterialReceiptModel = sequelize.models.MaterialReceipt;
+  if (!MaterialReceiptModel) {
+    try {
+      MaterialReceiptModel = require('./MaterialReceiptModel').MaterialReceipt;
+    } catch {
+      MaterialReceiptModel = null;
+    }
+  }
 
-  if (isSequelizeModel(Supplier) && isSequelizeModel(MaterialReceiptModel)) {
+  const hasReceiptModel = isSequelizeModel(Supplier) && isSequelizeModel(MaterialReceiptModel);
+
+  if (hasReceiptModel) {
     if (!Supplier.associations || !Supplier.associations.materialReceiptSupplierIdRecords) {
       Supplier.hasMany(MaterialReceiptModel, {
         foreignKey: 'supplier_id',
@@ -143,43 +173,65 @@ async function getSupplierWithReceiptHistory(supplierId) {
     }
   }
 
-  const supplier = await Supplier.findByPk(supplierId, {
-    include: [
-      {
-        model: MaterialReceiptModel,
-        as: 'materialReceiptSupplierIdRecords',
-        attributes: [
-          'receipt_id',
-          'receipt_code',
-          'receipt_date',
-          'total_amount',
-          'status',
-          'received_by',
-          'note',
-          'createdate',
+  if (hasReceiptModel && Supplier.associations?.materialReceiptSupplierIdRecords) {
+    try {
+      const supplier = await Supplier.findByPk(supplierId, {
+        include: [
+          {
+            model: MaterialReceiptModel,
+            as: 'materialReceiptSupplierIdRecords',
+            attributes: [
+              'receipt_id',
+              'receipt_code',
+              'receipt_date',
+              'total_amount',
+              'status',
+              'received_by',
+              'note',
+              'createdate',
+            ],
+          },
         ],
-      },
-    ],
-    order: [
-      [{ model: MaterialReceiptModel, as: 'materialReceiptSupplierIdRecords' }, 'receipt_date', 'DESC'],
-      [{ model: MaterialReceiptModel, as: 'materialReceiptSupplierIdRecords' }, 'receipt_id', 'DESC'],
-    ],
-  });
+        order: [
+          [{ model: MaterialReceiptModel, as: 'materialReceiptSupplierIdRecords' }, 'receipt_date', 'DESC'],
+          [{ model: MaterialReceiptModel, as: 'materialReceiptSupplierIdRecords' }, 'receipt_id', 'DESC'],
+        ],
+      });
 
+      if (!supplier) return null;
+      return supplier.toJSON ? supplier.toJSON() : supplier;
+    } catch (queryErr) {
+      console.warn('[SupplierModel.getSupplierWithReceiptHistory] Query with include failed, fallback to findByPk:', queryErr.message);
+    }
+  }
+
+  const supplier = await findSupplierById(supplierId);
   if (!supplier) return null;
-  return supplier.toJSON ? supplier.toJSON() : supplier;
+  return {
+    ...supplier,
+    materialReceiptSupplierIdRecords: [],
+  };
 }
 
 /**
  * Đếm số lượng phiếu nhập của 1 nhà cung cấp
  */
 async function countMaterialReceiptsBySupplierId(supplierId) {
-  const MaterialReceiptModel =
-    sequelize.models.MaterialReceipt || require('./MaterialReceiptModel').MaterialReceipt;
+  let MaterialReceiptModel = sequelize.models.MaterialReceipt;
+  if (!MaterialReceiptModel) {
+    try {
+      MaterialReceiptModel = require('./MaterialReceiptModel').MaterialReceipt;
+    } catch {
+      MaterialReceiptModel = null;
+    }
+  }
 
-  return MaterialReceiptModel.count({
-    where: { supplier_id: supplierId },
-  });
+  if (isSequelizeModel(MaterialReceiptModel)) {
+    return MaterialReceiptModel.count({
+      where: { supplier_id: supplierId },
+    });
+  }
+  return 0;
 }
 
 /**
@@ -329,6 +381,7 @@ module.exports = {
   Supplier,
   findSupplierById,
   findSupplierByCode,
+  findSupplierByPhone,
   getSuppliersWithPagination,
   getSupplierWithReceiptHistory,
   countMaterialReceiptsBySupplierId,

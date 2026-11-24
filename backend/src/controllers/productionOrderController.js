@@ -117,13 +117,14 @@ async function createProductionOrderHandler(req, res) {
       return res.status(400).json({ message: validation.error });
     }
 
-    const { order_id, planned_start, planned_end } = validation.value;
+    const { order_id, planned_start, planned_end, assigned_to } = validation.value;
     const userEmail = req.user ? req.user.email : 'system';
 
     const po = await createProductionOrder({
       orderId: order_id,
       plannedStart: planned_start,
       plannedEnd: planned_end,
+      assignedTo: assigned_to || req.body.assigned_to || req.body.assignedTo || null,
       createBy: userEmail,
     });
 
