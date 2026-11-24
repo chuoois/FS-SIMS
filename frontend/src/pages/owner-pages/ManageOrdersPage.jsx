@@ -3,22 +3,20 @@
 // Quản lý Đơn hàng (Manage Orders) dành cho Chủ xưởng (Owner)
 // Chức năng:
 // 1. Xem danh sách đơn hàng (hàng sẵn & hàng đặt làm, tìm kiếm, lọc, phân trang)
-// 2. Xem chi tiết đơn hàng (thông tin khách, sản phẩm, thanh toán)
-// 3. Quản lý trạng thái đơn hàng tuần tự (Next Action Button, không dùng select/dropdown)
-//    Quy trình: Mới (NEW) -> Đã xác nhận (CONFIRMED) -> Đang xử lý (IN_PRODUCTION) -> Hoàn thành (COMPLETED)
+// 2. Xem chi tiết đơn hàng (thông tin khách, sản phẩm, bản vẽ thiết kế, thanh toán)
+// 3. Quản lý trạng thái đơn hàng tuần tự (Next Action Button):
+//    Quy trình: Mới (NEW) -> Đã xác nhận (CONFIRMED) -> Đang xử lý (IN_PRODUCTION) -> Chờ nghiệm thu (UNDER_INSPECTION) -> Sẵn sàng giao (READY_TO_DELIVER) -> Hoàn thành (COMPLETED)
 // 4. Hủy đơn hàng chưa hoàn thành
-// Đồng bộ giao diện 100% với hệ thống Dashboard Owner
+// Chuẩn hóa 100% theo FSSIMS Design System (Xưởng sản xuất đồ gỗ nội thất Góc Nhà)
 // =========================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Filter,
   ClipboardList,
   Search,
   RotateCw,
   Eye,
-  RefreshCw,
   Ban,
   Clock,
   CheckCircle2,
@@ -27,7 +25,6 @@ import {
   AlertTriangle,
   Calendar,
   Layers,
-  ShoppingBag,
   User,
   Phone,
   MapPin,
@@ -37,7 +34,6 @@ import {
   Hammer,
   Image as ImageIcon,
   FileUp,
-  Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -50,12 +46,15 @@ import {
 } from '../../services/orderManagementService';
 import { TablePagination } from '../../components/common/TablePagination';
 import { CustomerOrderStatusBadge } from '../../components/common/StatusBadge';
-import { formatVND as formatCurrency, formatDateVN as formatDate, formatDateTimeVN as formatDateTime } from '../../utils/formatters';
+import {
+  formatVND as formatCurrency,
+  formatDateVN as formatDate,
+  formatDateTimeVN as formatDateTime,
+} from '../../utils/formatters';
 
 // ─── Hằng số ──────────────────────────────────────────────
 const STATUSES = [
   'ALL',
-  'NEW',
   'CONFIRMED',
   'IN_PRODUCTION',
   'UNDER_INSPECTION',
@@ -64,10 +63,12 @@ const STATUSES = [
   'COMPLETED',
   'CANCELLED',
 ];
+
 const ORDER_TYPES = ['ALL', 'READY', 'CUSTOM'];
 
 const STATUS_LABELS = {
-  NEW: 'Mới',
+  ALL: 'Tất cả đơn',
+  NEW: 'Mới tạo',
   CONFIRMED: 'Đã xác nhận',
   IN_PRODUCTION: 'Đang gia công',
   UNDER_INSPECTION: 'Chờ nghiệm thu',
@@ -78,18 +79,17 @@ const STATUS_LABELS = {
 };
 
 const ORDER_TYPE_LABELS = {
-  READY: 'Hàng sẵn',
-  CUSTOM: 'Đặt theo yêu cầu',
+  READY: 'Hàng sẵn có',
+  CUSTOM: 'Đặt làm theo mẫu',
 };
 
 // Cấu hình trạng thái kế tiếp trong quy trình tuần tự
-// Chỉ cho phép chuyển sang trạng thái hợp lệ tiếp theo
 const NEXT_STATUS_CONFIG = {
   NEW: {
     nextStatus: 'CONFIRMED',
     actionLabel: 'Tiếp nhận đơn',
     nextLabel: 'Đã xác nhận',
-    buttonClass: 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100',
+    buttonClass: 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100',
     icon: CheckCircle2,
   },
   READY_TO_DELIVER: {
@@ -124,28 +124,29 @@ function OrderDetailModal({
   const generalOwnerImgs = (order.images || []).filter(isOwnerDesignImage);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-xs overflow-y-auto">
       <div className="relative w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-stone-200 my-8">
         {/* Header Modal */}
         <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-amber-100 p-2.5 text-amber-800">
+            <div className="rounded-xl bg-amber-100 p-2 text-amber-900">
               <FileText className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-stone-900">
-                Chi tiết đơn hàng — {order.orderCode}
+              <h2 className="text-base font-bold text-stone-900 sm:text-lg">
+                Chi tiết đơn hàng — <span className="font-mono text-amber-900">{order.orderCode}</span>
               </h2>
               <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 mt-0.5">
-                <span>Loại: {ORDER_TYPE_LABELS[order.orderType] || order.orderType}</span>
-                {order.contractCode && <span>• Hợp đồng: {order.contractCode}</span>}
-                {order.requestCode && <span>• Yêu cầu: {order.requestCode}</span>}
+                <span>Phân loại: {ORDER_TYPE_LABELS[order.orderType] || order.orderType}</span>
+                {order.contractCode && <span>• Hợp đồng: <strong className="font-mono">{order.contractCode}</strong></span>}
+                {order.requestCode && <span>• Yêu cầu: <strong className="font-mono">{order.requestCode}</strong></span>}
               </div>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition focus-visible:outline-none"
             aria-label="Đóng"
           >
             <X className="h-5 w-5" />
@@ -153,19 +154,20 @@ function OrderDetailModal({
         </div>
 
         {/* Nội dung chi tiết */}
-        <div className="max-h-[72vh] overflow-y-auto px-6 py-5 space-y-6">
+        <div className="max-h-[72vh] overflow-y-auto px-6 py-5 space-y-5">
           {/* Trạng thái & hành động kế tiếp */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-stone-50 p-4 border border-stone-200">
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-stone-500">Trạng thái hiện tại:</span>
               <CustomerOrderStatusBadge status={order.status} />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               {nextConfig && (
                 <button
+                  type="button"
                   onClick={() => onAdvanceStatus(order)}
                   disabled={isAdvancing}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 ${nextConfig.buttonClass}`}
                   title={nextConfig.actionLabel}
                 >
                   {isAdvancing ? (
@@ -178,11 +180,12 @@ function OrderDetailModal({
               )}
               {order.status === 'CONFIRMED' && onGoToProductionOrders && (
                 <button
+                  type="button"
                   onClick={() => {
                     onClose();
                     onGoToProductionOrders(order);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-xs transition hover:bg-amber-100 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                   title="Chuyển sang trang Quản lý Lệnh Gia Công để giao việc cho thợ"
                 >
                   <Hammer className="h-3.5 w-3.5" />
@@ -191,11 +194,12 @@ function OrderDetailModal({
               )}
               {order.status === 'IN_PRODUCTION' && onGoToProductionOrders && (
                 <button
+                  type="button"
                   onClick={() => {
                     onClose();
                     onGoToProductionOrders(order);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 shadow-sm transition hover:bg-blue-100 active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-800 shadow-xs transition hover:bg-stone-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                   title="Xem tiến độ và lệnh gia công tại xưởng"
                 >
                   <Hammer className="h-3.5 w-3.5" />
@@ -204,21 +208,19 @@ function OrderDetailModal({
               )}
               {order.status === 'UNDER_INSPECTION' && onGoToProductionOrders && (
                 <button
+                  type="button"
                   onClick={() => {
                     onClose();
                     onGoToProductionOrders(order);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-800 shadow-sm transition hover:bg-orange-100 active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-900 shadow-xs transition hover:bg-orange-100 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                   title="Kiểm tra ảnh thành phẩm và duyệt nghiệm thu chất lượng"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-orange-600" />
                   <span>Duyệt nghiệm thu</span>
                 </button>
               )}
-              <div className="flex items-center gap-3 text-xs text-stone-500">
-                {order.createdAt && (
-                  <span>Ngày tạo: {formatDateTime(order.createdAt)}</span>
-                )}
+              <div className="flex items-center gap-2 text-xs text-stone-500">
                 {order.expectedDate && (
                   <span className="font-medium text-stone-700">
                     Giao dự kiến: {formatDate(order.expectedDate)}
@@ -231,19 +233,19 @@ function OrderDetailModal({
           {/* Thông tin Khách hàng & Phụ trách */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Cột 1: Thông tin khách hàng */}
-            <div className="rounded-xl border border-stone-200 p-4 space-y-3">
+            <div className="rounded-xl border border-stone-200 p-4 space-y-2.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
-                <User className="h-4 w-4 text-amber-700" />
+                <User className="h-4 w-4 text-amber-900" />
                 Thông tin người nhận
               </h3>
-              <div className="space-y-1.5 text-sm">
-                <p className="font-semibold text-stone-800">{order.contactName}</p>
+              <div className="space-y-1.5 text-xs">
+                <p className="font-semibold text-stone-800 text-sm">{order.contactName}</p>
                 <p className="text-stone-600 flex items-center gap-2">
                   <Phone className="h-3.5 w-3.5 text-stone-400" />
-                  <span>{order.contactPhone}</span>
+                  <span className="font-mono">{order.contactPhone}</span>
                 </p>
                 {order.deliveryAddress && (
-                  <p className="text-stone-600 flex items-start gap-2 text-xs">
+                  <p className="text-stone-600 flex items-start gap-2">
                     <MapPin className="h-3.5 w-3.5 text-stone-400 mt-0.5 shrink-0" />
                     <span>{order.deliveryAddress}</span>
                   </p>
@@ -252,29 +254,29 @@ function OrderDetailModal({
             </div>
 
             {/* Cột 2: Phụ trách & Tiến độ */}
-            <div className="rounded-xl border border-stone-200 p-4 space-y-3">
+            <div className="rounded-xl border border-stone-200 p-4 space-y-2.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-amber-700" />
+                <Calendar className="h-4 w-4 text-amber-900" />
                 Tiến độ & Giao nhận
               </h3>
-              <div className="space-y-1.5 text-sm">
+              <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-stone-500">Nhân viên bán hàng:</span>
                   <span className="font-medium text-stone-800">{order.staffName || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-stone-500">Giao dự kiến:</span>
-                  <span className="text-stone-800">{formatDate(order.expectedDate)}</span>
+                  <span className="text-stone-800 font-mono">{formatDate(order.expectedDate)}</span>
                 </div>
                 {order.deliveredDate && (
                   <div className="flex justify-between">
                     <span className="text-stone-500">Ngày giao thực tế:</span>
-                    <span className="font-medium text-emerald-700">{formatDate(order.deliveredDate)}</span>
+                    <span className="font-medium font-mono text-emerald-800">{formatDate(order.deliveredDate)}</span>
                   </div>
                 )}
                 {order.note && (
-                  <div className="border-t border-stone-100 pt-1 text-xs text-stone-500">
-                    <span className="font-medium text-stone-600">Ghi chú:</span> {order.note}
+                  <div className="border-t border-stone-100 pt-1 text-stone-500">
+                    <span className="font-medium text-stone-700">Ghi chú:</span> {order.note}
                   </div>
                 )}
               </div>
@@ -282,27 +284,27 @@ function OrderDetailModal({
           </div>
 
           {/* Tóm tắt tài chính */}
-          <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900 mb-3 flex items-center gap-1.5">
-              <CreditCard className="h-4 w-4 text-amber-800" />
+              <CreditCard className="h-4 w-4 text-amber-900" />
               Tình trạng thanh toán
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="rounded-lg bg-white p-3 border border-stone-200">
-                <span className="text-xs text-stone-500 block">Tổng giá trị đơn</span>
-                <span className="text-base font-bold text-stone-900">{formatCurrency(order.totalAmount)}</span>
+                <span className="text-stone-500 block mb-0.5">Tổng giá trị đơn</span>
+                <span className="text-sm font-bold font-mono text-stone-900">{formatCurrency(order.totalAmount)}</span>
               </div>
               <div className="rounded-lg bg-white p-3 border border-stone-200">
-                <span className="text-xs text-stone-500 block">Tiền đặt cọc</span>
-                <span className="text-base font-semibold text-stone-800">{formatCurrency(order.depositAmount)}</span>
+                <span className="text-stone-500 block mb-0.5">Tiền đặt cọc</span>
+                <span className="text-sm font-semibold font-mono text-stone-800">{formatCurrency(order.depositAmount)}</span>
               </div>
               <div className="rounded-lg bg-white p-3 border border-stone-200">
-                <span className="text-xs text-stone-500 block">Đã thanh toán</span>
-                <span className="text-base font-semibold text-emerald-700">{formatCurrency(order.paidAmount)}</span>
+                <span className="text-stone-500 block mb-0.5">Đã thanh toán</span>
+                <span className="text-sm font-semibold font-mono text-emerald-800">{formatCurrency(order.paidAmount)}</span>
               </div>
               <div className="rounded-lg bg-white p-3 border border-stone-200">
-                <span className="text-xs text-stone-500 block">Còn lại cần thu</span>
-                <span className="text-base font-bold text-rose-600">{formatCurrency(order.remainingAmount)}</span>
+                <span className="text-stone-500 block mb-0.5">Còn lại cần thu</span>
+                <span className="text-sm font-bold font-mono text-rose-800">{formatCurrency(order.remainingAmount)}</span>
               </div>
             </div>
           </div>
@@ -311,17 +313,17 @@ function OrderDetailModal({
           <div
             className={`rounded-xl p-4 space-y-4 ${
               order.orderType === 'CUSTOM'
-                ? 'border-2 border-amber-300 bg-amber-50/40'
-                : 'border border-stone-200 bg-stone-50/40'
+                ? 'border border-amber-300 bg-amber-50/30'
+                : 'border border-stone-200 bg-stone-50/30'
             }`}
           >
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-sm font-bold text-stone-800 flex items-center gap-1.5">
-                <Package className="h-4 w-4 text-amber-700" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-stone-800 flex items-center gap-1.5">
+                <Package className="h-4 w-4 text-amber-900" />
                 Sản phẩm trong đơn ({(order.items || []).length})
               </h3>
               {totalOwnerDesigns > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Đã lưu {totalOwnerDesigns} bản vẽ xưởng
                 </span>
@@ -343,14 +345,14 @@ function OrderDetailModal({
                   const isCustomItem = order.orderType === 'CUSTOM' || itemImages.length > 0;
 
                   return (
-                    <div key={item.orderItemId || idx} className="rounded-xl border border-stone-200 bg-white p-4 shadow-2xs space-y-3">
+                    <div key={item.orderItemId || idx} className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs space-y-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-2.5 border-b border-stone-100">
                         <div className="flex items-start gap-2.5">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 font-bold text-xs text-amber-800">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 font-bold font-mono text-xs text-amber-900">
                             #{idx + 1}
                           </div>
                           <div>
-                            <p className="font-semibold text-stone-900">
+                            <p className="font-semibold text-stone-900 text-xs sm:text-sm">
                               {item.productName}
                               {item.productCode && (
                                 <span className="ml-1.5 text-xs font-mono font-normal text-stone-500">
@@ -367,11 +369,11 @@ function OrderDetailModal({
                               </span>
                               <span>•</span>
                               <span>
-                                SL: <strong className="text-stone-700">{item.quantity}</strong>
+                                SL: <strong className="text-stone-700 font-mono">{item.quantity}</strong>
                               </span>
                               <span>•</span>
                               <span>
-                                Đơn giá: <strong className="text-stone-700">{formatCurrency(item.unitPrice)}</strong>
+                                Đơn giá: <strong className="text-stone-700 font-mono">{formatCurrency(item.unitPrice)}</strong>
                               </span>
                               {item.materialName && (
                                 <>
@@ -400,65 +402,65 @@ function OrderDetailModal({
 
                         <div className="text-right shrink-0">
                           <span className="text-[11px] text-stone-400 block">Thành tiền</span>
-                          <span className="text-sm font-bold text-amber-900">{formatCurrency(item.totalPrice)}</span>
+                          <span className="text-xs sm:text-sm font-bold font-mono text-amber-900">{formatCurrency(item.totalPrice)}</span>
                         </div>
                       </div>
 
                       {item.description && (
                         <div className="rounded-lg bg-stone-50 border border-stone-200 p-2.5 text-xs text-stone-700">
-                          <span className="font-semibold text-stone-800 block mb-0.5">Mô tả kỹ thuật:</span>
+                          <span className="font-semibold text-stone-800 block mb-0.5">Mô tả quy cách kỹ thuật:</span>
                           <p className="whitespace-pre-line">{item.description}</p>
                         </div>
                       )}
 
                       {isCustomItem ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                          <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-2">
-                            <div className="flex items-center justify-between pb-1.5 border-b border-sky-100">
+                          <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-3 space-y-2">
+                            <div className="flex items-center justify-between pb-1.5 border-b border-stone-200">
                               <div className="flex items-center gap-1.5">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-stone-700">
                                   <ImageIcon className="h-3 w-3" />
                                 </span>
-                                <h5 className="text-xs font-bold text-sky-950 uppercase tracking-wide">
+                                <h5 className="text-xs font-semibold text-stone-900 uppercase tracking-wide">
                                   Ảnh mẫu khách gửi
                                 </h5>
                               </div>
-                              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+                              <span className="rounded-full bg-stone-200 px-2 py-0.5 text-[11px] font-mono text-stone-800">
                                 {customerImgs.length} ảnh
                               </span>
                             </div>
                             <DesignGallery
                               images={customerImgs}
                               badgeText={directCustomerImgs.length === 0 && customerImgs.length > 0 ? 'Khách gửi (Chung)' : 'Khách gửi'}
-                              badgeClassName="bg-sky-700/90"
-                              borderClassName="border-sky-200 hover:border-sky-400"
+                              badgeClassName="bg-stone-700/90"
+                              borderClassName="border-stone-200 hover:border-stone-400"
                               emptyText="Không có ảnh mẫu tham khảo."
-                              emptyClassName="rounded-lg border border-dashed border-sky-200 bg-sky-50/60 p-3 text-center text-xs text-sky-600"
+                              emptyClassName="rounded-lg border border-dashed border-stone-200 bg-stone-50/60 p-3 text-center text-xs text-stone-500"
                               onPreview={setPreviewImg}
                             />
                           </div>
 
-                          <div className="rounded-xl border border-amber-300 bg-amber-50/40 p-3 space-y-2">
-                            <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/80">
+                          <div className="rounded-xl border border-amber-300 bg-amber-50/30 p-3 space-y-2">
+                            <div className="flex items-center justify-between pb-1.5 border-b border-amber-200">
                               <div className="flex items-center gap-1.5">
                                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-amber-900">
                                   <FileUp className="h-3 w-3" />
                                 </span>
-                                <h5 className="text-xs font-bold text-amber-950 uppercase tracking-wide">
+                                <h5 className="text-xs font-semibold text-amber-950 uppercase tracking-wide">
                                   Bản vẽ thiết kế của Chủ xưởng
                                 </h5>
                               </div>
-                              <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-mono font-semibold text-amber-900">
                                 {ownerImgs.length} bản vẽ
                               </span>
                             </div>
                             <DesignGallery
                               images={ownerImgs}
                               badgeText="Bản vẽ xưởng"
-                              badgeClassName="bg-amber-800/90"
+                              badgeClassName="bg-amber-900/90"
                               borderClassName="border-amber-300 hover:border-amber-500"
                               emptyText="Chưa có bản vẽ thiết kế từ Chủ xưởng."
-                              emptyClassName="rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-3 text-center text-xs text-amber-700"
+                              emptyClassName="rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-3 text-center text-xs text-amber-800"
                               onPreview={setPreviewImg}
                             />
                           </div>
@@ -491,13 +493,13 @@ function OrderDetailModal({
             {generalOwnerImgs.length > 0 && (
               <div className="rounded-xl border border-amber-300 bg-white p-3.5 space-y-2">
                 <h4 className="text-xs font-bold uppercase text-amber-950 flex items-center gap-1.5">
-                  <FileUp className="h-4 w-4 text-amber-700" />
+                  <FileUp className="h-4 w-4 text-amber-900" />
                   Bản vẽ thiết kế chung từ Chủ xưởng ({generalOwnerImgs.length})
                 </h4>
                 <DesignGallery
                   images={generalOwnerImgs}
                   badgeText="Bản vẽ xưởng"
-                  badgeClassName="bg-amber-800/90"
+                  badgeClassName="bg-amber-900/90"
                   borderClassName="border-amber-300 hover:border-amber-500"
                   emptyText=""
                   emptyClassName=""
@@ -513,9 +515,10 @@ function OrderDetailModal({
           <div>
             {nextConfig && (
               <button
+                type="button"
                 onClick={() => onAdvanceStatus(order)}
                 disabled={isAdvancing}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 ${nextConfig.buttonClass}`}
                 title={nextConfig.actionLabel}
               >
                 {isAdvancing ? (
@@ -528,11 +531,12 @@ function OrderDetailModal({
             )}
             {order.status === 'CONFIRMED' && onGoToProductionOrders && (
               <button
+                type="button"
                 onClick={() => {
                   onClose();
                   onGoToProductionOrders(order);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900 shadow-xs transition hover:bg-amber-100 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 title="Chuyển sang trang Quản lý Lệnh Gia Công để giao việc cho thợ"
               >
                 <Hammer className="h-4 w-4" />
@@ -541,11 +545,12 @@ function OrderDetailModal({
             )}
             {order.status === 'IN_PRODUCTION' && onGoToProductionOrders && (
               <button
+                type="button"
                 onClick={() => {
                   onClose();
                   onGoToProductionOrders(order);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-800 shadow-sm transition hover:bg-blue-100 active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-stone-100 px-4 py-2 text-xs font-semibold text-stone-800 shadow-xs transition hover:bg-stone-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 title="Xem tiến độ và lệnh gia công tại xưởng"
               >
                 <Hammer className="h-4 w-4" />
@@ -554,11 +559,12 @@ function OrderDetailModal({
             )}
             {order.status === 'UNDER_INSPECTION' && onGoToProductionOrders && (
               <button
+                type="button"
                 onClick={() => {
                   onClose();
                   onGoToProductionOrders(order);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-800 shadow-sm transition hover:bg-orange-100 active:scale-95"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-xs font-semibold text-orange-900 shadow-xs transition hover:bg-orange-100 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 title="Kiểm tra ảnh thành phẩm và duyệt nghiệm thu chất lượng"
               >
                 <CheckCircle2 className="h-4 w-4 text-orange-600" />
@@ -567,8 +573,9 @@ function OrderDetailModal({
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg border border-stone-300 bg-white px-5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95"
+            className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 shadow-xs transition hover:bg-stone-50 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
           >
             Đóng
           </button>
@@ -591,7 +598,7 @@ function OrderDetailModal({
               type="button"
               onClick={() => setPreviewImg(null)}
               aria-label="Đóng ảnh phóng to"
-              className="absolute -top-3 -right-3 rounded-full bg-white p-1.5 text-stone-800 shadow-xl hover:bg-stone-100"
+              className="absolute -top-3 -right-3 rounded-full bg-white p-1.5 text-stone-800 shadow-xl hover:bg-stone-100 focus-visible:outline-none"
             >
               <X className="h-5 w-5" />
             </button>
@@ -607,43 +614,45 @@ function CancelConfirmDialog({ order, loading, onConfirm, onClose }) {
   if (!order) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-xs">
       <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl border border-stone-200">
         <div className="p-6">
           <div className="flex items-center gap-3">
             <div className="rounded-full bg-rose-100 p-2.5 text-rose-700">
-              <AlertTriangle className="h-6 w-6" />
+              <AlertTriangle className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-stone-900">Xác nhận hủy đơn hàng</h2>
-              <p className="text-xs text-stone-500">Thao tác này sẽ chuyển đơn hàng sang trạng thái Đã hủy</p>
+              <h2 className="text-base font-bold text-stone-900">Xác nhận hủy đơn hàng</h2>
+              <p className="text-xs text-stone-500">Mã đơn: <span className="font-mono">{order.orderCode}</span></p>
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl bg-rose-50/50 p-4 border border-rose-200 text-sm space-y-1">
+          <div className="mt-4 rounded-xl bg-rose-50/50 p-3.5 border border-rose-200 text-xs space-y-1.5">
             <p className="text-stone-700">
               Bạn có chắc chắn muốn hủy đơn hàng{' '}
-              <span className="font-bold text-rose-700">{order.orderCode}</span> của khách hàng{' '}
+              <span className="font-bold font-mono text-rose-800">{order.orderCode}</span> của khách hàng{' '}
               <span className="font-semibold text-stone-900">{order.contactName}</span>?
             </p>
-            <p className="text-xs text-stone-500 pt-1">
-              ⚠️ Hành động này không thể hoàn tác sau khi xác nhận.
+            <p className="text-stone-500">
+              ⚠️ Hành động này sẽ chuyển trạng thái đơn hàng sang Đã hủy và không thể hoàn tác.
             </p>
           </div>
         </div>
 
         <div className="flex justify-end gap-2.5 border-t border-stone-200 px-6 py-4 bg-stone-50 rounded-b-2xl">
           <button
+            type="button"
             onClick={onClose}
             disabled={loading}
-            className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm hover:bg-stone-50 transition active:scale-95 disabled:opacity-50"
+            className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 shadow-xs hover:bg-stone-50 transition active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
           >
             Không hủy
           </button>
           <button
+            type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="rounded-lg bg-rose-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-rose-700 transition active:scale-95 disabled:opacity-50"
+            className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-rose-700 transition active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
           >
             {loading ? 'Đang hủy...' : 'Xác nhận hủy'}
           </button>
@@ -662,7 +671,6 @@ export function ManageOrdersPage() {
 
   // Filters & Phân trang
   const [search, setSearch] = useState('');
-  const [searchBy, setSearchBy] = useState('ALL'); // 'ALL' | 'CUSTOMER_NAME' | 'ORDER_CODE' | 'PHONE'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [orderTypeFilter, setOrderTypeFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -779,7 +787,7 @@ export function ManageOrdersPage() {
         `Đã chuyển trạng thái đơn hàng ${order.orderCode} sang "${nextConfig.nextLabel}".`
       );
 
-      // Cập nhật ngay lập tức danh sách để nút hành động đổi sang trạng thái mới
+      // Cập nhật ngay lập tức danh sách
       setOrders((prevOrders) =>
         prevOrders.map((o) =>
           o.orderId === order.orderId
@@ -792,18 +800,18 @@ export function ManageOrdersPage() {
         )
       );
 
-      // Nếu đang mở modal chi tiết đơn hàng này, cập nhật modal luôn
-      setDetailOrder((prev) =>
-        prev && prev.orderId === order.orderId
-          ? {
-              ...prev,
-              status: nextConfig.nextStatus,
-              statusLabel: nextConfig.nextLabel,
-            }
-          : prev
-      );
+      if (detailOrder && detailOrder.orderId === order.orderId) {
+        setDetailOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: nextConfig.nextStatus,
+                statusLabel: nextConfig.nextLabel,
+              }
+            : prev
+        );
+      }
 
-      // Đồng bộ lại với backend
       fetchOrders();
     } catch (err) {
       console.error('Lỗi khi chuyển trạng thái đơn hàng:', err);
@@ -818,102 +826,148 @@ export function ManageOrdersPage() {
     const total = pagination.totalItems || orders.length;
     const confirmed = orders.filter((o) => o.status === 'CONFIRMED').length;
     const inProduction = orders.filter((o) => o.status === 'IN_PRODUCTION').length;
+    const readyToDeliver = orders.filter((o) => o.status === 'READY_TO_DELIVER').length;
     const completed = orders.filter((o) => o.status === 'COMPLETED').length;
-    return { total, confirmed, inProduction, completed };
+    const underInspection = orders.filter((o) => o.status === 'UNDER_INSPECTION').length;
+    const delivering = orders.filter((o) => o.status === 'DELIVERING').length;
+    const cancelled = orders.filter((o) => o.status === 'CANCELLED').length;
+    return { total, confirmed, inProduction, readyToDeliver, completed, underInspection, delivering, cancelled };
   }, [pagination.totalItems, orders]);
 
   return (
     <div className="space-y-6">
-      {/* ── Tiêu đề & Nút thao tác ───────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* ── 1. HEADER & ACTION BUTTONS ───────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-                Quản Lý Đơn Hàng
-              </h1>
-              <p className="text-sm text-stone-500">
-                Xem toàn bộ đơn hàng (hàng sẵn & đặt làm), theo dõi tiến độ, chi tiết thông tin và chuyển trạng thái theo quy trình.
-              </p>
-            </div>
-          </div>
+          <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
+            Quản Lý Đơn Hàng
+          </h1>
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Theo dõi tiến độ gia công xưởng mộc, nghiệm thu chất lượng thành phẩm và điều phối giao hàng Góc Nhà.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 shadow-xs transition hover:bg-stone-50 active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             title="Tải lại danh sách"
           >
-            <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin text-amber-700' : ''}`} />
+            <RotateCw className={`h-3.5 w-3.5 text-stone-500 ${refreshing ? 'animate-spin text-amber-700' : ''}`} />
             <span>Làm mới</span>
           </button>
         </div>
       </div>
 
-      {/* ── Thống kê tổng quan (Cards) ─────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ── 2. THỐNG KÊ TỔNG QUAN (4 CARDS) ───────────────────── */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Tổng số đơn hàng */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs transition hover:border-stone-300">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-stone-500">Tổng đơn hàng</span>
-            <div className="rounded-lg bg-stone-100 p-2 text-stone-700">
-              <Layers className="h-5 w-5" />
+            <span className="text-xs font-medium text-stone-500">Tổng đơn hàng</span>
+            <div className="rounded-lg bg-stone-100 p-1.5 text-stone-700">
+              <Layers className="h-4 w-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-stone-900">{stats.total}</span>
-            <span className="text-xs text-stone-400">đơn</span>
+          <div className="mt-2 text-lg font-bold font-mono text-stone-900 sm:text-2xl">
+            {stats.total}
+            <span className="ml-1.5 text-xs font-sans font-normal text-stone-400">đơn</span>
           </div>
+          <div className="mt-1 text-[11px] text-stone-500">Toàn bộ đơn hàng phát sinh</div>
         </div>
 
         {/* Đã xác nhận */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 shadow-xs transition hover:border-amber-300">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-amber-800">Đã xác nhận</span>
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-700">
-              <Clock className="h-5 w-5" />
+            <span className="text-xs font-semibold text-amber-800">Đã xác nhận</span>
+            <div className="rounded-lg bg-amber-100 p-1.5 text-amber-800">
+              <Clock className="h-4 w-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-900">{stats.confirmed}</span>
-            <span className="text-xs text-amber-600">chờ xử lý</span>
+          <div className="mt-2 text-lg font-bold font-mono text-amber-900 sm:text-2xl">
+            {stats.confirmed}
+            <span className="ml-1.5 text-xs font-sans font-normal text-amber-700">đơn</span>
           </div>
+          <div className="mt-1 text-[11px] text-amber-700">Chờ lập lệnh gia công xưởng</div>
         </div>
 
-        {/* Đang xử lý */}
-        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-5 shadow-sm transition hover:shadow">
+        {/* Đang xử lý xưởng */}
+        <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs transition hover:border-stone-300">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-blue-800">Đang xử lý</span>
-            <div className="rounded-lg bg-blue-100 p-2 text-blue-700">
-              <Clock className="h-5 w-5" />
+            <span className="text-xs font-medium text-stone-600">Đang gia công</span>
+            <div className="rounded-lg bg-stone-100 p-1.5 text-stone-700">
+              <Hammer className="h-4 w-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-blue-900">{stats.inProduction}</span>
-            <span className="text-xs text-blue-600">trong tiến trình</span>
+          <div className="mt-2 text-lg font-bold font-mono text-stone-900 sm:text-2xl">
+            {stats.inProduction}
+            <span className="ml-1.5 text-xs font-sans font-normal text-stone-400">đơn</span>
           </div>
+          <div className="mt-1 text-[11px] text-stone-500">Thợ mộc đang đóng tại xưởng</div>
         </div>
 
         {/* Hoàn thành */}
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 shadow-xs transition hover:border-emerald-300">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-emerald-800">Hoàn thành</span>
-            <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700">
-              <CheckCircle2 className="h-5 w-5" />
+            <span className="text-xs font-semibold text-emerald-800">Đã hoàn thành</span>
+            <div className="rounded-lg bg-emerald-100 p-1.5 text-emerald-800">
+              <CheckCircle2 className="h-4 w-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-900">{stats.completed}</span>
-            <span className="text-xs text-emerald-600">đã giao khách</span>
+          <div className="mt-2 text-lg font-bold font-mono text-emerald-900 sm:text-2xl">
+            {stats.completed}
+            <span className="ml-1.5 text-xs font-sans font-normal text-emerald-700">đơn</span>
           </div>
+          <div className="mt-1 text-[11px] text-emerald-700">Khách đã nhận và quyết toán</div>
         </div>
-      </div>
+      </section>
 
-      {/* ── Bộ lọc & Tìm kiếm ─────────────────────────────── */}
-      <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* ── 3. BỘ LỌC & TÌM KIẾM ─────────────────────────────── */}
+      <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs space-y-4">
+        {/* Tabs trạng thái đơn hàng */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 pb-3">
+          {[
+            { key: 'ALL', label: 'Tất cả đơn', count: stats.total },
+            { key: 'CONFIRMED', label: 'Đã xác nhận', count: stats.confirmed },
+            { key: 'IN_PRODUCTION', label: 'Đang gia công', count: stats.inProduction },
+            { key: 'UNDER_INSPECTION', label: 'Chờ nghiệm thu', count: stats.underInspection },
+            { key: 'READY_TO_DELIVER', label: 'Sẵn sàng giao', count: stats.readyToDeliver },
+            { key: 'DELIVERING', label: 'Đang giao hàng', count: stats.delivering },
+            { key: 'COMPLETED', label: 'Hoàn thành', count: stats.completed },
+            { key: 'CANCELLED', label: 'Đã hủy', count: stats.cancelled },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(tab.key);
+                  setCurrentPage(1);
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 ${
+                  isActive
+                    ? 'bg-stone-900 text-white font-semibold'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-mono font-medium ${
+                    isActive ? 'bg-stone-700 text-white' : 'bg-stone-200 text-stone-700'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Thanh tìm kiếm & lọc loại đơn */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           {/* Ô tìm kiếm */}
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
@@ -925,85 +979,79 @@ export function ManageOrdersPage() {
                 setSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 shadow-sm"
+              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-9 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             />
             {search && (
               <button
                 type="button"
-                onClick={() => { setSearch(''); setCurrentPage(1); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                onClick={() => {
+                  setSearch('');
+                  setCurrentPage(1);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600 focus-visible:outline-none"
+                title="Xóa từ khóa"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          {/* Lọc Trạng thái & Loại đơn */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s === 'ALL' ? 'Tất cả trạng thái' : STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
+            {/* Lọc loại đơn */}
+            <div className="w-full sm:w-52">
+              <select
+                aria-label="Lọc theo loại đơn hàng"
+                value={orderTypeFilter}
+                onChange={(e) => {
+                  setOrderTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full rounded-lg border border-stone-300 bg-white py-2 px-3 text-xs text-stone-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              >
+                {ORDER_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t === 'ALL' ? 'Tất cả loại đơn' : ORDER_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <select
-              value={orderTypeFilter}
-              onChange={(e) => {
-                setOrderTypeFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
-            >
-              {ORDER_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t === 'ALL' ? 'Tất cả loại đơn' : ORDER_TYPE_LABELS[t]}
-                </option>
-              ))}
-            </select>
-
+            {/* Nút Xóa bộ lọc */}
             {(search || statusFilter !== 'ALL' || orderTypeFilter !== 'ALL') && (
               <button
+                type="button"
                 onClick={handleResetFilters}
-                className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-600 transition hover:bg-stone-50"
+                className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-medium text-stone-600 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
               >
                 Xóa bộ lọc
               </button>
             )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── Bảng danh sách đơn hàng ───────────────────────── */}
-      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+      {/* ── 4. BẢNG DANH SÁCH ĐƠN HÀNG ───────────────────────── */}
+      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
+          <table className="min-w-full divide-y divide-stone-200 text-left text-xs">
             <thead className="bg-stone-50 font-semibold text-stone-700">
               <tr>
-                <th className="py-3.5 pl-4 pr-3 sm:pl-6">Mã đơn</th>
-                <th className="px-3 py-3.5">Loại</th>
-                <th className="px-3 py-3.5">Khách hàng</th>
-                <th className="px-3 py-3.5">Nhân viên</th>
-                <th className="px-3 py-3.5 text-center">Trạng thái</th>
-                <th className="px-3 py-3.5 text-right">Tổng tiền</th>
-                <th className="py-3.5 pl-3 pr-4 text-center sm:pr-6">Thao tác</th>
+                <th className="py-3 pl-4 pr-3 sm:pl-6">Mã đơn</th>
+                <th className="px-3 py-3">Loại đơn</th>
+                <th className="px-3 py-3">Khách hàng</th>
+                <th className="px-3 py-3">Phụ trách</th>
+                <th className="px-3 py-3 text-center">Trạng thái</th>
+                <th className="px-3 py-3 text-right">Tổng tiền</th>
+                <th className="py-3 pl-3 pr-4 text-center sm:pr-6">Thao tác</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-stone-200 bg-white">
+            <tbody className="divide-y divide-stone-100 bg-white">
               {loading ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-stone-500">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <RotateCw className="h-6 w-6 animate-spin text-amber-700" />
+                      <RotateCw className="h-5 w-5 animate-spin text-amber-700" />
                       <span>Đang tải danh sách đơn hàng...</span>
                     </div>
                   </td>
@@ -1012,10 +1060,10 @@ export function ManageOrdersPage() {
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-stone-500">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <ClipboardList className="h-10 w-10 text-stone-300" />
-                      <p className="font-medium text-stone-700">Không có đơn hàng nào.</p>
+                      <ClipboardList className="h-9 w-9 text-stone-300" />
+                      <p className="font-semibold text-stone-700 text-sm">Không có đơn hàng nào</p>
                       <p className="text-xs text-stone-400">
-                        Chưa có đơn hàng nào thỏa mãn điều kiện tìm kiếm.
+                        Chưa có đơn hàng nào thỏa mãn điều kiện lọc.
                       </p>
                     </div>
                   </td>
@@ -1028,20 +1076,24 @@ export function ManageOrdersPage() {
                   const canCancel = order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
 
                   return (
-                    <tr key={order.orderId} className="transition hover:bg-stone-50/80">
-                      {/* 1. Mã đơn */}
-                      <td className="whitespace-nowrap py-3.5 pl-4 pr-3 sm:pl-6">
-                        <div className="font-mono font-bold text-amber-800 text-xs">
+                    <tr key={order.orderId} className="transition hover:bg-stone-50/70">
+                      {/* Mã đơn */}
+                      <td className="whitespace-nowrap py-3 pl-4 pr-3 sm:pl-6">
+                        <button
+                          type="button"
+                          onClick={() => handleViewDetail(order)}
+                          className="font-mono font-semibold text-amber-900 hover:underline hover:text-amber-950 focus-visible:outline-none"
+                        >
                           {order.orderCode}
-                        </div>
+                        </button>
                       </td>
 
-                      {/* 2. Loại đơn */}
-                      <td className="whitespace-nowrap px-3 py-3.5">
+                      {/* Loại đơn */}
+                      <td className="whitespace-nowrap px-3 py-3">
                         <span
                           className={`inline-block rounded px-2 py-0.5 text-[11px] font-semibold border ${
                             order.orderType === 'CUSTOM'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              ? 'bg-amber-100 text-amber-900 border-amber-200'
                               : 'bg-stone-100 text-stone-700 border-stone-200'
                           }`}
                         >
@@ -1050,126 +1102,132 @@ export function ManageOrdersPage() {
                       </td>
 
                       {/* Khách hàng */}
-                      <td className="px-3 py-3.5">
-                        <div className="font-semibold text-stone-800 flex items-center gap-1.5 text-xs">
+                      <td className="px-3 py-3">
+                        <div className="font-medium text-stone-800 flex items-center gap-1.5">
                           <User className="h-3.5 w-3.5 text-stone-400 shrink-0" />
                           <span>{order.contactName}</span>
                         </div>
-                        <div className="text-xs text-stone-500 flex items-center gap-1 mt-0.5">
+                        <div className="text-[11px] text-stone-500 font-mono flex items-center gap-1 mt-0.5">
                           <Phone className="h-3 w-3 text-stone-400" />
                           <span>{order.contactPhone}</span>
                         </div>
                       </td>
 
-                      {/* Nhân viên phụ trách / Tổ trưởng */}
-                      <td className="whitespace-nowrap px-3 py-3.5 text-xs">
+                      {/* Phụ trách */}
+                      <td className="whitespace-nowrap px-3 py-3">
                         {order.staffName ? (
-                          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
-                            <Hammer className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-0.5 text-[11px] font-medium text-stone-800 border border-stone-200">
+                            <Hammer className="h-3 w-3 text-amber-900 shrink-0" />
                             <span>{order.staffName}</span>
                           </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-stone-400 italic">
+                          <span className="text-[11px] text-stone-400 italic">
                             Chưa phân công
                           </span>
                         )}
                       </td>
 
                       {/* Trạng thái hiện tại */}
-                      <td className="whitespace-nowrap px-3 py-3.5 text-center">
+                      <td className="whitespace-nowrap px-3 py-3 text-center">
                         <CustomerOrderStatusBadge status={order.status} />
                       </td>
 
-                      {/* Tài chính & Thu tiền */}
-                      <td className="whitespace-nowrap px-3 py-3.5 text-right text-xs">
-                        <div className="font-bold text-stone-900">
+                      {/* Tổng tiền & Còn nợ */}
+                      <td className="whitespace-nowrap px-3 py-3 text-right">
+                        <div className="font-bold font-mono text-stone-900">
                           {formatCurrency(order.totalAmount)}
                         </div>
                         {order.remainingAmount > 0 ? (
-                          <div className="text-[11px] font-semibold text-rose-600 mt-0.5">
-                            Còn lại: {formatCurrency(order.remainingAmount)}
+                          <div className="text-[11px] font-mono text-rose-700 mt-0.5">
+                            Còn nợ: {formatCurrency(order.remainingAmount)}
                           </div>
                         ) : (
-                          <div className="text-[11px] font-semibold text-emerald-600 mt-0.5">
+                          <div className="text-[11px] font-medium text-emerald-700 mt-0.5">
                             Đã thanh toán đủ
                           </div>
                         )}
                       </td>
 
                       {/* Thao tác */}
-                      <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
+                      <td className="whitespace-nowrap py-3 pl-3 pr-4 text-center sm:pr-6">
                         <div className="inline-flex items-center justify-center gap-1.5">
-                          {/* 1. Nếu có cấu hình trạng thái kế tiếp (NEW hoặc READY_TO_DELIVER): Nút Thao tác tuần tự */}
+                          {/* 1. Nếu có cấu hình trạng thái kế tiếp (NEW hoặc READY_TO_DELIVER) */}
                           {nextConfig && (
                             <button
+                              type="button"
                               onClick={() => handleAdvanceStatus(order)}
                               disabled={isAdvancing}
-                              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-sm transition active:scale-95 disabled:opacity-50 ${nextConfig.buttonClass}`}
+                              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold shadow-xs transition active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900 ${nextConfig.buttonClass}`}
                               title={nextConfig.actionLabel}
                             >
                               {isAdvancing ? (
-                                <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                                <RotateCw className="h-3 w-3 animate-spin" />
                               ) : (
-                                <NextIcon className="h-3.5 w-3.5" />
+                                <NextIcon className="h-3 w-3" />
                               )}
                               <span>{nextConfig.actionLabel}</span>
                             </button>
                           )}
 
-                          {/* 2. Nếu đơn đã tiếp nhận CONFIRMED: Nút Giao việc cho thợ (chuyển sang Quản lý Lệnh Gia Công) */}
+                          {/* 2. Nếu đơn đã tiếp nhận CONFIRMED: Giao việc cho thợ */}
                           {order.status === 'CONFIRMED' && (
                             <button
+                              type="button"
                               onClick={() => handleGoToProductionOrders(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 shadow-sm transition hover:bg-amber-100 active:scale-95"
+                              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 shadow-xs transition hover:bg-amber-100 active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               title="Chuyển sang trang Quản lý Lệnh Gia Công để giao việc cho thợ"
                             >
-                              <Hammer className="h-3.5 w-3.5" />
+                              <Hammer className="h-3 w-3" />
                               <span>Giao việc cho thợ</span>
                             </button>
                           )}
 
-                          {/* 3. Nếu đơn đang gia công IN_PRODUCTION: Nút Lệnh gia công */}
+                          {/* 3. Nếu đơn đang gia công IN_PRODUCTION: Lệnh gia công */}
                           {order.status === 'IN_PRODUCTION' && (
                             <button
+                              type="button"
                               onClick={() => handleGoToProductionOrders(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800 shadow-sm transition hover:bg-blue-100 active:scale-95"
+                              className="inline-flex items-center gap-1 rounded-md border border-stone-300 bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-800 shadow-xs transition hover:bg-stone-200 active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               title="Xem tiến độ và lệnh gia công tại xưởng"
                             >
-                              <Hammer className="h-3.5 w-3.5" />
+                              <Hammer className="h-3 w-3" />
                               <span>Lệnh gia công</span>
                             </button>
                           )}
 
-                          {/* 4. Nếu đơn chờ nghiệm thu UNDER_INSPECTION: Nút Duyệt nghiệm thu */}
+                          {/* 4. Nếu đơn chờ nghiệm thu UNDER_INSPECTION: Duyệt nghiệm thu */}
                           {order.status === 'UNDER_INSPECTION' && (
                             <button
+                              type="button"
                               onClick={() => handleGoToProductionOrders(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-800 shadow-sm transition hover:bg-orange-100 active:scale-95"
+                              className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-900 shadow-xs transition hover:bg-orange-100 active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               title="Kiểm tra ảnh thành phẩm và duyệt nghiệm thu chất lượng"
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5 text-orange-600" />
+                              <CheckCircle2 className="h-3 w-3 text-orange-600" />
                               <span>Duyệt nghiệm thu</span>
                             </button>
                           )}
 
                           {/* Xem chi tiết */}
                           <button
+                            type="button"
                             onClick={() => handleViewDetail(order)}
-                            className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95"
+                            className="inline-flex items-center gap-1 rounded-md border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 shadow-xs transition hover:bg-stone-50 active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             title="Xem chi tiết đơn hàng"
                           >
-                            <Eye className="h-3.5 w-3.5 text-stone-400" />
+                            <Eye className="h-3 w-3 text-stone-400" />
                             <span>Chi tiết</span>
                           </button>
 
                           {/* Hủy đơn hàng */}
                           {canCancel && (
                             <button
+                              type="button"
                               onClick={() => setCancelOrder(order)}
-                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 shadow-sm transition hover:bg-rose-100 active:scale-95"
+                              className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 shadow-xs transition hover:bg-rose-100 active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               title="Hủy đơn hàng này"
                             >
-                              <Ban className="h-3.5 w-3.5" />
+                              <Ban className="h-3 w-3" />
                               <span>Hủy</span>
                             </button>
                           )}
@@ -1183,7 +1241,7 @@ export function ManageOrdersPage() {
           </table>
         </div>
 
-        {/* Phân trang đồng bộ TablePagination */}
+        {/* Phân trang TablePagination */}
         <TablePagination
           currentPage={currentPage}
           totalPages={pagination.totalPages}

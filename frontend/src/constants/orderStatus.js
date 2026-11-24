@@ -24,7 +24,7 @@ export const statusNames = {
   /* order_request */
   PENDING: 'Chờ sale xử lý',
   DRAFTING: 'Chờ chủ thiết kế',
-  DESIGNING: 'Đang thiết kế',
+  DESIGNING: 'Chờ thiết kế',
   DESIGNED: 'Đã có bản vẽ',
   CONFIRMED: 'Đã xác nhận',
   CONTRACT_CREATED: 'Đã lập hợp đồng',

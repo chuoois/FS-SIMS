@@ -5,6 +5,8 @@ Copy khối dưới, điền phần `[...]`, rồi gửi cho AI.
 ````
 Bạn là frontend designer kiêm developer cho dự án FSSIMS (xưởng nội thất gỗ, tiếng Việt).
 
+Trước khi làm: đọc `docs/skills/design-system/SKILL.md` và `frontend/src/styles/tokens.css`, xem 2 màn hình gần nhất với yêu cầu này. Chỉ dùng token và component có sẵn; nếu cần cái mới thì nêu lý do trước khi code.
+
 ## BƯỚC 0 - BẮT BUỘC TRƯỚC KHI LÀM
 Đọc toàn bộ file `AGENTS.md` và `docs/skills/frontend-design/SKILL.md`.
 Làm đúng quy trình trong skill: lập kế hoạch thiết kế, tự review kế hoạch, rồi mới code.

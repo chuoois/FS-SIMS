@@ -9,6 +9,7 @@
 const {
   findSupplierById,
   findSupplierByCode,
+  findSupplierByPhone,
   getSuppliersWithPagination,
   getSupplierWithReceiptHistory,
   countMaterialReceiptsBySupplierId,
@@ -155,6 +156,16 @@ async function createSupplier(req, res) {
       }
     }
 
+    // 2.1 Kiểm tra trùng số điện thoại nhà cung cấp (hai NCC không được trùng số điện thoại)
+    if (validation.value.phone_number) {
+      const existingPhone = await findSupplierByPhone(validation.value.phone_number);
+      if (existingPhone) {
+        return res.status(409).json({
+          message: `Số điện thoại '${validation.value.phone_number}' đã được đăng ký bởi nhà cung cấp '${existingPhone.supplier_name}' (${existingPhone.supplier_code})`,
+        });
+      }
+    }
+
     const createBy = req.user?.email || req.user?.full_name || 'SYSTEM';
 
     // 3. Tạo mới vào database
@@ -200,6 +211,16 @@ async function updateSupplier(req, res) {
     const existing = await findSupplierById(supplierId);
     if (!existing) {
       return res.status(404).json({ message: 'Không tìm thấy thông tin nhà cung cấp' });
+    }
+
+    // 2.1 Kiểm tra trùng số điện thoại với nhà cung cấp khác (nếu có cập nhật số điện thoại)
+    if (validation.value.phone_number) {
+      const existingPhone = await findSupplierByPhone(validation.value.phone_number, supplierId);
+      if (existingPhone) {
+        return res.status(409).json({
+          message: `Số điện thoại '${validation.value.phone_number}' đã được đăng ký bởi nhà cung cấp '${existingPhone.supplier_name}' (${existingPhone.supplier_code})`,
+        });
+      }
     }
 
     const modifieBy = req.user?.email || req.user?.full_name || 'SYSTEM';

@@ -18,7 +18,7 @@ describe('StatusBadge Components', () => {
       render(<OrderRequestStatusBadge status="PENDING" />);
       const badge = screen.getByRole('status');
       expect(badge).toBeInTheDocument();
-      expect(badge).toHaveTextContent('Chờ tiếp nhận');
+      expect(badge).toHaveTextContent('Chờ xử lý');
     });
 
     it('renders CONFIRMED status', () => {
@@ -61,9 +61,9 @@ describe('StatusBadge Components', () => {
   });
 
   describe('ContractStatusBadge', () => {
-    it('renders DRAFT as Chờ ký', () => {
+    it('renders DRAFT as Chờ ký hợp đồng', () => {
       render(<ContractStatusBadge status="DRAFT" />);
-      expect(screen.getByText('Chờ ký')).toBeInTheDocument();
+      expect(screen.getByText('Chờ ký hợp đồng')).toBeInTheDocument();
     });
 
     it('renders SIGNED as Đã ký kết', () => {
@@ -122,7 +122,7 @@ describe('StatusBadge Components', () => {
       expect(screen.getByText('Đã ký kết')).toBeInTheDocument();
 
       rerender(<StatusBadge type="order_request" status="PENDING" />);
-      expect(screen.getByText('Chờ tiếp nhận')).toBeInTheDocument();
+      expect(screen.getByText('Chờ xử lý')).toBeInTheDocument();
 
       rerender(<StatusBadge type="production_order" status="IN_PROGRESS" />);
       expect(screen.getByText('Đang gia công')).toBeInTheDocument();

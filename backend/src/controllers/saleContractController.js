@@ -22,6 +22,8 @@ const {
   updateSalesOrderRequest,
 } = require('../models/SaleRequestModel');
 
+const { OrderRequest } = require('../models/OrderRequestModel');
+
 const {
   validateCreateOfflineContractInput,
   validateSignContractInput,
@@ -225,6 +227,14 @@ async function signContract(req, res) {
 
     if (!contract) {
       return res.status(404).json({ message: 'Không tìm thấy hợp đồng.' });
+    }
+
+    if (contract.request_id) {
+      const { OrderRequest } = require('../models/OrderRequestModel');
+      await OrderRequest.update(
+        { status: 'CONVERTED', modifieby: req.user?.email || 'STAFF' },
+        { where: { request_id: contract.request_id } }
+      );
     }
 
     return res.status(200).json({

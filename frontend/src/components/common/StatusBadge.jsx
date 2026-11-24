@@ -17,7 +17,6 @@ import {
   RotateCw,
   Truck,
   FileText,
-  Sparkles,
   Hammer,
   AlertTriangle,
   Package,
@@ -27,7 +26,7 @@ import {
 
 export const ORDER_REQUEST_STATUS_MAP = {
   PENDING: {
-    label: 'Chờ tiếp nhận',
+    label: 'Chờ xử lý',
     icon: Clock,
     className: 'bg-amber-50 text-amber-800 border-amber-200',
   },
@@ -37,14 +36,14 @@ export const ORDER_REQUEST_STATUS_MAP = {
     className: 'bg-stone-100 text-stone-700 border-stone-200',
   },
   DESIGNING: {
-    label: 'Đang thiết kế',
+    label: 'Chờ thiết kế',
     icon: RotateCw,
     className: 'bg-blue-50 text-blue-800 border-blue-200',
   },
   DESIGNED: {
     label: 'Đã có bản vẽ',
-    icon: Sparkles,
-    className: 'bg-indigo-50 text-indigo-800 border-indigo-200',
+    icon: CheckCircle2,
+    className: 'bg-blue-50 text-blue-800 border-blue-200',
   },
   CONFIRMED: {
     label: 'Đã xác nhận',
@@ -55,6 +54,11 @@ export const ORDER_REQUEST_STATUS_MAP = {
     label: 'Đã tạo hợp đồng',
     icon: FileText,
     className: 'bg-teal-50 text-teal-800 border-teal-200',
+  },
+  DRAFT: {
+    label: 'Chờ ký hợp đồng',
+    icon: Clock,
+    className: 'bg-amber-50 text-amber-800 border-amber-200',
   },
   CONVERTED: {
     label: 'Đã chuyển đơn',
@@ -75,7 +79,7 @@ export const ORDER_REQUEST_STATUS_MAP = {
 
 export const CONTRACT_STATUS_MAP = {
   DRAFT: {
-    label: 'Chờ ký',
+    label: 'Chờ ký hợp đồng',
     icon: Clock,
     className: 'bg-amber-50 text-amber-800 border-amber-200',
   },
@@ -83,6 +87,11 @@ export const CONTRACT_STATUS_MAP = {
     label: 'Đã ký kết',
     icon: CheckCircle2,
     className: 'bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold',
+  },
+  COMPLETED: {
+    label: 'Hoàn thành',
+    icon: CheckCircle2,
+    className: 'bg-blue-50 text-blue-800 border-blue-200 font-semibold',
   },
   CANCELLED: {
     label: 'Đã hủy',

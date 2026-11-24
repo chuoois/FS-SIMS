@@ -371,7 +371,7 @@ async function convertRequestToContract({
     }
 
     // Cập nhật trạng thái và thông tin bổ sung cho request
-    request.status = 'CONVERTED';
+    request.status = 'DRAFT';
     request.approved_at = new Date();
     request.modifieby = createBy;
     if (finalCustomerAddress) request.delivery_address = finalCustomerAddress;
@@ -494,7 +494,7 @@ async function createSalesOrderRequest({
       budget_min: budgetMin || null,
       budget_max: budgetMax || null,
       expected_date: expectedDate || null,
-      status: 'PENDING',
+      status: 'DESIGNING',
       createby: createdBy || 'Sales',
     }, { transaction });
 

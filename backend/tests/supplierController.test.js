@@ -1,6 +1,7 @@
 jest.mock('../src/models/SupplierModel', () => ({
   findSupplierById: jest.fn(),
   findSupplierByCode: jest.fn(),
+  findSupplierByPhone: jest.fn(),
   getSuppliersWithPagination: jest.fn(),
   getSupplierWithReceiptHistory: jest.fn(),
   countMaterialReceiptsBySupplierId: jest.fn(),
@@ -14,6 +15,7 @@ jest.mock('../src/models/SupplierModel', () => ({
 const {
   findSupplierById,
   findSupplierByCode,
+  findSupplierByPhone,
   getSuppliersWithPagination,
   getSupplierWithReceiptHistory,
   countMaterialReceiptsBySupplierId,
@@ -230,6 +232,30 @@ describe('supplierController', () => {
       );
     });
 
+    it('returns 409 when phone_number already exists', async () => {
+      findSupplierByCode.mockResolvedValue(null);
+      findSupplierByPhone.mockResolvedValue({
+        supplier_id: 1,
+        supplier_code: 'NCC001',
+        supplier_name: 'Gỗ Đức Thành',
+      });
+
+      const req = createRequest({
+        body: { supplier_name: 'NCC Trùng SĐT', phone_number: '0901234567' },
+      });
+      const res = createResponse();
+
+      await createSupplier(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining("Số điện thoại '0901234567' đã được đăng ký bởi nhà cung cấp 'Gỗ Đức Thành'"),
+        }),
+      );
+      expect(createSupplierModel).not.toHaveBeenCalled();
+    });
+
     it('creates supplier successfully when data is valid', async () => {
       findSupplierByCode.mockResolvedValue(null);
       generateNextSupplierCode.mockResolvedValue('NCC002');
@@ -287,6 +313,31 @@ describe('supplierController', () => {
       await updateSupplier(req, res);
 
       expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('returns 409 when updated phone_number already belongs to another supplier', async () => {
+      findSupplierById.mockResolvedValue({ supplier_id: 2, supplier_name: 'Công ty Hiện Tại' });
+      findSupplierByPhone.mockResolvedValue({
+        supplier_id: 1,
+        supplier_code: 'NCC001',
+        supplier_name: 'Gỗ Đức Thành',
+      });
+
+      const req = createRequest({
+        params: { id: '2' },
+        body: { phone_number: '0901234567' },
+      });
+      const res = createResponse();
+
+      await updateSupplier(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining("Số điện thoại '0901234567' đã được đăng ký bởi nhà cung cấp 'Gỗ Đức Thành'"),
+        }),
+      );
+      expect(updateSupplierModel).not.toHaveBeenCalled();
     });
 
     it('updates supplier successfully', async () => {

@@ -55,7 +55,10 @@ const Supplier = sequelize.define(
     timestamps: true,
     createdAt: 'createdate',
     updatedAt: 'modifiedate',
-    indexes: [{ name: 'uk_supplier_code', unique: true, fields: ['supplier_code'] }],
+    indexes: [
+      { name: 'uk_supplier_code', unique: true, fields: ['supplier_code'] },
+      { name: 'uk_supplier_phone', unique: true, fields: ['phone_number'] },
+    ],
   },
 );
 
@@ -79,6 +82,23 @@ async function findSupplierByCode(supplierCode) {
   if (!supplierCode) return null;
   return Supplier.findOne({
     where: { supplier_code: supplierCode.trim() },
+    raw: true,
+  });
+}
+
+/**
+ * Tìm nhà cung cấp theo số điện thoại (phone_number)
+ * @param {string} phoneNumber
+ * @param {number|string} [excludeSupplierId]
+ */
+async function findSupplierByPhone(phoneNumber, excludeSupplierId = null) {
+  if (!phoneNumber || !phoneNumber.trim()) return null;
+  const whereClause = { phone_number: phoneNumber.trim() };
+  if (excludeSupplierId) {
+    whereClause.supplier_id = { [Op.ne]: Number(excludeSupplierId) };
+  }
+  return Supplier.findOne({
+    where: whereClause,
     raw: true,
   });
 }
@@ -361,6 +381,7 @@ module.exports = {
   Supplier,
   findSupplierById,
   findSupplierByCode,
+  findSupplierByPhone,
   getSuppliersWithPagination,
   getSupplierWithReceiptHistory,
   countMaterialReceiptsBySupplierId,

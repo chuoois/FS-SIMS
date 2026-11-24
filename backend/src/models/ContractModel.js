@@ -221,6 +221,16 @@ async function signContract(contractId, { signedPlace, signedBy, modifieBy, cont
   if (contractFileUrl) contract.contract_file_url = contractFileUrl;
 
   await contract.save();
+
+  // Đồng thời cập nhật trạng thái của order_request thành CONVERTED nếu hợp đồng gắn với yêu cầu đặt hàng
+  if (contract.request_id) {
+    const { OrderRequest } = require('./OrderRequestModel');
+    await OrderRequest.update(
+      { status: 'CONVERTED', modifieby: modifieBy || 'STAFF' },
+      { where: { request_id: contract.request_id } }
+    );
+  }
+
   return findContractById(contractId);
 }
 

@@ -645,7 +645,8 @@ CREATE TABLE IF NOT EXISTS supplier (
     createby       VARCHAR(100)  NULL,
     modifieby      VARCHAR(100)  NULL,
     PRIMARY KEY (supplier_id),
-    UNIQUE KEY uk_supplier_code (supplier_code)
+    UNIQUE KEY uk_supplier_code (supplier_code),
+    UNIQUE KEY uk_supplier_phone (phone_number)
 ) ENGINE = InnoDB;
 
 
