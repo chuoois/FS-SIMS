@@ -140,9 +140,8 @@ describe('ManageOrdersPage Component', () => {
       expect(screen.getAllByText('Đã xác nhận').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('Đang gia công').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('Đã hoàn thành').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(1);
     });
-
-    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders order list in the table with codes and customer details', async () => {

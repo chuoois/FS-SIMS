@@ -34,6 +34,7 @@ const {
 // Import controllers thành phần để re-export
 const saleCustomerController = require("./saleCustomerController");
 const saleContractController = require("./saleContractController");
+const { buildSuccessResponse } = require("../utils/successResponse");
 
 /**
  * 1. GET /api/sale-orders/products
@@ -49,19 +50,30 @@ async function getWarehouseProducts(req, res) {
     };
 
     const result = await getProductsWithPagination(queryParams);
+    const dtoList = (result.products || []).map((product) =>
+      toProductDTO(product, { showAvailableStock: true }),
+    );
 
-    return res.status(200).json({
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: "Lấy danh sách sản phẩm trong kho thành công",
-      data: (result.products || []).map((product) =>
-        toProductDTO(product, { showAvailableStock: true }),
-      ),
-      pagination: {
-        totalItems: result.totalItems,
+      data: dtoList,
+      meta: {
+        page: result.currentPage,
+        limit: result.itemsPerPage,
+        total: result.totalItems,
         totalPages: result.totalPages,
-        currentPage: result.currentPage,
-        itemsPerPage: result.itemsPerPage,
       },
+      req,
     });
+    responsePayload.products = dtoList;
+    responsePayload.pagination = {
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      itemsPerPage: result.itemsPerPage,
+    };
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error("[saleOrderController.getWarehouseProducts]", error);
     return res.status(500).json({
@@ -90,10 +102,15 @@ async function getProductDetail(req, res) {
         .json({ message: "Không tìm thấy sản phẩm trong kho." });
     }
 
-    return res.status(200).json({
+    const productDTO = toProductDTO(product, { showAvailableStock: true });
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: "Lấy thông tin chi tiết sản phẩm thành công",
-      data: toProductDTO(product, { showAvailableStock: true }),
+      data: productDTO,
+      req,
     });
+    responsePayload.product = productDTO;
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error("[saleOrderController.getProductDetail]", error);
     return res.status(500).json({
@@ -110,10 +127,12 @@ async function getProductDetail(req, res) {
 async function getProductMetadata(req, res) {
   try {
     const metadata = await getProductMetadataModel();
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: "Lấy metadata thành công",
       data: metadata,
-    });
+      req,
+    }));
   } catch (error) {
     console.error("[saleOrderController.getProductMetadata]", error);
     return res.status(500).json({
@@ -140,10 +159,15 @@ async function createOrderFromContract(req, res) {
       createBy: req.user?.email || "STAFF",
     });
 
-    return res.status(201).json({
+    const orderDTO = toOrderDTO(order);
+    const responsePayload = buildSuccessResponse({
+      status: 201,
       message: "Tạo đơn hàng từ hợp đồng thành công",
-      data: toOrderDTO(order),
+      data: orderDTO,
+      req,
     });
+    responsePayload.order = orderDTO;
+    return res.status(201).json(responsePayload);
   } catch (error) {
     console.error("[saleOrderController.createOrderFromContract]", error);
     const isConflict =
@@ -197,16 +221,27 @@ async function getOrders(req, res) {
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
     });
 
-    return res.status(200).json({
+    const ordersDTO = (result.orders || []).map(toOrderDTO);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: "Lấy danh sách đơn hàng thành công",
-      data: (result.orders || []).map(toOrderDTO),
-      pagination: {
-        totalItems: result.totalItems,
+      data: ordersDTO,
+      meta: {
+        page: result.currentPage,
+        limit: result.itemsPerPage,
+        total: result.totalItems,
         totalPages: result.totalPages,
-        currentPage: result.currentPage,
-        itemsPerPage: result.itemsPerPage,
       },
+      req,
     });
+    responsePayload.orders = ordersDTO;
+    responsePayload.pagination = {
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      itemsPerPage: result.itemsPerPage,
+    };
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error("[saleOrderController.getOrders]", error);
     return res.status(500).json({
@@ -233,10 +268,15 @@ async function getOrderById(req, res) {
       return res.status(404).json({ message: "Không tìm thấy đơn hàng." });
     }
 
-    return res.status(200).json({
+    const orderDTO = toOrderDTO(order);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: "Lấy chi tiết đơn hàng thành công",
-      data: toOrderDTO(order),
+      data: orderDTO,
+      req,
     });
+    responsePayload.order = orderDTO;
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error("[saleOrderController.getOrderById]", error);
     return res.status(500).json({
@@ -266,10 +306,15 @@ async function deliverOrder(req, res) {
       updatedBy,
     });
 
-    return res.status(200).json({
+    const orderDTO = toOrderDTO(order);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: "Kích hoạt giao hàng thành công",
-      data: toOrderDTO(order),
+      data: orderDTO,
+      req,
     });
+    responsePayload.order = orderDTO;
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error("[saleOrderController.deliverOrder]", error);
     return res.status(400).json({
@@ -294,10 +339,15 @@ async function completeOrder(req, res) {
     const updatedBy = req.user?.email || req.user?.full_name || "Sales";
     const order = await completeDeliveryModel(orderId, { updatedBy });
 
-    return res.status(200).json({
+    const orderDTO = toOrderDTO(order);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: "Hoàn tất đơn hàng thành công (COMPLETED)",
-      data: toOrderDTO(order),
+      data: orderDTO,
+      req,
     });
+    responsePayload.order = orderDTO;
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error("[saleOrderController.completeOrder]", error);
     return res.status(400).json({

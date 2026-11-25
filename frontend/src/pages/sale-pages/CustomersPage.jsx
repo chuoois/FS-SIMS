@@ -61,11 +61,12 @@ function CustomerDetailModal({ customerId, onClose }) {
     setLoading(true);
     getCustomerById(customerId)
       .then((res) => {
-        setCustomer(res?.data || null);
+        // Chuẩn AGENTS.md / CONVENTIONS.md: Dữ liệu trả về nằm trong res.data
+        setCustomer(res?.data ?? res?.customer ?? null);
       })
       .catch((err) => {
         console.error('Lỗi tải chi tiết khách hàng:', err);
-        toast.error(err.response?.data?.message || 'Không thể tải thông tin khách hàng');
+        toast.error(err.response?.data?.detail || err.response?.data?.message || 'Không thể tải thông tin khách hàng');
       })
       .finally(() => setLoading(false));
   }, [customerId]);
@@ -298,15 +299,16 @@ function CreateCustomerModal({ open, onClose, initialName = '', initialPhone = '
         note: note.trim() || undefined,
       });
 
-      const newCustomer = res.data;
-      toast.success('Tạo khách hàng mới thành công');
+      // Chuẩn AGENTS.md / CONVENTIONS.md: Dữ liệu trả về nằm trong res.data
+      const newCustomer = res?.data ?? res?.customer ?? res;
+      toast.success(res?.message || 'Tạo khách hàng mới thành công');
       if (onSuccess) onSuccess(newCustomer);
 
       if (returnUrl) {
         const params = new URLSearchParams();
-        params.set('customerAccountId', newCustomer.customerAccountId);
-        params.set('customerName', newCustomer.fullName);
-        params.set('customerPhone', newCustomer.phoneNumber);
+        params.set('customerAccountId', newCustomer.customerAccountId || newCustomer.user_account_id);
+        params.set('customerName', newCustomer.fullName || newCustomer.full_name);
+        params.set('customerPhone', newCustomer.phoneNumber || newCustomer.phone_number);
         if (newCustomer.address) params.set('customerAddress', newCustomer.address);
         navigate(`${returnUrl}?${params.toString()}`);
       } else {
@@ -314,7 +316,7 @@ function CreateCustomerModal({ open, onClose, initialName = '', initialPhone = '
       }
     } catch (err) {
       console.error('Lỗi khi tạo khách hàng:', err);
-      toast.error(err.response?.data?.message || err.message || 'Không thể tạo khách hàng');
+      toast.error(err.response?.data?.detail || err.response?.data?.message || err.message || 'Không thể tạo khách hàng');
     } finally {
       setSubmitting(false);
     }
@@ -481,22 +483,24 @@ export function CustomersPage() {
         };
 
         const res = await getCustomers(params);
-        const customerList = Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res?.data?.customers)
-            ? res.data.customers
-            : Array.isArray(res?.customers)
-              ? res.customers
-              : [];
+        // Chuẩn AGENTS.md / CONVENTIONS.md: Dữ liệu danh sách nằm trong res.data, phân trang nằm trong res.meta
+        const customerList = res?.data ?? res?.customers ?? [];
 
-        setCustomers(customerList);
+        setCustomers(Array.isArray(customerList) ? customerList : []);
 
-        const pag = res?.pagination || res?.data?.pagination || {
-          currentPage: page,
-          totalPages: Math.max(1, Math.ceil((res?.totalItems || customerList.length) / pageSize)),
-          totalItems: res?.totalItems || res?.pagination?.totalItems || customerList.length,
-          itemsPerPage: pageSize,
-        };
+        const pag = res?.meta
+          ? {
+              currentPage: res.meta.page ?? page,
+              totalPages: res.meta.totalPages ?? 1,
+              totalItems: res.meta.total ?? customerList.length,
+              itemsPerPage: res.meta.limit ?? pageSize,
+            }
+          : res?.pagination || res?.data?.pagination || {
+              currentPage: page,
+              totalPages: Math.max(1, Math.ceil((res?.totalItems || customerList.length) / pageSize)),
+              totalItems: res?.totalItems || res?.pagination?.totalItems || customerList.length,
+              itemsPerPage: pageSize,
+            };
         setPagination(pag);
 
         const total = pag.totalItems || customerList.length;
@@ -508,7 +512,7 @@ export function CustomersPage() {
         });
       } catch (err) {
         console.error('Lỗi tải danh sách khách hàng:', err);
-        toast.error(err.response?.data?.message || 'Không thể tải danh sách khách hàng');
+        toast.error(err.response?.data?.detail || err.response?.data?.message || 'Không thể tải danh sách khách hàng');
       } finally {
         setLoading(false);
       }

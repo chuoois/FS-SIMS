@@ -78,7 +78,7 @@ function RequestDetailModal({ requestId, onClose, onEdit }) {
       try {
         setLoading(true);
         const res = await getRequestById(requestId);
-        if (active) setDetail(res.data || null);
+        if (active) setDetail(res.request || res.data || null);
       } catch {
         if (active) toast.error('Không tải được thông tin yêu cầu.');
       } finally {
@@ -588,8 +588,9 @@ function ConvertToContractModal({ request, onClose, onSuccess }) {
       };
 
       const res = await convertRequestToContract(request.requestId, payload);
-      toast.success(`Đã tạo hợp đồng ${res.data?.contractCode || ''} thành công!`);
-      onSuccess(res.data);
+      const createdContract = res.contract || res.data;
+      toast.success(`Đã tạo hợp đồng ${createdContract?.contractCode || ''} thành công!`);
+      onSuccess(createdContract);
     } catch (err) {
       const msg = err?.response?.data?.message || 'Có lỗi xảy ra khi chuyển yêu cầu thành hợp đồng.';
       toast.error(msg);
@@ -843,7 +844,7 @@ export function RequestsPage() {
       }
 
       const res = await getRequests(params);
-      const list = res.data || res.requests || [];
+      const list = res.requests || res.data || [];
       setRequests(Array.isArray(list) ? list : []);
 
       if (res.pagination) {
