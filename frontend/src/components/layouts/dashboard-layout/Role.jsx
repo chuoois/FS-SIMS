@@ -51,9 +51,7 @@ export const roles = {
     label: 'Thợ xưởng',
     base: '/staff-leader',
     items: [
-      { label: 'Tổng quan', path: '', icon: LayoutDashboard },
-      { label: 'Đơn hàng sản xuất', path: 'orders', icon: Package },
-      { label: 'Tiến độ sản xuất', path: 'production', icon: Hammer },
+      { label: 'Đơn hàng sản xuất', path: 'orders', icon: Package }
     ],
   },
 };

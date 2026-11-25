@@ -3,10 +3,11 @@
 // Thành phần hiển thị huy hiệu trạng thái (Status Badge) dùng chung
 // Chuẩn hóa 100% theo bảng quy ước trạng thái trong AGENTS.md (FSSIMS)
 // Hỗ trợ:
-// - order_request: PENDING, DRAFTING, DESIGNING, DESIGNED, CONFIRMED, CONTRACT_CREATED, CONVERTED, REJECTED, CANCELLED
+// - order_request: PENDING, DESIGNING, DESIGNED, CONFIRMED, CONTRACT_CREATED, CONVERTED, REJECTED, CANCELLED
 // - contract: DRAFT, SIGNED, CANCELLED
 // - customer_order: NEW, ASSIGNED, IN_PROGRESS, PENDING_APPROVAL, READY_TO_DELIVER, COMPLETED, CANCELLED
 // - production_order: ASSIGNED, IN_PROGRESS, SUBMITTED, COMPLETED, CANCELLED
+// - product: ACTIVE, INACTIVE
 // - material_receipt / material_issue / account
 // =========================================================
 
@@ -17,6 +18,7 @@ import {
   RotateCw,
   Truck,
   FileText,
+  Sparkles,
   Hammer,
   AlertTriangle,
   Package,
@@ -30,11 +32,6 @@ export const ORDER_REQUEST_STATUS_MAP = {
     icon: Clock,
     className: 'bg-amber-50 text-amber-800 border-amber-200',
   },
-  DRAFTING: {
-    label: 'Đang phác thảo',
-    icon: FileText,
-    className: 'bg-stone-100 text-stone-700 border-stone-200',
-  },
   DESIGNING: {
     label: 'Chờ thiết kế',
     icon: RotateCw,
@@ -42,8 +39,8 @@ export const ORDER_REQUEST_STATUS_MAP = {
   },
   DESIGNED: {
     label: 'Đã có bản vẽ',
-    icon: CheckCircle2,
-    className: 'bg-blue-50 text-blue-800 border-blue-200',
+    icon: Sparkles,
+    className: 'bg-indigo-50 text-indigo-800 border-indigo-200',
   },
   CONFIRMED: {
     label: 'Đã xác nhận',
@@ -54,11 +51,6 @@ export const ORDER_REQUEST_STATUS_MAP = {
     label: 'Đã tạo hợp đồng',
     icon: FileText,
     className: 'bg-teal-50 text-teal-800 border-teal-200',
-  },
-  DRAFT: {
-    label: 'Chờ ký hợp đồng',
-    icon: Clock,
-    className: 'bg-amber-50 text-amber-800 border-amber-200',
   },
   CONVERTED: {
     label: 'Đã chuyển đơn',
@@ -87,11 +79,6 @@ export const CONTRACT_STATUS_MAP = {
     label: 'Đã ký kết',
     icon: CheckCircle2,
     className: 'bg-emerald-50 text-emerald-800 border-emerald-200 font-semibold',
-  },
-  COMPLETED: {
-    label: 'Hoàn thành',
-    icon: CheckCircle2,
-    className: 'bg-blue-50 text-blue-800 border-blue-200 font-semibold',
   },
   CANCELLED: {
     label: 'Đã hủy',
@@ -199,6 +186,19 @@ export const ACCOUNT_STATUS_MAP = {
   },
 };
 
+export const PRODUCT_STATUS_MAP = {
+  ACTIVE: {
+    label: 'Đang kinh doanh',
+    icon: CheckCircle2,
+    className: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  },
+  INACTIVE: {
+    label: 'Ngừng kinh doanh',
+    icon: XCircle,
+    className: 'bg-stone-100 text-stone-600 border-stone-200',
+  },
+};
+
 export const RECEIPT_STATUS_MAP = {
   DRAFT: {
     label: 'Phiếu nháp',
@@ -289,6 +289,11 @@ export function AccountStatusBadge({ status, size = 'md', className = '' }) {
   return <BaseStatusBadge cfg={cfg} fallbackValue={status} size={size} className={className} />;
 }
 
+export function ProductStatusBadge({ status, size = 'md', className = '' }) {
+  const cfg = PRODUCT_STATUS_MAP[status];
+  return <BaseStatusBadge cfg={cfg} fallbackValue={status} size={size} className={className} />;
+}
+
 export function ReceiptStatusBadge({ status, size = 'md', className = '' }) {
   const cfg = RECEIPT_STATUS_MAP[status];
   return <BaseStatusBadge cfg={cfg} fallbackValue={status} size={size} className={className} />;
@@ -312,6 +317,9 @@ export function StatusBadge({ type, status, size = 'md', className = '' }) {
   }
   if (type === 'account') {
     return <AccountStatusBadge status={status} size={size} className={className} />;
+  }
+  if (type === 'product') {
+    return <ProductStatusBadge status={status} size={size} className={className} />;
   }
   if (type === 'receipt' || type === 'material_receipt') {
     return <ReceiptStatusBadge status={status} size={size} className={className} />;

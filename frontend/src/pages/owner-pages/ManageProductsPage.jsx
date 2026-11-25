@@ -43,6 +43,11 @@ import {
 } from '../../services/productManagerService';
 import { CreatableCombobox } from '../../components/common/CreatableCombobox';
 import { TablePagination } from '../../components/common/TablePagination';
+import { ProductStatusBadge } from '../../components/common/StatusBadge';
+import { formatVND, formatNumber } from '../../utils/formatters';
+
+const focusRing =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900';
 
 export const ManageProductsPage = () => {
   // ── States ───────────────────────────────────────────────
@@ -791,9 +796,32 @@ export const ManageProductsPage = () => {
     }
   };
 
-  // Format currency
-  const formatVND = (num) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
+  // Huy hiệu hiển thị số lượng tồn kho theo quy chuẩn màu Design System
+  const renderStockBadge = (quantity) => {
+    const qty = Number(quantity) || 0;
+    const isOut = qty === 0;
+    const isLow = qty > 0 && qty <= 5;
+    const colorClass = isOut
+      ? 'bg-rose-50 text-rose-800 border-rose-200'
+      : isLow
+        ? 'bg-amber-50 text-amber-800 border-amber-200'
+        : 'bg-emerald-50 text-emerald-800 border-emerald-200';
+
+    return (
+      <span
+        role="status"
+        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border ${colorClass}`}
+      >
+        {isOut ? (
+          <XCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
+        ) : isLow ? (
+          <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
+        ) : (
+          <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+        )}
+        <span>{formatNumber(qty)} cái</span>
+      </span>
+    );
   };
 
   return (
@@ -813,7 +841,7 @@ export const ManageProductsPage = () => {
             type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 shadow-2xs transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
           >
             <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Làm mới
@@ -822,7 +850,7 @@ export const ManageProductsPage = () => {
             type="button"
             onClick={handleOpenCreate}
             data-testid="add-product-btn"
-            className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-stone-800"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-amber-950 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
           >
             <Plus className="h-4 w-4" />
             Thêm sản phẩm mới
@@ -888,7 +916,7 @@ export const ManageProductsPage = () => {
               placeholder="Tìm kiếm theo mã sản phẩm, tên, mô tả..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-stone-200 pl-10 pr-4 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-stone-900 focus:outline-none"
+              className="w-full rounded-lg border border-stone-200 pl-10 pr-4 py-2 text-sm text-stone-900 placeholder-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             />
           </div>
 
@@ -897,7 +925,7 @@ export const ManageProductsPage = () => {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 focus:border-stone-900 focus:outline-none"
+              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             >
               <option value="ALL">Tất cả</option>
               <option value="SINGLE">Sản phẩm lẻ</option>
@@ -908,7 +936,7 @@ export const ManageProductsPage = () => {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
+              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             >
               <option value="ALL">Tất cả danh mục</option>
               {metadata.categories.map((c) => (
@@ -922,7 +950,7 @@ export const ManageProductsPage = () => {
             <select
               value={roomFilter}
               onChange={(e) => setRoomFilter(e.target.value)}
-              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
+              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             >
               <option value="ALL">Tất cả phòng</option>
               {metadata.rooms.map((r) => (
@@ -936,7 +964,7 @@ export const ManageProductsPage = () => {
             <select
               value={stockStatusFilter}
               onChange={(e) => setStockStatusFilter(e.target.value)}
-              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
+              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             >
               <option value="ALL">Mọi tình trạng tồn</option>
               <option value="IN_STOCK">Còn hàng (&gt; 0)</option>
@@ -948,7 +976,7 @@ export const ManageProductsPage = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus:border-stone-900 focus:outline-none"
+              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             >
               <option value="ALL">Tất cả</option>
               <option value="ACTIVE">Đang kinh doanh</option>
@@ -996,8 +1024,32 @@ export const ManageProductsPage = () => {
               ) : products.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-sm text-stone-500">
-                    <Boxes className="mx-auto mb-2 h-8 w-8 text-stone-300" />
-                    Không tìm thấy sản phẩm nào phù hợp.
+                    <Boxes className="mx-auto mb-2 h-8 w-8 text-stone-300" aria-hidden="true" />
+                    <p className="font-semibold text-stone-800">Không tìm thấy sản phẩm nào phù hợp</p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      {searchTerm || typeFilter !== 'ALL' || categoryFilter !== 'ALL' || roomFilter !== 'ALL' || stockStatusFilter !== 'ALL' || statusFilter !== 'ALL'
+                        ? 'Thử xóa bớt bộ lọc hoặc tìm kiếm với từ khóa khác.'
+                        : 'Kho thành phẩm hiện đang trống. Hãy thêm sản phẩm mới để bắt đầu kinh doanh.'}
+                    </p>
+                    <div className="mt-4 flex items-center justify-center gap-2">
+                      {(searchTerm || typeFilter !== 'ALL' || categoryFilter !== 'ALL' || roomFilter !== 'ALL' || stockStatusFilter !== 'ALL' || statusFilter !== 'ALL') && (
+                        <button
+                          type="button"
+                          onClick={handleResetFilters}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-200 transition ${focusRing}`}
+                        >
+                          Xóa bộ lọc
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleOpenCreate}
+                        className={`inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-950 transition active:scale-95 shadow-xs ${focusRing}`}
+                      >
+                        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                        Thêm sản phẩm mới
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -1044,7 +1096,7 @@ export const ManageProductsPage = () => {
                                 title={isExpanded ? 'Thu gọn danh sách món con' : 'Nhấn để xổ xuống xem các món con thuộc bộ'}
                                 data-testid={`toggle-set-${p.productId}`}
                               >
-                                <span className="flex h-5 w-5 items-center justify-center rounded bg-stone-900 text-white group-hover:bg-stone-800 transition shadow-2xs">
+                                <span className="flex h-5 w-5 items-center justify-center rounded bg-amber-900 text-white group-hover:bg-amber-950 transition shadow-2xs">
                                   {isExpanded ? (
                                     <ChevronDown className="h-3.5 w-3.5 text-white" />
                                   ) : (
@@ -1061,7 +1113,7 @@ export const ManageProductsPage = () => {
                               <button
                                 type="button"
                                 onClick={(e) => toggleExpandSet(p.productId, e)}
-                                className="inline-flex items-center gap-1 rounded bg-stone-900 border border-stone-800 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-stone-800 transition cursor-pointer shadow-2xs"
+                                className="inline-flex items-center gap-1 rounded bg-amber-900 border border-amber-800 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-amber-950 transition cursor-pointer shadow-2xs"
                                 title="Nhấn để xổ xuống xem chi tiết các món con"
                               >
                                 <Boxes className="h-3 w-3" />
@@ -1118,28 +1170,12 @@ export const ManageProductsPage = () => {
 
                         {/* Stock Quantity */}
                         <td className="px-4 py-3 text-center">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isOut
-                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                : isLow
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              }`}
-                          >
-                            {p.stockQuantity} cái
-                          </span>
+                          {renderStockBadge(p.stockQuantity)}
                         </td>
 
                         {/* Status */}
                         <td className="px-4 py-3 text-center">
-                          <span
-                            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${p.status === 'ACTIVE'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-stone-200 text-stone-700'
-                              }`}
-                          >
-                            {p.status === 'ACTIVE' ? 'Kinh doanh' : 'Ngừng'}
-                          </span>
+                          <ProductStatusBadge status={p.status} />
                         </td>
 
                         {/* Actions */}
@@ -1152,7 +1188,7 @@ export const ManageProductsPage = () => {
                                 e.stopPropagation();
                                 handleOpenDetail(p);
                               }}
-                              className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                              className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             >
                               <Eye className="h-4 w-4" />
                             </button>
@@ -1164,7 +1200,7 @@ export const ManageProductsPage = () => {
                                 e.stopPropagation();
                                 handleOpenEdit(p);
                               }}
-                              className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                              className="rounded-lg p-1.5 text-amber-700 hover:bg-amber-50 hover:text-amber-900 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
@@ -1176,7 +1212,7 @@ export const ManageProductsPage = () => {
                                 e.stopPropagation();
                                 handleOpenDelete(p);
                               }}
-                              className="rounded p-1 text-stone-400 hover:bg-rose-50 hover:text-rose-600"
+                              className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -1192,11 +1228,11 @@ export const ManageProductsPage = () => {
                           data-testid={`set-dropdown-${p.productId}`}
                         >
                           <td colSpan={9} className="p-0">
-                            <div className="border-l-4 border-stone-900 bg-stone-50/80 px-6 py-4 shadow-inner">
+                            <div className="border-l-4 border-amber-900 bg-amber-50/20 px-6 py-4 shadow-inner">
                               {/* Header của dropdown */}
                               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-2.5">
                                 <div className="flex items-center gap-2">
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-white">
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-900 text-white">
                                     <Boxes className="h-3.5 w-3.5" />
                                   </span>
                                   <div>
@@ -1269,9 +1305,7 @@ export const ManageProductsPage = () => {
                                             </span>
                                           </td>
                                           <td className="px-3 py-2.5 text-center">
-                                            <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800">
-                                              {item.status || 'ACTIVE'}
-                                            </span>
+                                            <ProductStatusBadge status={item.status || 'ACTIVE'} size="sm" />
                                           </td>
                                           <td className="px-3 py-2.5 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
@@ -1357,7 +1391,7 @@ export const ManageProductsPage = () => {
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-stone-900">Thêm sản phẩm mới</h3>
                 {form.product_type === 'SET' && (
-                  <span className="rounded-full bg-stone-900 text-white px-2.5 py-0.5 text-xs font-bold">
+                  <span className="rounded-full bg-amber-900 text-white px-2.5 py-0.5 text-xs font-bold">
                     Bộ sản phẩm (SET)
                   </span>
                 )}
@@ -1382,7 +1416,7 @@ export const ManageProductsPage = () => {
                     type="button"
                     onClick={() => setForm({ ...form, product_type: 'SINGLE' })}
                     className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${form.product_type === 'SINGLE'
-                        ? 'border-stone-900 bg-stone-900 text-white shadow-xs'
+                        ? 'border-amber-900 bg-amber-900 text-white shadow-xs'
                         : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                       }`}
                   >
@@ -1396,7 +1430,7 @@ export const ManageProductsPage = () => {
                       loadAvailableSingleProducts();
                     }}
                     className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition ${form.product_type === 'SET'
-                        ? 'border-stone-900 bg-stone-900 text-white shadow-xs'
+                        ? 'border-amber-900 bg-amber-900 text-white shadow-xs'
                         : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
                       }`}
                   >
@@ -1423,7 +1457,7 @@ export const ManageProductsPage = () => {
                     placeholder="VD: TB-001"
                     value={form.product_code}
                     onChange={(e) => setForm({ ...form, product_code: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm font-mono focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -1434,7 +1468,7 @@ export const ManageProductsPage = () => {
                     placeholder="VD: Bàn ăn gỗ sồi 6 người"
                     value={form.product_name}
                     onChange={(e) => setForm({ ...form, product_name: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
               </div>
@@ -1446,7 +1480,7 @@ export const ManageProductsPage = () => {
                   <select
                     value={form.category_id}
                     onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   >
                     {metadata.categories.map((c) => (
                       <option key={c.category_id} value={c.category_id}>
@@ -1460,7 +1494,7 @@ export const ManageProductsPage = () => {
                   <select
                     value={form.room_id}
                     onChange={(e) => setForm({ ...form, room_id: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   >
                     {metadata.rooms.map((r) => (
                       <option key={r.room_id} value={r.room_id}>
@@ -1507,7 +1541,7 @@ export const ManageProductsPage = () => {
                     placeholder="VD: 4500000"
                     value={form.price}
                     onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
                 <div>
@@ -1518,7 +1552,7 @@ export const ManageProductsPage = () => {
                     placeholder="VD: 10"
                     value={form.stock_quantity}
                     onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
               </div>
@@ -1533,7 +1567,7 @@ export const ManageProductsPage = () => {
                     placeholder="160"
                     value={form.length_cm}
                     onChange={(e) => setForm({ ...form, length_cm: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
                 <div>
@@ -1544,7 +1578,7 @@ export const ManageProductsPage = () => {
                     placeholder="80"
                     value={form.width_cm}
                     onChange={(e) => setForm({ ...form, width_cm: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
                 <div>
@@ -1555,7 +1589,7 @@ export const ManageProductsPage = () => {
                     placeholder="75"
                     value={form.height_cm}
                     onChange={(e) => setForm({ ...form, height_cm: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
               </div>
@@ -1592,7 +1626,7 @@ export const ManageProductsPage = () => {
                   placeholder="Mô tả kiểu dáng, hoàn thiện sơn PU..."
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                 />
               </div>
 
@@ -1602,7 +1636,7 @@ export const ManageProductsPage = () => {
                 <select
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                 >
                   <option value="ACTIVE">Đang kinh doanh</option>
                   <option value="INACTIVE">Ngừng kinh doanh </option>
@@ -1614,7 +1648,7 @@ export const ManageProductsPage = () => {
                 <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-white">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-900 text-white">
                         <Boxes className="h-3.5 w-3.5" />
                       </span>
                       <h4 className="text-sm font-bold text-stone-900">
@@ -1769,7 +1803,7 @@ export const ManageProductsPage = () => {
                         <select
                           value={newCreateSetItemId}
                           onChange={(e) => setNewCreateSetItemId(e.target.value)}
-                          className="flex-1 min-w-[200px] rounded-lg border border-stone-200 p-2 text-xs text-stone-800 focus:border-stone-900 focus:outline-none"
+                          className="flex-1 min-w-[200px] rounded-lg border border-stone-200 p-2 text-xs text-stone-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                         >
                           <option value="">-- Chọn sản phẩm thành phần đưa vào bộ --</option>
                           {availableSingleProducts
@@ -1787,13 +1821,13 @@ export const ManageProductsPage = () => {
                             min="1"
                             value={newCreateSetItemQty}
                             onChange={(e) => setNewCreateSetItemQty(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                            className="w-16 rounded-lg border border-stone-200 p-2 text-center text-xs font-semibold focus:border-stone-900 focus:outline-none"
+                            className="w-16 rounded-lg border border-stone-200 p-2 text-center text-xs font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                           />
                         </div>
                         <button
                           type="button"
                           onClick={handleAddCreateSetItem}
-                          className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition"
+                          className="inline-flex items-center gap-1 rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950 transition active:scale-95 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                         >
                           <Plus className="h-3.5 w-3.5" />
                           <span>Thêm vào bộ</span>
@@ -1823,7 +1857,7 @@ export const ManageProductsPage = () => {
                               value={newChildForm.product_name}
                               onChange={(e) => setNewChildForm({ ...newChildForm, product_name: e.target.value })}
                               placeholder="VD: Ghế ăn bọc nệm, Mặt bàn kính cường lực..."
-                              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             />
                           </div>
                           <div>
@@ -1844,7 +1878,7 @@ export const ManageProductsPage = () => {
                               value={newChildForm.product_code}
                               onChange={(e) => setNewChildForm({ ...newChildForm, product_code: e.target.value.toUpperCase() })}
                               placeholder="Tự sinh nếu trống"
-                              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs font-mono text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs font-mono text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             />
                           </div>
                         </div>
@@ -1858,7 +1892,7 @@ export const ManageProductsPage = () => {
                             <select
                               value={newChildForm.category_id || metadata.categories[0]?.category_id || ''}
                               onChange={(e) => setNewChildForm({ ...newChildForm, category_id: e.target.value })}
-                              className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             >
                               {metadata.categories.map((c) => (
                                 <option key={c.category_id} value={c.category_id}>
@@ -1874,7 +1908,7 @@ export const ManageProductsPage = () => {
                             <select
                               value={newChildForm.room_id || form.room_id || metadata.rooms[0]?.room_id || ''}
                               onChange={(e) => setNewChildForm({ ...newChildForm, room_id: e.target.value })}
-                              className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             >
                               {metadata.rooms.map((r) => (
                                 <option key={r.room_id} value={r.room_id}>
@@ -1922,7 +1956,7 @@ export const ManageProductsPage = () => {
                                 value={newChildForm.length_cm}
                                 onChange={(e) => setNewChildForm({ ...newChildForm, length_cm: e.target.value })}
                                 placeholder="Dài (cm)"
-                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               />
                               <input
                                 type="number"
@@ -1930,7 +1964,7 @@ export const ManageProductsPage = () => {
                                 value={newChildForm.width_cm}
                                 onChange={(e) => setNewChildForm({ ...newChildForm, width_cm: e.target.value })}
                                 placeholder="Rộng (cm)"
-                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               />
                               <input
                                 type="number"
@@ -1938,7 +1972,7 @@ export const ManageProductsPage = () => {
                                 value={newChildForm.height_cm}
                                 onChange={(e) => setNewChildForm({ ...newChildForm, height_cm: e.target.value })}
                                 placeholder="Cao (cm)"
-                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               />
                             </div>
                           </div>
@@ -1951,7 +1985,7 @@ export const ManageProductsPage = () => {
                               min="1"
                               value={newChildForm.quantity}
                               onChange={(e) => setNewChildForm({ ...newChildForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-                              className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-bold text-center text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-bold text-center text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             />
                           </div>
                         </div>
@@ -1992,7 +2026,7 @@ export const ManageProductsPage = () => {
                             type="button"
                             disabled={isCreatingChild}
                             onClick={() => handleCreateAndAddChildItem('create')}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 disabled:opacity-50 transition"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-amber-950 disabled:opacity-50 transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                           >
                             <Plus className="h-3.5 w-3.5" />
                             <span>{isCreatingChild ? 'Đang tạo món con...' : 'Tạo & Đưa vào bộ ngay'}</span>
@@ -2009,14 +2043,14 @@ export const ManageProductsPage = () => {
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                  className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 transition shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-lg bg-stone-900 px-5 py-2 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-50"
+                  className="rounded-lg bg-amber-900 px-5 py-2 text-xs font-semibold text-white hover:bg-amber-950 disabled:opacity-50 transition active:scale-95 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
                   {submitting ? 'Đang lưu & Upload ảnh...' : form.product_type === 'SET' ? 'Tạo bộ sản phẩm' : 'Thêm sản phẩm'}
                 </button>
@@ -2063,7 +2097,7 @@ export const ManageProductsPage = () => {
                   required
                   value={form.product_name}
                   onChange={(e) => setForm({ ...form, product_name: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                 />
               </div>
 
@@ -2074,7 +2108,7 @@ export const ManageProductsPage = () => {
                   <select
                     value={form.category_id}
                     onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   >
                     {metadata.categories.map((c) => (
                       <option key={c.category_id} value={c.category_id}>
@@ -2088,7 +2122,7 @@ export const ManageProductsPage = () => {
                   <select
                     value={form.room_id}
                     onChange={(e) => setForm({ ...form, room_id: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   >
                     {metadata.rooms.map((r) => (
                       <option key={r.room_id} value={r.room_id}>
@@ -2147,7 +2181,7 @@ export const ManageProductsPage = () => {
                       min="0"
                       value={form.price}
                       onChange={(e) => setForm({ ...form, price: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                     />
                   </div>
                   <div>
@@ -2159,7 +2193,7 @@ export const ManageProductsPage = () => {
                       min="0"
                       value={form.stock_quantity}
                       onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
+                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                     />
                   </div>
                 </div>
@@ -2174,7 +2208,7 @@ export const ManageProductsPage = () => {
                     min="0"
                     value={form.length_cm}
                     onChange={(e) => setForm({ ...form, length_cm: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
                 <div>
@@ -2184,7 +2218,7 @@ export const ManageProductsPage = () => {
                     min="0"
                     value={form.width_cm}
                     onChange={(e) => setForm({ ...form, width_cm: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
                 <div>
@@ -2194,7 +2228,7 @@ export const ManageProductsPage = () => {
                     min="0"
                     value={form.height_cm}
                     onChange={(e) => setForm({ ...form, height_cm: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus:border-stone-900 focus:outline-none"
+                    className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
               </div>
@@ -2230,7 +2264,7 @@ export const ManageProductsPage = () => {
                   rows={2}
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                 />
               </div>
 
@@ -2240,7 +2274,7 @@ export const ManageProductsPage = () => {
                 <select
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none"
+                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                 >
                   <option value="ACTIVE">Đang kinh doanh (ACTIVE)</option>
                   <option value="INACTIVE">Ngừng kinh doanh (INACTIVE)</option>
@@ -2252,7 +2286,7 @@ export const ManageProductsPage = () => {
                 <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-white">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-900 text-white">
                         <Boxes className="h-3.5 w-3.5" />
                       </span>
                       <h4 className="text-sm font-bold text-stone-900">
@@ -2417,7 +2451,7 @@ export const ManageProductsPage = () => {
                         <select
                           value={newSetItemId}
                           onChange={(e) => setNewSetItemId(e.target.value)}
-                          className="flex-1 min-w-[200px] rounded-lg border border-stone-200 p-2 text-xs text-stone-800 focus:border-stone-900 focus:outline-none"
+                          className="flex-1 min-w-[200px] rounded-lg border border-stone-200 p-2 text-xs text-stone-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                         >
                           <option value="">-- Chọn sản phẩm con để thêm --</option>
                           {availableSingleProducts
@@ -2435,13 +2469,13 @@ export const ManageProductsPage = () => {
                             min="1"
                             value={newSetItemQty}
                             onChange={(e) => setNewSetItemQty(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                            className="w-16 rounded-lg border border-stone-200 p-2 text-center text-xs font-semibold focus:border-stone-900 focus:outline-none"
+                            className="w-16 rounded-lg border border-stone-200 p-2 text-center text-xs font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                           />
                         </div>
                         <button
                           type="button"
                           onClick={handleAddSetItem}
-                          className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-3 py-2 text-xs font-semibold text-white hover:bg-stone-800 transition"
+                          className="inline-flex items-center gap-1 rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-950 transition active:scale-95 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                         >
                           <Plus className="h-3.5 w-3.5" />
                           <span>Thêm vào bộ</span>
@@ -2471,7 +2505,7 @@ export const ManageProductsPage = () => {
                               value={newChildForm.product_name}
                               onChange={(e) => setNewChildForm({ ...newChildForm, product_name: e.target.value })}
                               placeholder="VD: Ghế ăn bọc nệm, Mặt bàn kính cường lực..."
-                              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             />
                           </div>
                           <div>
@@ -2492,7 +2526,7 @@ export const ManageProductsPage = () => {
                               value={newChildForm.product_code}
                               onChange={(e) => setNewChildForm({ ...newChildForm, product_code: e.target.value.toUpperCase() })}
                               placeholder="Tự sinh nếu trống"
-                              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs font-mono text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-xs font-mono text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             />
                           </div>
                         </div>
@@ -2506,7 +2540,7 @@ export const ManageProductsPage = () => {
                             <select
                               value={newChildForm.category_id || metadata.categories[0]?.category_id || ''}
                               onChange={(e) => setNewChildForm({ ...newChildForm, category_id: e.target.value })}
-                              className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             >
                               {metadata.categories.map((c) => (
                                 <option key={c.category_id} value={c.category_id}>
@@ -2522,7 +2556,7 @@ export const ManageProductsPage = () => {
                             <select
                               value={newChildForm.room_id || form.room_id || metadata.rooms[0]?.room_id || ''}
                               onChange={(e) => setNewChildForm({ ...newChildForm, room_id: e.target.value })}
-                              className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             >
                               {metadata.rooms.map((r) => (
                                 <option key={r.room_id} value={r.room_id}>
@@ -2570,7 +2604,7 @@ export const ManageProductsPage = () => {
                                 value={newChildForm.length_cm}
                                 onChange={(e) => setNewChildForm({ ...newChildForm, length_cm: e.target.value })}
                                 placeholder="Dài (cm)"
-                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               />
                               <input
                                 type="number"
@@ -2578,7 +2612,7 @@ export const ManageProductsPage = () => {
                                 value={newChildForm.width_cm}
                                 onChange={(e) => setNewChildForm({ ...newChildForm, width_cm: e.target.value })}
                                 placeholder="Rộng (cm)"
-                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               />
                               <input
                                 type="number"
@@ -2586,7 +2620,7 @@ export const ManageProductsPage = () => {
                                 value={newChildForm.height_cm}
                                 onChange={(e) => setNewChildForm({ ...newChildForm, height_cm: e.target.value })}
                                 placeholder="Cao (cm)"
-                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-none"
+                                className="w-full rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               />
                             </div>
                           </div>
@@ -2599,7 +2633,7 @@ export const ManageProductsPage = () => {
                               min="1"
                               value={newChildForm.quantity}
                               onChange={(e) => setNewChildForm({ ...newChildForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-                              className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-bold text-center text-stone-900 focus:border-stone-900 focus:outline-none"
+                              className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-bold text-center text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             />
                           </div>
                         </div>
@@ -2640,7 +2674,7 @@ export const ManageProductsPage = () => {
                             type="button"
                             disabled={isCreatingChild}
                             onClick={() => handleCreateAndAddChildItem('edit')}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 disabled:opacity-50 transition"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-amber-950 disabled:opacity-50 transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                           >
                             <Plus className="h-3.5 w-3.5" />
                             <span>{isCreatingChild ? 'Đang tạo món con...' : 'Tạo & Đưa vào bộ ngay'}</span>
@@ -2657,16 +2691,16 @@ export const ManageProductsPage = () => {
                 <button
                   type="button"
                   onClick={() => setIsEditOpen(false)}
-                  className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                  className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 transition shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-lg bg-stone-900 px-5 py-2 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-50"
+                  className="rounded-lg bg-amber-900 px-5 py-2 text-xs font-semibold text-white hover:bg-amber-950 disabled:opacity-50 transition active:scale-95 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
-                  {submitting ? 'Đang cập nhật...' : 'Cập nhật sản phẩm'}
+                  {submitting ? 'Đang cập nhật...' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>
@@ -2686,7 +2720,7 @@ export const ManageProductsPage = () => {
                   {selectedProduct.productCode}
                 </span>
                 {selectedProduct.isSet ? (
-                  <span className="inline-flex items-center gap-1 rounded bg-stone-900 px-2 py-0.5 text-xs font-bold text-white shadow-2xs">
+                  <span className="inline-flex items-center gap-1 rounded bg-amber-900 px-2 py-0.5 text-xs font-bold text-white shadow-2xs">
                     <Boxes className="h-3.5 w-3.5" />
                     Bộ {selectedProduct.totalSetItems > 0 ? `${selectedProduct.totalSetItems} món` : 'sản phẩm'}
                   </span>
@@ -2695,14 +2729,7 @@ export const ManageProductsPage = () => {
                     Sản phẩm lẻ
                   </span>
                 )}
-                <span
-                  className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${selectedProduct.status === 'ACTIVE'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-stone-200 text-stone-700'
-                    }`}
-                >
-                  {selectedProduct.status === 'ACTIVE' ? 'Đang kinh doanh' : 'Ngừng kinh doanh'}
-                </span>
+                <ProductStatusBadge status={selectedProduct.status} size="lg" />
               </div>
               <button
                 type="button"
@@ -2888,7 +2915,7 @@ export const ManageProductsPage = () => {
                                   setIsDetailOpen(false);
                                   handleOpenEdit(item);
                                 }}
-                                className="inline-flex items-center gap-1 rounded bg-stone-900 px-2 py-1 text-[11px] font-semibold text-white hover:bg-stone-800 transition"
+                                className="inline-flex items-center gap-1 rounded bg-amber-900 px-2 py-1 text-[11px] font-semibold text-white hover:bg-amber-950 transition shadow-2xs active:scale-95"
                                 title="Chỉnh sửa sản phẩm con này"
                                 data-testid={`detail-edit-child-${item.productId}`}
                               >
@@ -2937,7 +2964,7 @@ export const ManageProductsPage = () => {
                 <button
                   type="button"
                   onClick={() => setIsDetailOpen(false)}
-                  className="rounded-lg bg-stone-900 px-5 py-2 text-xs font-semibold text-white hover:bg-stone-800 shadow-2xs transition"
+                  className="rounded-lg bg-amber-900 px-5 py-2 text-xs font-semibold text-white hover:bg-amber-950 shadow-2xs transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
                   Đóng
                 </button>
@@ -2978,7 +3005,7 @@ export const ManageProductsPage = () => {
               <button
                 type="button"
                 onClick={() => setIsDeleteOpen(false)}
-                className="rounded-lg border border-stone-200 px-4 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50"
+                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 transition shadow-2xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
               >
                 Hủy
               </button>
@@ -2991,7 +3018,7 @@ export const ManageProductsPage = () => {
                     setIsDeleteOpen(false);
                     fetchProductsList(currentPage);
                   }}
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700"
+                  className="rounded-lg bg-amber-800 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-900 shadow-xs transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
                   Ngừng kinh doanh
                 </button>
@@ -3000,7 +3027,7 @@ export const ManageProductsPage = () => {
                   type="button"
                   disabled={submitting}
                   onClick={handleConfirmDelete}
-                  className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                  className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 shadow-xs transition active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-700"
                 >
                   {submitting ? 'Đang xóa...' : 'Xác nhận xóa'}
                 </button>
