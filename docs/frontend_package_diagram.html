@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Frontend Package Diagram · FS-SIMS</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 34px; background: #fff; color: #252525; font: 14px Arial, sans-serif; }
+    main { max-width: 1200px; margin: auto; }
+    h1 { margin: 0 0 28px; text-align: center; font-size: 22px; }
+    .entry { display: flex; justify-content: center; align-items: center; gap: 18px; }
+    .box { min-width: 150px; padding: 14px 20px; border: 1px solid #e2c45f; background: #fff2c7; text-align: center; font-weight: 700; }
+    .entry .box { min-width: 180px; }
+    .arrow { color: #555; font-size: 24px; text-align: center; }
+    .down { height: 32px; line-height: 32px; }
+    .routers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+    .router-col { display: flex; flex-direction: column; align-items: center; }
+    .router-col .box { width: 100%; }
+    .views { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start; }
+    .view { border: 1px solid #555; background: white; }
+    .view-title { width: 112px; padding: 8px 14px; border-right: 1px solid #555; border-bottom: 1px solid #555; font-weight: 700; }
+    .view-content { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 12px; min-height: 130px; padding: 18px 14px; }
+    .page { position: relative; min-width: 82px; padding: 11px 10px; border: 1px solid #78ad69; background: #dcebd7; text-align: center; font-size: 12px; font-weight: 700; }
+    .page::before { position: absolute; top: -8px; left: -1px; width: 34px; height: 8px; border: 1px solid #78ad69; border-bottom: 0; background: #dcebd7; content: ""; }
+    .shared { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 32px; }
+    .shared .box { min-height: 76px; display: flex; flex-direction: column; justify-content: center; gap: 7px; }
+    .shared small { font-size: 11px; font-weight: 400; }
+    .backend { width: 260px; margin: 0 auto; border: 1px solid #7c9dcc; background: #dbe8fa; padding: 17px; text-align: center; font-weight: 700; }
+    .backend small { display: block; margin-top: 6px; font-weight: 400; }
+    @media (max-width: 850px) { body { padding: 22px; } .routers, .views { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; } .shared { grid-template-columns: 1fr; gap: 12px; } }
+    @media (max-width: 520px) { body { padding: 16px 10px; } h1 { font-size: 18px; } .routers, .views { grid-template-columns: 1fr; } .entry { flex-direction: column; gap: 4px; } .entry .arrow { transform: rotate(90deg); } }
+    @media print { body { padding: 12px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Frontend Package Diagram · FS-SIMS</h1>
+
+    <section class="entry">
+      <div class="box">main.jsx<br><small>ReactDOM · Providers</small></div>
+      <div class="arrow">→</div>
+      <div class="box">App.jsx</div>
+      <div class="arrow">→</div>
+      <div class="box">AppRouter.jsx<br><small>React Router</small></div>
+    </section>
+
+    <div class="arrow down">↓</div>
+
+    <section class="routers">
+      <div class="router-col"><div class="box">PublicRouter</div><div class="arrow down">↓</div></div>
+      <div class="router-col"><div class="box">OwnerRouter</div><div class="arrow down">↓</div></div>
+      <div class="router-col"><div class="box">SaleRouter</div><div class="arrow down">↓</div></div>
+      <div class="router-col"><div class="box">StaffLeaderRouter</div><div class="arrow down">↓</div></div>
+    </section>
+
+    <section class="views">
+      <article class="view">
+        <div class="view-title">View</div>
+        <div class="view-content">
+          <div class="page">Home</div><div class="page">Products</div><div class="page">Product Detail</div>
+          <div class="page">Login</div><div class="page">Register</div><div class="page">Profile</div>
+          <div class="page">Cart</div><div class="page">Customer Orders</div>
+        </div>
+      </article>
+      <article class="view">
+        <div class="view-title">View</div>
+        <div class="view-content">
+          <div class="page">Staff Accounts</div><div class="page">Suppliers</div><div class="page">Products</div>
+          <div class="page">Materials</div><div class="page">Purchase Receipts</div><div class="page">Material Exports</div>
+          <div class="page">Production Orders</div><div class="page">Orders</div><div class="page">Financial Reports</div>
+        </div>
+      </article>
+      <article class="view">
+        <div class="view-title">View</div>
+        <div class="view-content">
+          <div class="page">Create Order</div><div class="page">Create Request</div><div class="page">Orders</div>
+          <div class="page">Contracts</div><div class="page">Requests</div><div class="page">Customers</div>
+        </div>
+      </article>
+      <article class="view">
+        <div class="view-title">View</div>
+        <div class="view-content">
+          <div class="page">Leader Orders</div>
+        </div>
+      </article>
+    </section>
+
+    <div class="arrow down">↓</div>
+
+    <section class="shared">
+      <div class="box">Components & Layouts<small>components/</small></div>
+      <div class="box">Context & Hooks<small>context/ · hooks/ · constants/ · utils/</small></div>
+      <div class="box">Services<small>services/ · Axios API client</small></div>
+    </section>
+
+    <div class="arrow down">↓</div>
+    <div class="backend">Node.js · Express API<small>REST API · /api/*</small></div>
+  </main>
+</body>
+</html>

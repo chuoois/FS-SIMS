@@ -1,799 +1,636 @@
-# TỔNG HỢP CLASS DIAGRAM TINH GỌN HỆ THỐNG FS-SIMS (NHÓM 2.1 ĐẾN 2.14)
-> **Dự án**: FS-SIMS (Furniture Sales & Inventory Management System)  
-> **Kiến trúc thực tế**: Node.js + Express + Sequelize ORM + MySQL 8  
-> **Phong cách**: Tinh gọn (Concise), tập trung vào các lớp chính, thuộc tính và phương thức trọng tâm của từng ca sử dụng.
+# CLASS DIAGRAM — CẤU TRÚC THỰC TẾ FS-SIMS
 
----
+> Các sơ đồ lấy tên controller, hàm export, model và service từ mã nguồn hiện tại. Backend chạy theo luồng Express route → controller → Sequelize model/model module; schema nằm trong `database/init.sql`. Không thêm DTO hay repository nếu code không có các lớp đó.
 
-### 2.1: Xác thực & Phân quyền (Auth)
+
+## 2.1: Xác thực & Phân quyền
+
+> Lưu ý đối chiếu code: `authRoutes.js` đang dùng `register`, nhưng `authController.js` hiện không khai báo hàm này. Luồng đăng ký trong sequence mô tả use case dự kiến; endpoint hiện chưa chạy được cho đến khi handler có lại.
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.1 Xác thực & Phân quyền (Auth)
+title 2.1: Xác thực & Phân quyền — MVC theo code
 
-class AuthController {
-  +register(req, res)
-  +login(req, res)
-  +refreshToken(req, res)
-  +forgotPassword(req, res)
-}
-
-class MailService {
-  +sendNewPasswordEmail(to, name, pass)
+class authController <<Express Controller>> {
+  +login()
+  +refreshToken()
+  +logout()
+  +forgotPassword()
 }
 
-class UserAccountModel {
-  +user_account_id: bigint
-  +email: string
-  +password_hash: string
-  +status: string
-  +createUserAccount(data)
-  +findUserAccountByEmail(email)
-  +updateUserPassword(id, hash)
+class staffAuthController <<Express Controller>> {
+  +staffLogin()
 }
 
-class RefreshTokenModel {
-  +refresh_token_id: bigint
-  +token: string
-  +expires_at: datetime
-  +createRefreshToken(userId, token)
-  +deleteRefreshToken(token)
-}
+class UserAccount <<Sequelize Model / Model module>>
 
-class AuthDto {
-  +email: string
-  +password: string
-  +accessToken: string
-  +role: string
-}
+class UserRole <<Sequelize Model / Model module>>
 
-AuthController --> MailService : calls
-AuthController --> UserAccountModel : queries & creates
-AuthController --> RefreshTokenModel : manages
-AuthController ..> AuthDto : <<use>>
-UserAccountModel "1" -- "0..*" RefreshTokenModel : has
+class RefreshToken <<Sequelize Model / Model module>>
+
+class mailService <<Service>>
+authController --> UserAccount : gọi model
+authController --> UserRole : gọi model
+authController --> RefreshToken : gọi model
+authController --> mailService : dùng service
+staffAuthController --> UserAccount : gọi model
+staffAuthController --> UserRole : gọi model
+staffAuthController --> RefreshToken : gọi model
 @enduml
 ```
 
----
-
-### 2.2: Quản lý Hồ sơ & Nhân sự (User & Staff)
+## 2.2: Hồ sơ & Nhân sự
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.2 Quản lý Hồ sơ & Nhân sự (User & Staff)
+title 2.2: Hồ sơ & Nhân sự — MVC theo code
 
-class StaffAccountController {
-  +listStaffAccounts(req, res)
-  +createStaffAccount(req, res)
-  +updateStaffAccount(req, res)
-  +changeStaffAccountStatus(req, res)
-}
-
-class UserController {
-  +getProfile(req, res)
-  +updateProfile(req, res)
+class userController <<Express Controller>> {
+  +getProfile()
+  +updateProfile()
+  +changePassword()
 }
 
-class CloudinaryService {
-  +deleteImage(publicId)
+class staffAccountController <<Express Controller>> {
+  +listStaffAccounts()
+  +listStaffRoles()
+  +getStaffAccountDetail()
+  +createStaffAccount()
+  +updateStaffAccount()
+  +changeStaffAccountStatus()
+  +removeStaffAccount()
 }
 
-class UserAccountModel {
-  +user_account_id: bigint
-  +role_id: bigint
-  +full_name: string
-  +email: string
-  +status: string
-  +getStaffAccounts(options)
-  +updateStaffAccount(id, data)
-  +updateUserProfile(id, data)
-}
+class UserAccount <<Sequelize Model / Model module>>
 
-class UserRoleModel {
-  +role_id: bigint
-  +role_code: string
-  +role_name: string
-}
+class UserRole <<Sequelize Model / Model module>>
 
-class StaffAccountDto {
-  +user_account_id: bigint
-  +full_name: string
-  +email: string
-  +role_code: string
-  +status: string
-}
-
-StaffAccountController --> UserAccountModel : manages staff
-UserController --> UserAccountModel : updates profile
-UserController --> CloudinaryService : uploads avatar
-StaffAccountController ..> StaffAccountDto : <<use>>
-UserAccountModel --> UserRoleModel : belongsTo
+class cloudinaryService <<Service>>
+userController --> UserAccount : gọi model
+userController --> cloudinaryService : dùng service
+staffAccountController --> UserAccount : gọi model
+staffAccountController --> UserRole : gọi model
 @enduml
 ```
 
----
-
-### 2.3: Quản lý Sản phẩm & Danh mục (Product & Catalog)
+## 2.3: Sản phẩm & Danh mục
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.3 Quản lý Sản phẩm & Danh mục (Product & Catalog)
+title 2.3: Sản phẩm & Danh mục — MVC theo code
 
-class ProductManagerController {
-  +getProducts(req, res)
-  +getProductById(req, res)
-  +createProduct(req, res)
-  +updateProduct(req, res)
-  +deleteProduct(req, res)
+class productController <<Express Controller>> {
+  +getProducts()
+  +getProductById()
+  +getProductMetadata()
 }
 
-class ProductController {
-  +getProducts(req, res)
-  +getProductMetadata(req, res)
+class productManagerController <<Express Controller>> {
+  +getProducts()
+  +getProductMetadata()
+  +getProductStockSummary()
+  +getNextProductCode()
+  +getProductById()
+  +createProduct()
+  +updateProduct()
+  +deleteProduct()
+  +createProductMaterial()
+  +createProductColor()
 }
 
-class ProductModel {
-  +product_id: bigint
-  +category_id: bigint
-  +product_code: string
-  +product_name: string
-  +unit_price: decimal
-  +stock_quantity: int
-  +findAndCountAll(options)
-  +create(data)
-  +update(data, options)
-}
+class Product <<Sequelize Model / Model module>>
 
-class ProductCategoryModel {
-  +category_id: bigint
-  +category_name: string
-  +findAll()
-}
+class ProductCategory <<Sequelize Model / Model module>>
 
-class ProductDto {
-  +product_id: bigint
-  +product_code: string
-  +product_name: string
-  +category_name: string
-  +unit_price: decimal
-}
+class ProductRoom <<Sequelize Model / Model module>>
 
-ProductManagerController --> ProductModel : CRUD
-ProductController --> ProductModel : queries public
-ProductModel --> ProductCategoryModel : belongsTo
-ProductManagerController ..> ProductDto : <<use>>
+class ProductMaterial <<Sequelize Model / Model module>>
+
+class ProductColor <<Sequelize Model / Model module>>
+
+class ProductSetItem <<Sequelize Model / Model module>>
+
+class cloudinaryService <<Service>>
+productController --> Product : gọi model
+productManagerController --> Product : gọi model
+productManagerController --> ProductMaterial : gọi model
+productManagerController --> ProductColor : gọi model
+productManagerController --> cloudinaryService : dùng service
 @enduml
 ```
 
----
-
-### 2.4: Giỏ hàng trực tuyến (Shopping Cart)
+## 2.4: Giỏ hàng
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.4 Giỏ hàng trực tuyến (Shopping Cart)
+title 2.4: Giỏ hàng — MVC theo code
 
-class CartController {
-  +getCart(req, res)
-  +addItem(req, res)
-  +updateItem(req, res)
-  +deleteItem(req, res)
-}
-
-class CartModel {
-  +cart_id: bigint
-  +customer_account_id: bigint
-  +findOne(options)
-  +create(data)
+class cartController <<Express Controller>> {
+  +getCart()
+  +addItem()
+  +updateItem()
+  +deleteItem()
 }
 
-class CartItemModel {
-  +cart_item_id: bigint
-  +cart_id: bigint
-  +product_id: bigint
-  +quantity: int
-  +unit_price: decimal
-  +upsert(data)
-  +destroy(options)
-}
+class Cart <<Sequelize Model / Model module>>
 
-class ProductModel {
-  +product_id: bigint
-  +product_name: string
-  +stock_quantity: int
-  +unit_price: decimal
-}
+class CartItem <<Sequelize Model / Model module>>
 
-class CartDto {
-  +cart_id: bigint
-  +total_amount: decimal
-  +total_items: int
-}
-
-CartController --> CartModel : gets or creates
-CartController --> CartItemModel : adds / removes items
-CartItemModel --> ProductModel : references
-CartModel "1" -- "0..*" CartItemModel : hasMany
-CartController ..> CartDto : <<use>>
+class Product <<Sequelize Model / Model module>>
+cartController --> Cart : gọi model
 @enduml
 ```
 
----
-
-### 2.5: Yêu cầu Đặt hàng & Thiết kế (Order Requests)
+## 2.5: Yêu cầu Đặt hàng & Thiết kế
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.5 Yêu cầu Đặt hàng & Thiết kế (Order Requests)
+title 2.5: Yêu cầu Đặt hàng & Thiết kế — MVC theo code
 
-class SaleOrderController {
-  +getRequests(req, res)
-  +createSalesRequest(req, res)
-  +updateSalesRequest(req, res)
-  +convertRequestToContract(req, res)
-}
-
-class OrderManagementController {
-  +getOwnerRequests(req, res)
-  +reviewRequest(req, res)
-}
-
-class OrderRequestModel {
-  +request_id: bigint
-  +request_code: string
-  +order_type: string
-  +status: string
-  +total_estimated_price: decimal
-  +create(data)
-  +update(data, options)
-}
-
-class OrderRequestItemModel {
-  +request_item_id: bigint
-  +request_id: bigint
-  +custom_item_name: string
-  +quantity: int
-  +estimated_unit_price: decimal
+class saleOrderController <<Express Controller>> {
+  +getWarehouseProducts()
+  +getProductDetail()
+  +getProductMetadata()
+  +createOfflineContract()
+  +signContract()
+  +getContracts()
+  +getContractById()
+  +createOrderFromContract()
+  +getOrders()
+  +getOrderById()
+  +getRequests()
+  +getRequestById()
+  +convertRequestToContract()
+  +createSalesRequest()
+  +updateSalesRequest()
+  +deliverOrder()
+  +completeOrder()
+  +updateDesignFile()
+  +deleteDesignImage()
+  +getSaleCustomers()
+  +getSaleCustomerById()
+  +getCustomers()
+  +getCustomerById()
 }
 
-class OrderRequestDto {
-  +request_id: bigint
-  +request_code: string
-  +order_type: string
-  +status: string
+class orderManagementController <<Express Controller>> {
+  +getOrders()
+  +getOrderDetail()
+  +cancelOrder()
+  +updateOrderStatus()
+  +getOwnerRequests()
+  +getOwnerRequestDetail()
+  +reviewRequest()
+  +getStaffLeaders()
+  +assignLeader()
+  +inspectOrder()
 }
 
-SaleOrderController --> OrderRequestModel : creates & converts
-OrderManagementController --> OrderRequestModel : reviews & approves
-OrderRequestModel "1" -- "1..*" OrderRequestItemModel : hasMany
-SaleOrderController ..> OrderRequestDto : <<use>>
+class orderRequestController <<Express Controller>> {
+  +createCartOrderRequest()
+}
+
+class customerOrderController <<Express Controller>> {
+  +getMyOrders()
+  +getMyOrderById()
+  +getMyOrderRequestById()
+}
+
+class OrderRequest <<Sequelize Model / Model module>>
+
+class OrderRequestItem <<Sequelize Model / Model module>>
+
+class OrderRequestImage <<Sequelize Model / Model module>>
+
+class SaleRequestModel <<Sequelize Model / Model module>>
+
+class Contract <<Sequelize Model / Model module>>
+
+class UserAccount <<Sequelize Model / Model module>>
+saleOrderController --> Contract : gọi model
+orderManagementController --> UserAccount : gọi model
+orderRequestController --> OrderRequest : gọi model
 @enduml
 ```
 
----
-
-### 2.6: Quản lý Hợp đồng Bán hàng (Sales Contract)
+## 2.6: Hợp đồng Bán hàng
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.6 Quản lý Hợp đồng Bán hàng (Sales Contract)
+title 2.6: Hợp đồng Bán hàng — MVC theo code
 
-class SaleOrderController {
-  +getContracts(req, res)
-  +getContractById(req, res)
-  +createOfflineContract(req, res)
-  +signContract(req, res)
-}
-
-class ContractModel {
-  +contract_id: bigint
-  +customer_account_id: bigint
-  +contract_code: string
-  +status: string
-  +total_amount: decimal
-  +deposit_amount: decimal
-  +create(data)
-  +update(data, options)
-}
-
-class ContractItemModel {
-  +contract_item_id: bigint
-  +contract_id: bigint
-  +product_id: bigint
-  +quantity: int
-  +unit_price: decimal
-}
-
-class ContractDto {
-  +contract_id: bigint
-  +contract_code: string
-  +status: string
-  +total_amount: decimal
+class saleOrderController <<Express Controller>> {
+  +getWarehouseProducts()
+  +getProductDetail()
+  +getProductMetadata()
+  +createOfflineContract()
+  +signContract()
+  +getContracts()
+  +getContractById()
+  +createOrderFromContract()
+  +getOrders()
+  +getOrderById()
+  +getRequests()
+  +getRequestById()
+  +convertRequestToContract()
+  +createSalesRequest()
+  +updateSalesRequest()
+  +deliverOrder()
+  +completeOrder()
+  +updateDesignFile()
+  +deleteDesignImage()
+  +getSaleCustomers()
+  +getSaleCustomerById()
+  +getCustomers()
+  +getCustomerById()
 }
 
-SaleOrderController --> ContractModel : creates & signs
-ContractModel "1" -- "1..*" ContractItemModel : hasMany
-SaleOrderController ..> ContractDto : <<use>>
+class Contract <<Sequelize Model / Model module>>
+
+class ContractItem <<Sequelize Model / Model module>>
+
+class Product <<Sequelize Model / Model module>>
+
+class OrderRequest <<Sequelize Model / Model module>>
+saleOrderController --> Contract : gọi model
+saleOrderController --> Product : gọi model
 @enduml
 ```
 
----
-
-### 2.7: Quản lý Đơn hàng Bán (Customer Orders)
+## 2.7: Đơn hàng Bán
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.7 Quản lý Đơn hàng Bán (Customer Orders)
+title 2.7: Đơn hàng Bán — MVC theo code
 
-class OrderManagementController {
-  +getOrders(req, res)
-  +getOrderDetail(req, res)
-  +updateOrderStatus(req, res)
-  +assignLeader(req, res)
-}
-
-class SaleOrderController {
-  +createOrderFromContract(req, res)
-  +deliverOrder(req, res)
-  +completeOrder(req, res)
-}
-
-class CustomerOrderModel {
-  +order_id: bigint
-  +contract_id: bigint
-  +order_code: string
-  +order_status: string
-  +total_amount: decimal
-  +create(data)
-  +update(data, options)
-}
-
-class CustomerOrderItemModel {
-  +order_item_id: bigint
-  +order_id: bigint
-  +product_id: bigint
-  +quantity: int
-  +unit_price: decimal
+class saleOrderController <<Express Controller>> {
+  +getWarehouseProducts()
+  +getProductDetail()
+  +getProductMetadata()
+  +createOfflineContract()
+  +signContract()
+  +getContracts()
+  +getContractById()
+  +createOrderFromContract()
+  +getOrders()
+  +getOrderById()
+  +getRequests()
+  +getRequestById()
+  +convertRequestToContract()
+  +createSalesRequest()
+  +updateSalesRequest()
+  +deliverOrder()
+  +completeOrder()
+  +updateDesignFile()
+  +deleteDesignImage()
+  +getSaleCustomers()
+  +getSaleCustomerById()
+  +getCustomers()
+  +getCustomerById()
 }
 
-class CustomerOrderDto {
-  +order_id: bigint
-  +order_code: string
-  +order_status: string
-  +total_amount: decimal
+class customerOrderController <<Express Controller>> {
+  +getMyOrders()
+  +getMyOrderById()
+  +getMyOrderRequestById()
 }
 
-OrderManagementController --> CustomerOrderModel : manages & assigns
-SaleOrderController --> CustomerOrderModel : converts from contract
-CustomerOrderModel "1" -- "1..*" CustomerOrderItemModel : hasMany
-OrderManagementController ..> CustomerOrderDto : <<use>>
+class orderManagementController <<Express Controller>> {
+  +getOrders()
+  +getOrderDetail()
+  +cancelOrder()
+  +updateOrderStatus()
+  +getOwnerRequests()
+  +getOwnerRequestDetail()
+  +reviewRequest()
+  +getStaffLeaders()
+  +assignLeader()
+  +inspectOrder()
+}
+
+class leaderStaffController <<Express Controller>> {
+  +getLeaderOrders()
+  +getLeaderOrderDetail()
+  +leaderAccept()
+  +leaderProgress()
+  +leaderSubmit()
+}
+
+class CustomerOrder <<Sequelize Model / Model module>>
+
+class CustomerOrderItem <<Sequelize Model / Model module>>
+
+class CustomerOrderImage <<Sequelize Model / Model module>>
+
+class Contract <<Sequelize Model / Model module>>
+
+class ProductionOrder <<Sequelize Model / Model module>>
+saleOrderController --> CustomerOrder : gọi model
+saleOrderController --> Contract : gọi model
+customerOrderController --> CustomerOrder : gọi model
+orderManagementController --> CustomerOrder : gọi model
+leaderStaffController --> CustomerOrder : gọi model
 @enduml
 ```
 
----
-
-### 2.8: Quản lý Nhà cung cấp (Supplier)
+## 2.8: Nhà cung cấp
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.8 Quản lý Nhà cung cấp (Supplier)
+title 2.8: Nhà cung cấp — MVC theo code
 
-class SupplierController {
-  +getSuppliers(req, res)
-  +getSupplierById(req, res)
-  +createSupplier(req, res)
-  +updateSupplier(req, res)
-  +deleteSupplier(req, res)
-}
-
-class SupplierModel {
-  +supplier_id: bigint
-  +supplier_code: string
-  +supplier_name: string
-  +phone_number: string
-  +status: string
-  +findAndCountAll(options)
-  +create(data)
-  +update(data, options)
-  +destroy(options)
+class supplierController <<Express Controller>> {
+  +getSuppliers()
+  +getActiveSuppliers()
+  +getNextSupplierCode()
+  +getSupplierById()
+  +createSupplier()
+  +updateSupplier()
+  +deleteSupplier()
 }
 
-class SupplierDto {
-  +supplier_id: bigint
-  +supplier_code: string
-  +supplier_name: string
-  +phone_number: string
-  +status: string
-}
-
-SupplierController --> SupplierModel : CRUD
-SupplierController ..> SupplierDto : <<use>>
+class Supplier <<Sequelize Model / Model module>>
+supplierController --> Supplier : gọi model
 @enduml
 ```
 
----
-
-### 2.9: Quản lý Nguyên vật liệu & Tồn kho (Raw Material)
+## 2.9: Nguyên vật liệu
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.9 Quản lý Nguyên vật liệu & Tồn kho (Raw Material)
+title 2.9: Nguyên vật liệu — MVC theo code
 
-class RawMaterialController {
-  +getRawMaterials(req, res)
-  +getRawMaterialStockSummary(req, res)
-  +createRawMaterial(req, res)
-  +updateRawMaterial(req, res)
-  +deleteRawMaterial(req, res)
-}
-
-class RawMaterialModel {
-  +material_id: bigint
-  +material_code: string
-  +material_name: string
-  +unit: string
-  +quantity_on_hand: decimal
-  +minimum_stock_level: decimal
-  +findAndCountAll(options)
-  +create(data)
-  +update(data, options)
+class rawMaterialController <<Express Controller>> {
+  +getRawMaterials()
+  +getRawMaterialStockSummary()
+  +getNextRawMaterialCode()
+  +getRawMaterialById()
+  +createRawMaterial()
+  +updateRawMaterial()
+  +deleteRawMaterial()
 }
 
-class RawMaterialDto {
-  +material_id: bigint
-  +material_code: string
-  +material_name: string
-  +quantity_on_hand: decimal
-  +unit: string
-}
+class RawMaterial <<Sequelize Model / Model module>>
 
-RawMaterialController --> RawMaterialModel : CRUD & checks stock
-RawMaterialController ..> RawMaterialDto : <<use>>
+class ProductMaterial <<Sequelize Model / Model module>>
+rawMaterialController --> RawMaterial : gọi model
 @enduml
 ```
 
----
-
-### 2.10: Nhập kho Nguyên vật liệu (Material Receipt)
+## 2.10: Nhập kho Nguyên vật liệu
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.10 Nhập kho Nguyên vật liệu (Material Receipt)
+title 2.10: Nhập kho Nguyên vật liệu — MVC theo code
 
-class PurchaseReceiptController {
-  +getReceipts(req, res)
-  +createReceipt(req, res)
-  +confirmReceipt(req, res)
-  +cancelReceipt(req, res)
-}
-
-class MaterialReceiptModel {
-  +receipt_id: bigint
-  +supplier_id: bigint
-  +receipt_code: string
-  +status: string
-  +total_amount: decimal
-  +create(data)
-  +update(data, options)
+class purchaseReceiptController <<Express Controller>> {
+  +getReceipts()
+  +getReceiptSummary()
+  +getNextReceiptCode()
+  +getReceiptById()
+  +createReceipt()
+  +updateReceipt()
+  +confirmReceipt()
+  +cancelReceipt()
+  +deleteReceipt()
 }
 
-class MaterialReceiptItemModel {
-  +receipt_item_id: bigint
-  +receipt_id: bigint
-  +material_id: bigint
-  +quantity: decimal
-  +unit_price: decimal
-}
+class MaterialReceipt <<Sequelize Model / Model module>>
 
-class RawMaterialModel {
-  +material_id: bigint
-  +quantity_on_hand: decimal
-  +increment(fields, options)
-}
+class MaterialReceiptItem <<Sequelize Model / Model module>>
 
-class PurchaseReceiptDto {
-  +receipt_id: bigint
-  +receipt_code: string
-  +status: string
-  +total_amount: decimal
-}
+class Supplier <<Sequelize Model / Model module>>
 
-PurchaseReceiptController --> MaterialReceiptModel : creates & confirms
-PurchaseReceiptController --> RawMaterialModel : increases stock
-MaterialReceiptModel "1" -- "1..*" MaterialReceiptItemModel : hasMany
-PurchaseReceiptController ..> PurchaseReceiptDto : <<use>>
+class RawMaterial <<Sequelize Model / Model module>>
+purchaseReceiptController --> MaterialReceipt : gọi model
+purchaseReceiptController --> Supplier : gọi model
+purchaseReceiptController --> RawMaterial : gọi model
 @enduml
 ```
 
----
-
-### 2.11: Lệnh Sản xuất & Gia công (Production Order)
+## 2.11: Lệnh Sản xuất
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.11 Lệnh Sản xuất & Gia công (Production Order)
+title 2.11: Lệnh Sản xuất — MVC theo code
 
-class ProductionOrderController {
-  +getProductionOrders(req, res)
-  +createProductionOrderHandler(req, res)
-  +assignLeader(req, res)
-}
-
-class LeaderStaffController {
-  +getLeaderOrders(req, res)
-  +leaderAccept(req, res)
-  +leaderProgress(req, res)
+class productionOrderController <<Express Controller>> {
+  +getProductionOrders()
+  +getEligibleOrders()
+  +getStaffLeadersList()
+  +createProductionOrderHandler()
+  +assignLeader()
+  +cancelProductionOrderHandler()
 }
 
-class ProductionOrderModel {
-  +production_order_id: bigint
-  +customer_order_id: bigint
-  +leader_account_id: bigint
-  +production_order_code: string
-  +status: string
-  +progress_percent: int
-  +create(data)
-  +update(data, options)
+class leaderStaffController <<Express Controller>> {
+  +getLeaderOrders()
+  +getLeaderOrderDetail()
+  +leaderAccept()
+  +leaderProgress()
+  +leaderSubmit()
 }
 
-class ProductionOrderItemModel {
-  +production_order_item_id: bigint
-  +production_order_id: bigint
-  +custom_item_name: string
-  +quantity: int
-}
+class ProductionOrder <<Sequelize Model / Model module>>
 
-class ProductionOrderDto {
-  +production_order_id: bigint
-  +production_order_code: string
-  +status: string
-  +progress_percent: int
-}
+class ProductionOrderItem <<Sequelize Model / Model module>>
 
-ProductionOrderController --> ProductionOrderModel : creates & assigns
-LeaderStaffController --> ProductionOrderModel : accepts & updates progress
-ProductionOrderModel "1" -- "1..*" ProductionOrderItemModel : hasMany
-ProductionOrderController ..> ProductionOrderDto : <<use>>
+class CustomerOrder <<Sequelize Model / Model module>>
+
+class UserAccount <<Sequelize Model / Model module>>
+productionOrderController --> ProductionOrder : gọi model
+productionOrderController --> UserAccount : gọi model
+leaderStaffController --> CustomerOrder : gọi model
 @enduml
 ```
 
----
-
-### 2.12: Xuất kho Nguyên vật liệu (Material Issue)
+## 2.12: Xuất kho Nguyên vật liệu
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.12 Xuất kho Nguyên vật liệu (Material Issue)
+title 2.12: Xuất kho Nguyên vật liệu — MVC theo code
 
-class MaterialExportController {
-  +getMaterialExports(req, res)
-  +createMaterialExport(req, res)
-  +confirmMaterialExport(req, res)
-  +cancelMaterialExport(req, res)
-}
-
-class MaterialIssueModel {
-  +issue_id: bigint
-  +production_order_id: bigint
-  +issue_code: string
-  +status: string
-  +total_cost: decimal
-  +create(data)
-  +update(data, options)
+class materialExportController <<Express Controller>> {
+  +getMaterialExports()
+  +getMaterialExportSummary()
+  +getNextMaterialExportCode()
+  +getProductionOrdersList()
+  +getMaterialExportById()
+  +createMaterialExport()
+  +updateMaterialExport()
+  +confirmMaterialExport()
+  +cancelMaterialExport()
+  +deleteMaterialExport()
 }
 
-class MaterialIssueItemModel {
-  +issue_item_id: bigint
-  +issue_id: bigint
-  +material_id: bigint
-  +quantity_issued: decimal
-}
+class MaterialIssue <<Sequelize Model / Model module>>
 
-class RawMaterialModel {
-  +material_id: bigint
-  +quantity_on_hand: decimal
-  +decrement(fields, options)
-}
+class MaterialIssueItem <<Sequelize Model / Model module>>
 
-class MaterialExportDto {
-  +issue_id: bigint
-  +issue_code: string
-  +status: string
-  +total_cost: decimal
-}
+class ProductionOrder <<Sequelize Model / Model module>>
 
-MaterialExportController --> MaterialIssueModel : creates & confirms
-MaterialExportController --> RawMaterialModel : decrements stock
-MaterialIssueModel "1" -- "1..*" MaterialIssueItemModel : hasMany
-MaterialExportController ..> MaterialExportDto : <<use>>
+class RawMaterial <<Sequelize Model / Model module>>
+materialExportController --> MaterialIssue : gọi model
+materialExportController --> ProductionOrder : gọi model
+materialExportController --> RawMaterial : gọi model
 @enduml
 ```
 
----
-
-### 2.13: Nghiệm thu & Nhập kho Thành phẩm (Finished Goods)
+## 2.13: Nghiệm thu Thành phẩm
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.13 Nghiệm thu & Nhập kho Thành phẩm (Finished Goods)
+title 2.13: Nghiệm thu Thành phẩm — MVC theo code
 
-class LeaderStaffController {
-  +leaderSubmit(req, res)
-}
-
-class OrderManagementController {
-  +inspectOrder(req, res)
-}
-
-class FinishedGoodsReceiptModel {
-  +receipt_id: bigint
-  +customer_order_id: bigint
-  +receipt_code: string
-  +inspection_status: string
-  +create(data)
-  +update(data, options)
+class leaderStaffController <<Express Controller>> {
+  +getLeaderOrders()
+  +getLeaderOrderDetail()
+  +leaderAccept()
+  +leaderProgress()
+  +leaderSubmit()
 }
 
-class ProductModel {
-  +product_id: bigint
-  +stock_quantity: int
-  +increment(fields, options)
+class orderManagementController <<Express Controller>> {
+  +getOrders()
+  +getOrderDetail()
+  +cancelOrder()
+  +updateOrderStatus()
+  +getOwnerRequests()
+  +getOwnerRequestDetail()
+  +reviewRequest()
+  +getStaffLeaders()
+  +assignLeader()
+  +inspectOrder()
 }
 
-class FinishedGoodsReceiptDto {
-  +receipt_id: bigint
-  +receipt_code: string
-  +inspection_status: string
-}
+class FinishedGoodsReceipt <<Sequelize Model / Model module>>
 
-LeaderStaffController --> FinishedGoodsReceiptModel : submits for inspection
-OrderManagementController --> FinishedGoodsReceiptModel : reviews inspection
-OrderManagementController --> ProductModel : increments finished stock
-OrderManagementController ..> FinishedGoodsReceiptDto : <<use>>
+class FinishedGoodsReceiptItem <<Sequelize Model / Model module>>
+
+class ProductionOrder <<Sequelize Model / Model module>>
+
+class Product <<Sequelize Model / Model module>>
 @enduml
 ```
 
----
-
-### 2.14: Báo cáo Tài chính & Doanh thu (Financial Reports)
+## 2.14: Báo cáo Tài chính
 
 ```plantuml
 @startuml
 skinparam classAttributeIconSize 0
 skinparam class {
-    BackgroundColor White
-    BorderColor Black
-    ArrowColor Black
-    HeaderBackgroundColor #FDEBD0
+  BackgroundColor White
+  BorderColor #475569
+  ArrowColor #475569
+  HeaderBackgroundColor #FDEBD0
 }
-title Class Diagram: 2.14 Báo cáo Tài chính & Doanh thu (Financial Reports)
+title 2.14: Báo cáo Tài chính — MVC theo code
 
-class FinancialReportController {
-  +getFinancialSummary(req, res)
-  +getFinancialOrders(req, res)
-  +getFinancialReceipts(req, res)
-  +exportFinancialReport(req, res)
-}
-
-class FinancialReportModel {
-  +calculateSummary(startDate, endDate)
-  +getOrderRevenueList(filter)
-  +getMaterialExpenseList(filter)
+class financialReportController <<Express Controller>> {
+  +getFinancialSummary()
+  +getFinancialOrders()
+  +getFinancialReceipts()
+  +exportFinancialReport()
 }
 
-class CustomerOrderModel {
-  +order_id: bigint
-  +total_amount: decimal
-  +findAll(options)
-}
+class financialReportModel <<Sequelize Model / Model module>>
 
-class MaterialReceiptModel {
-  +receipt_id: bigint
-  +total_amount: decimal
-  +findAll(options)
-}
+class CustomerOrder <<Sequelize Model / Model module>>
 
-class FinancialSummaryDto {
-  +total_revenue: decimal
-  +total_material_cost: decimal
-  +gross_profit: decimal
-}
+class MaterialReceipt <<Sequelize Model / Model module>>
 
-FinancialReportController --> FinancialReportModel : generates metrics
-FinancialReportModel --> CustomerOrderModel : sums revenue
-FinancialReportModel --> MaterialReceiptModel : sums expenses
-FinancialReportController ..> FinancialSummaryDto : <<use>>
+class MaterialIssue <<Sequelize Model / Model module>>
+financialReportController --> financialReportModel : gọi model
 @enduml
 ```

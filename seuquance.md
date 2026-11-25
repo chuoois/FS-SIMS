@@ -1,72 +1,17 @@
-# TỔNG HỢP SEQUENCE DIAGRAMS HỆ THỐNG FS-SIMS (NHÓM 2.1 ĐẾN 2.14)
+﻿
+
+# SEQUENCE DIAGRAMS FS-SIMS THEO UC REPORT
 > **Dự án**: FS-SIMS (Furniture Sales & Inventory Management System)  
-> **Kiến trúc thực tế**: React 18 / Vite + Node.js Express 4 + Sequelize ORM + MySQL 8  
-> **Quy chuẩn**: Bám sát 100% codebase thực tế, đủ activation bar, luồng alt (Operation successful / Unexpected error), mã màu chuẩn.
+> **Kiến trúc thực tế**: React 18 / Vite + Node.js Express 4
+> **Luồng backend thực tế**: Trang React (gọi `frontend/src/services/*` qua Axios) → Express route/middleware → controller → hàm truy vấn trong `backend/src/models/` → data store. Controller gọi model trực tiếp; tích hợp ngoài như mail/Cloudinary dùng service tương ứng. Các nhánh `alt` mô tả kết quả nghiệp vụ hoặc lỗi thực tế.
 
 ---
 
-## NHÓM 2.1: XÁC THỰC & PHÂN QUYỀN (AUTHENTICATION & AUTHORIZATION)
+## 1 Authentication & Account Access
 
-### Use Case 2.1.1: Customer Sign Up (Đăng ký tài khoản khách hàng)
+### Sequence 2.1.1: Register
 
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Customer" as User
-participant "RegisterPage" as FE #E3F2FD
-participant "authController" as Ctrl #FFE4B5
-participant "authService" as Svc #FFE4B5
-participant "mailService (Gmail SMTP)" as Ext #FFE4B5
-participant "userAccountModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Nhập thông tin (email, password, full_name, phone) -> Click "Đăng ký"
-activate FE
-
-FE -> Ctrl : POST /api/auth/register { email, password, full_name, phone_number }
-activate Ctrl
-
-Ctrl -> Svc : registerCustomer(dto)
-activate Svc
-
-Svc -> Ext : sendWelcomeEmail(email, full_name)
-activate Ext
-Ext --> Svc : Email sent acknowledgment
-deactivate Ext
-
-Svc -> Model : createUserAccount(data)
-activate Model
-
-Model -> DB : INSERT INTO user_account (email, password_hash, full_name, role_id, status) VALUES (?, ?, ?, ?, 'ACTIVE')
-activate DB
-DB --> Model : New User record inserted
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 201 Created { message: 'Đăng ký thành công', user }
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo thành công & điều hướng sang LoginPage
-  deactivate FE
-else Unexpected error (Email đã tồn tại / Dữ liệu không hợp lệ)
-  Svc --> Ctrl : Throw ApiError(409, 'Email đã được sử dụng')
-  deactivate Svc
-  Ctrl --> FE : 409 Conflict / 400 Bad Request { title, detail }
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo lỗi trên form đăng ký
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.1.2: Customer Sign In (Đăng nhập khách hàng)
+> Đối chiếu code hiện tại: route đăng ký đang trỏ tới `authController.register`, nhưng controller chưa khai báo handler này. Sơ đồ thể hiện luồng nghiệp vụ dự kiến; endpoint chưa chạy được cho đến khi handler được khôi phục.
 
 ```plantuml
 @startuml
@@ -75,110 +20,916 @@ skinparam maxMessageSize 150
 autonumber
 
 actor "Customer" as User
-participant "LoginPage" as FE #E3F2FD
-participant "authController" as Ctrl #FFE4B5
-participant "authService" as Svc #FFE4B5
-participant "userAccountModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+participant "RegisterPage" as FE #FFE4B5
+participant "Express authRoutes" as Route #FFE4B5
+participant "authController.register" as Ctrl #FFE4B5
+participant "userAccount.model" as Model #FFE4B5
+participant "userRole.model" as RoleModel #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Nhập email & password -> Click "Đăng nhập"
-activate FE
-
-FE -> Ctrl : POST /api/auth/login { email, password }
-activate Ctrl
-
-Ctrl -> Svc : loginCustomer(email, password)
-activate Svc
-
-Svc -> Model : findUserAccountByEmail(email)
-activate Model
-
-Model -> DB : SELECT * FROM user_account WHERE email = ? AND status = 'ACTIVE'
-activate DB
-DB --> Model : UserAccount record found
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc -> Svc : bcrypt.compare() & jwt.sign(accessToken)
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK + Set-Cookie: refreshToken { accessToken, user }
-  deactivate Ctrl
-  FE --> User : Lưu session vào AuthContext & chuyển hướng về HomePage
-  deactivate FE
-else Unexpected error (Sai mật khẩu / Tài khoản không tồn tại / Bị khóa)
-  Svc --> Ctrl : Throw ApiError(401, 'Email hoặc mật khẩu không chính xác')
-  deactivate Svc
-  Ctrl --> FE : 401 Unauthorized { title, detail }
-  deactivate Ctrl
-  FE --> User : Hiển thị lỗi 'Email hoặc mật khẩu không chính xác'
-  deactivate FE
+User -> FE : Nhập thông tin đăng ký
+FE -> Route : POST /api/auth/register
+Route -> Ctrl : register(req, res, next)
+alt Đăng ký thành công
+  Ctrl -> Ctrl : validate input; chuẩn hóa email; bcrypt.hash(password)
+  Ctrl -> Model : findUserAccountByEmail(email)
+  Model -> DB : Sequelize UserAccount.findOne({ where: { email } })
+  DB --> Model : Không tìm thấy email
+  Model --> Ctrl : null
+  Ctrl -> RoleModel : findUserRoleByCode('CUSTOMER')
+  RoleModel -> DB : Sequelize UserRole.findOne({ role_code: 'CUSTOMER' })
+  DB --> RoleModel : Customer role
+  RoleModel --> Ctrl : customerRole
+  Ctrl -> Model : createUserAccount(accountData)
+  Model -> DB : Sequelize UserAccount.create(accountData)
+  DB --> Model : Tài khoản mới (status mặc định ACTIVE)
+  Model --> Ctrl : User account data
+  Ctrl --> Route : 201 Created { email, fullName }
+  Route --> FE : HTTP response
+  FE --> User : Báo đăng ký thành công
+else Lỗi (validation, email trùng, thiếu role hoặc database)
+  Ctrl --> Route : Error response (400 / 409 / 500)
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị lỗi đăng ký
 end
 @enduml
 ```
 
-### Use Case 2.1.3: Staff Sign In (Đăng nhập nhân sự nội bộ: Sales, Leader, Owner)
+
+
+### Sequence 2.1.2 + 2.1.3 + 2.1.5: Login System
 
 ```plantuml
 @startuml
 skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Customer login
+  User -> FE : Customer submits email and password
+  FE -> Route : POST /api/auth/login
+  Route -> Ctrl : authRoutes -> authController
+  Ctrl -> Model : find account; verify password; issue tokens
+  Model -> DB : Sequelize user_account; refresh_token
+  DB --> Model : Customer account and token records
+  Model --> Ctrl : Account data and tokens
+  Ctrl --> Route : 200 OK + refresh cookie
+  Route --> FE : HTTP response
+  FE --> User : Open the customer session
+else Staff login
+  User -> FE : Sales / Owner / Staff Leader submits credentials
+  FE -> Route : POST /api/staff-auth/login
+  Route -> Ctrl : staffAuthRoutes -> staffAuthController
+  Ctrl -> Model : find staff account and role; issue staff tokens
+  Model -> DB : Sequelize user_account; user_role; refresh_token
+  DB --> Model : Staff account, role, and token
+  Model --> Ctrl : Staff account and role
+  Ctrl --> Route : 200 OK + staff refresh cookie
+  Route --> FE : HTTP response
+  FE --> User : Open the staff workspace for the assigned role
+else Refresh session
+  User -> FE : Axios refreshes an expired access token using the refresh cookie
+  FE -> Route : POST /api/auth/refresh
+  Route -> Ctrl : authRoutes -> authController
+  Ctrl -> Model : Find a valid refresh token and its account
+  Model -> DB : Read refresh token and account data
+  DB --> Model : Valid refresh token and active account data
+  Model --> Ctrl : Refresh token and account data
+  Ctrl -> Ctrl : Create a new access token
+  Ctrl --> Route : 200 OK { accessToken }
+  Route --> FE : HTTP response
+  FE --> User : Retry the original request with the new access token
+end
+@enduml
+```
+
+### Sequence 2.1.4: Forgot Password
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+
+actor "Customer / Staff" as User
+participant "Frontend API (authService.js)" as FE #FFE4B5
+participant "Express authRoutes" as Route #FFE4B5
+participant "authController.forgotPassword" as Ctrl #FFE4B5
+participant "userAccount.model" as Model #FFE4B5
+participant "mailService (Nodemailer)" as Mail #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Gửi email yêu cầu đặt lại mật khẩu
+FE -> Route : POST /api/auth/forgot-password
+Route -> Ctrl : forgotPassword(req, res)
+Ctrl -> Model : findUserAccountByEmail(email)
+Model -> DB : Sequelize UserAccount.findOne({ where: { email } })
+DB --> Model : Account hoặc null
+Model --> Ctrl : account
+alt Account ACTIVE
+  Ctrl -> Ctrl : Tạo mật khẩu mới và bcrypt.hash(...)
+  Ctrl -> Model : updateUserPassword(accountId, passwordHash)
+  Model -> DB : Sequelize UserAccount.update(...)
+  DB --> Model : Đã lưu hash
+  Model --> Ctrl : updated
+  Ctrl -> Mail : sendNewPasswordEmail(...)
+  Mail --> Ctrl : Gửi mail bắt đầu (không chờ kết quả)
+else Không tồn tại / INACTIVE
+  Ctrl -> Ctrl : Không đổi mật khẩu và không gửi mail
+end
+Ctrl --> Route : 200 OK (thông điệp chung)
+Route --> FE : HTTP response
+FE --> User : Hiển thị thông điệp chung
+@enduml
+```
+
+
+
+### Sequence 2.1.6: Log Out
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Customer / Staff" as User
+participant "Frontend API (authService.js)" as FE #FFE4B5
+participant "Express authRoutes" as Route #FFE4B5
+participant "authController.logout" as Ctrl #FFE4B5
+participant "RefreshToken model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chọn đăng xuất
+FE -> Route : POST /api/auth/logout
+Route -> Ctrl : logout(req, res)
+opt Refresh cookie exists
+  Ctrl -> Model : deleteRefreshToken(token)
+  Model -> DB : Delete the matching refresh token
+  DB --> Model : Token deleted or no matching token
+  Model --> Ctrl : Deletion complete
+end
+Ctrl -> Ctrl : Clear the refresh cookie
+Ctrl --> Route : 200 OK
+Route --> FE : HTTP response
+FE --> User : Clear the local session and return to login
+@enduml
+```
+
+
+
+## 2 Manage Profile
+
+### Sequence 2.1.7: Change password
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+
+actor "Customer / Staff" as User
+participant "Frontend API (userService.js)" as FE #FFE4B5
+participant "Express userRoutes" as Route #FFE4B5
+participant "authenticate middleware" as Auth #FFE4B5
+participant "userController.changePassword" as Ctrl #FFE4B5
+participant "userAccount.model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Nhập mật khẩu hiện tại và mật khẩu mới
+FE -> Route : PUT /api/users/change-password
+Route -> Auth : Xác thực access token
+Auth --> Route : req.user
+Route -> Ctrl : changePassword(req, res, next)
+Ctrl -> Ctrl : Kiểm tra input; bcrypt.compare(currentPassword)
+Ctrl -> Model : findUserAccountByEmail(userEmail)
+Model -> DB : Sequelize UserAccount.findOne({ where: { email } })
+DB --> Model : Account và password_hash
+Model --> Ctrl : account
+alt Mật khẩu hiện tại đúng
+  Ctrl -> Ctrl : bcrypt.hash(newPassword, 10)
+  Ctrl -> Model : updateUserPassword(userId, newHash)
+  Model -> DB : Sequelize UserAccount.update(...)
+  DB --> Model : Đã cập nhật
+  Model --> Ctrl : updated
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Báo đổi mật khẩu thành công
+else Input sai / mật khẩu không khớp
+  Ctrl --> Route : 400 Bad Request
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+---
+
+
+
+### Sequence 2.2.1: View profile
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "ProfilePage" as FE #FFE4B5
+participant "Express userRoutes" as Route #FFE4B5
+participant "userController" as Ctrl #FFE4B5
+participant "userAccountModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Mở trang Hồ sơ cá nhân (Profile)
+FE -> Route : GET /api/users/profile [Bearer Token]
+Route -> Ctrl : gọi handler
+Ctrl -> Model : findUserAccountById(userId)
+Model -> DB : Sequelize: đọc dữ liệu trong bảng user_account
+DB --> Model : User profile data
+Model --> Ctrl : User profile data
+alt Thành công
+  Ctrl --> Route : 200 OK { userProfile }
+  Route --> FE : HTTP response
+  FE --> User : Render thông tin cá nhân lên form hồ sơ
+else Lỗi
+  Ctrl --> Route : 404 Not Found / 401 Unauthorized
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị thông báo không thể tải hồ sơ
+end
+@enduml
+```
+
+
+
+### Sequence 2.2.2: Update profile
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "ProfilePage" as FE #FFE4B5
+participant "Express userRoutes" as Route #FFE4B5
+participant "userController" as Ctrl #FFE4B5
+participant "Cloudinary storage middleware" as Ext #FFE4B5
+participant "userAccountModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Upload ảnh avatar mới & sửa số điện thoại, địa chỉ -> Click 'Lưu thay đổi'
+FE -> Route : PUT /api/users/profile (multipart form data)
+opt Avatar image attached
+  Route -> Ext : Upload avatar through upload middleware
+  Ext --> Route : Uploaded image URL in req.file
+end
+Route -> Ctrl : updateProfile(req, res, next)
+Ctrl -> Model : Save profile fields and uploaded avatar URL
+Model -> DB : Sequelize: cập nhật bản ghi trong bảng user_account
+DB --> Model : Rows affected = 1
+Model --> Ctrl : User profile data
+alt Thành công
+  Ctrl --> Route : 200 OK { message: 'Cập nhật hồ sơ thành công', user }
+  Route --> FE : HTTP response
+  FE --> User : Cập nhật avatar trên Header & hiển thị thông báo thành công
+else Lỗi
+  Ctrl --> Route : 500 Internal Server Error { title, detail }
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị thông báo 'Cập nhật thất bại, vui lòng thử lại'
+end
+@enduml
+```
+
+
+
+## 3 View Products
+
+### Sequence 2.3.1 + 2.3.2 + 2.3.9: View product list / Search products / Filter products
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Customer browses products
+  User -> FE : Customer loads filter options, searches by keyword, and selects filters
+  FE -> Route : GET /api/products/metadata
+  Route -> Ctrl : productRoutes -> productController
+  Ctrl -> Model : load public filter metadata
+  Model -> DB : Sequelize product_category; product_room; product_material; product_color
+  DB --> Model : Product filter options
+  Model --> Ctrl : Categories, rooms, materials, and colors
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : GET /api/products?search=...&category_id=...&page=...&limit=...
+  Route -> Ctrl : productRoutes -> productController
+  Ctrl -> Model : find and paginate matching products
+  Model -> DB : Sequelize product
+  DB --> Model : Matching products and total count
+  Model --> Ctrl : Product rows and pagination
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render the filtered product list
+else Owner views managed products
+  User -> FE : Owner opens product management
+  FE -> Route : GET /api/product-manager
+  Route -> Ctrl : productManagerRoutes -> productManagerController
+  Ctrl -> Model : load products for management
+  Model -> DB : Sequelize product
+  DB --> Model : Managed products with stock and status
+  Model --> Ctrl : Product management list
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render the product management table
+end
+@enduml
+```
+
+### Sequence 2.3.3 + 2.3.10: View product details
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Customer views a public product
+  User -> FE : Customer selects a product from the catalog
+  FE -> Route : GET /api/products/:productId
+  Route -> Ctrl : productRoutes -> productController
+  Ctrl -> Model : load public product with related data
+  Model -> DB : Sequelize product; product_category; product_room; product_material; product_set_item
+  DB --> Model : Public product details
+  Model --> Ctrl : Description, price, images, and product set
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render public product details
+else Owner views product management details
+  User -> FE : Owner opens a product from management
+  FE -> Route : GET /api/product-manager/:id
+  Route -> Ctrl : productManagerRoutes -> productManagerController
+  Ctrl -> Model : load full product management record
+  Model -> DB : Sequelize product; product_set_item
+  DB --> Model : Full management product record
+  Model --> Ctrl : Technical specs, cost, price, and set items
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render product management details
+end
+@enduml
+```
+
+## 4 Manage Cart
+
+### Sequence 2.4.1: View cart
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "Customer" as User
+participant "CartPage" as FE #FFE4B5
+participant "Express cartRoutes" as Route #FFE4B5
+participant "cartController" as Ctrl #FFE4B5
+participant "cartModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Click biểu tượng Giỏ hàng trên Header
+FE -> Route : GET /api/cart [Bearer Token]
+Route -> Ctrl : gọi handler
+Ctrl -> Model : findOrCreateCart(userId) & getItems()
+Model -> DB : Sequelize: đọc dữ liệu trong bảng cart
+DB --> Model : Cart entity with array of CartItems
+Model --> Ctrl : Cart data
+alt Thành công
+  Ctrl --> Route : 200 OK { cart, totalAmount, totalItems }
+  Route --> FE : HTTP response
+  FE --> User : Render bảng sản phẩm trong giỏ, số lượng và tổng tiền tạm tính
+else Lỗi
+  Ctrl --> Route : 401 Unauthorized
+  Route --> FE : HTTP response
+  FE --> User : Chuyển hướng sang trang LoginPage
+end
+@enduml
+```
+
+
+
+### Sequence 2.4.2: Add product to cart
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "Customer" as User
+participant "ProductDetailPage" as FE #FFE4B5
+participant "Express cartRoutes" as Route #FFE4B5
+participant "cartController" as Ctrl #FFE4B5
+participant "cartItemModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Chọn số lượng = 2 -> Click 'Thêm vào giỏ'
+FE -> Route : POST /api/cart/items { productId: 10, quantity: 2 }
+Route -> Ctrl : gọi handler
+Ctrl -> Model : upsertCartItem(cartId, productId, quantity)
+Model -> DB : Sequelize: tạo bản ghi trong bảng cart_item
+DB --> Model : Cart item saved successfully
+Model --> Ctrl : Cart data
+alt Thành công
+  Ctrl --> Route : 200 OK { message: 'Đã thêm vào giỏ hàng', cartCount }
+  Route --> FE : HTTP response
+  FE --> User : Cập nhật số badge giỏ hàng trên Header & popup thông báo
+else Lỗi
+  Ctrl --> Route : 400 Bad Request
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị cảnh báo 'Sản phẩm tạm thời hết hàng'
+end
+@enduml
+```
+
+
+
+### Sequence 2.4.3: Update quantity
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "Customer" as User
+participant "CartPage" as FE #FFE4B5
+participant "Express cartRoutes" as Route #FFE4B5
+participant "cartController" as Ctrl #FFE4B5
+participant "cartItemModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Bấm nút [+] để tăng số lượng từ 1 lên 2
+FE -> Route : PATCH /api/cart/items/:productId { quantity: 2 }
+Route -> Ctrl : gọi handler
+Ctrl -> Model : updateQuantity(cartId, productId, 2)
+Model -> DB : Sequelize: cập nhật bản ghi trong bảng cart_item
+DB --> Model : Rows affected = 1
+Model --> Ctrl : Cart item data
+alt Thành công
+  Ctrl --> Route : 200 OK { message: 'Đã cập nhật số lượng', totalAmount }
+  Route --> FE : HTTP response
+  FE --> User : Tự động tính lại thành tiền dòng sản phẩm và tổng giá trị giỏ hàng
+else Lỗi
+  Ctrl --> Route : 400 Bad Request
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị thông báo giới hạn số lượng
+end
+@enduml
+```
+
+
+
+### Sequence 2.4.4: Remove product from cart
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Customer" as User
+participant "Frontend API (cartService.js)" as FE #FFE4B5
+participant "Express cartRoutes" as Route #FFE4B5
+participant "cartController.deleteItem" as Ctrl #FFE4B5
+participant "CartModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xóa hẳn một mặt hàng ra khỏi giỏ hàng cá nhân
+FE -> Route : DELETE /api/cart/items/:productId
+Route -> Ctrl : deleteItem(req, res)
+Ctrl -> Model : removeCartItem(...)
+Model -> DB : Sequelize: xóa dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ removeCartItem
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+## 5 Manage Order
+
+### Sequence 2.7.1: Create sales order
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "Sales" as User
+participant "ContractsPage" as FE #FFE4B5
+participant "Express saleOrderRoutes" as Route #FFE4B5
+participant "saleOrderController" as Ctrl #FFE4B5
+participant "customerOrderModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Khách đã ký hợp đồng -> Bấm 'Chuyển thành Đơn hàng'
+FE -> Route : POST /api/sale-orders/orders/from-contract/:contractId
+Route -> Ctrl : gọi handler
+Ctrl -> Model : createOrderFromContract(contractId)
+Model -> DB : Sequelize: tạo bản ghi trong bảng customer_order
+DB --> Model : Customer order created with code 'DH-...'
+  Model --> Ctrl : Created order data
+alt Thành công
+  Ctrl --> Route : 201 Created { orderId, orderCode, status: 'PENDING' }
+  Route --> FE : HTTP response
+  FE --> User : Thông báo thành công & điều hướng sang trang Quản lý đơn hàng
+else Lỗi
+  Ctrl --> Route : 400 Bad Request
+  Route --> FE : HTTP response
+  FE --> User : Báo lỗi hợp đồng cần được ký trước khi tạo đơn
+end
+@enduml
+```
+
+
+
+### Sequence 2.7.2 + 2.7.6 + 2.7.12: View order history / order list
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Sales views POS orders
+  User -> FE : Sales opens the order list in the Sales workspace
+  FE -> Route : GET /api/sale-orders/orders?page=...&limit=...
+  Route -> Ctrl : saleOrderRoutes -> saleOrderController
+  Ctrl -> Model : load paginated POS orders
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Sales order rows and count
+  Model --> Ctrl : POS order list
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render the Sales order list
+else Owner views managed orders
+  User -> FE : Owner opens the system-wide order management list
+  FE -> Route : GET /api/order-management?search=...&type=...&status=...
+  Route -> Ctrl : orderManagementRoutes -> orderManagementController
+  Ctrl -> Model : filter and paginate all orders
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Filtered order rows and count
+  Model --> Ctrl : Managed order list
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render the management order list
+else Customer views order history
+  User -> FE : Customer opens their personal order history
+  FE -> Route : GET /api/customer-orders
+  Route -> Ctrl : customerOrderRoutes -> customerOrderController
+  Ctrl -> Model : load orders for the signed-in customer
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Orders belonging to the customer
+  Model --> Ctrl : Customer order history
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render personal order history
+end
+@enduml
+```
+
+### Sequence 2.7.3 + 2.7.7 + 2.7.13: View order details
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Sales views an order
+  User -> FE : Sales opens an order from the POS list
+  FE -> Route : GET /api/sale-orders/orders/:id
+  Route -> Ctrl : saleOrderRoutes -> saleOrderController
+  Ctrl -> Model : load POS order details
+  Model -> DB : Sequelize customer_order; contract; customer_order_item
+  DB --> Model : POS order and related items
+  Model --> Ctrl : Order, contract, delivery, and payment details
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render POS order details
+else Owner views a managed order
+  User -> FE : Owner opens an order from the management list
+  FE -> Route : GET /api/order-management/:id
+  Route -> Ctrl : orderManagementRoutes -> orderManagementController
+  Ctrl -> Model : load order and production history
+  Model -> DB : Sequelize customer_order; production_order; finished_goods_receipt
+  DB --> Model : Managed order and production history
+  Model --> Ctrl : Timeline, assigned staff, inspection, and history
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render managed order details
+else Customer views a personal order
+  User -> FE : Customer opens an order from personal history
+  FE -> Route : GET /api/customer-orders/:id
+  Route -> Ctrl : customerOrderRoutes -> customerOrderController
+  Ctrl -> Model : load order if it belongs to the signed-in customer
+  Model -> DB : Sequelize customer_order; customer_order_item
+  DB --> Model : Customer-owned order and items
+  Model --> Ctrl : Items, delivery date, payment, and progress
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render customer order details
+end
+@enduml
+```
+
+### Sequence 2.7.4 + 2.7.5 + 2.7.9: Update order status
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Start delivery
+  User -> FE : Sales starts delivery for a finished order
+  FE -> Route : POST /api/sale-orders/orders/:orderId/deliver
+  Route -> Ctrl : saleOrderRoutes -> saleOrderController
+  Ctrl -> Model : set order status to DELIVERING
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Order status updated
+  Model --> Ctrl : DELIVERING
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show the order as in delivery
+else Complete delivery
+  User -> FE : Sales confirms the customer received and paid for the order
+  FE -> Route : POST /api/sale-orders/orders/:id/complete
+  Route -> Ctrl : saleOrderRoutes -> saleOrderController
+  Ctrl -> Model : complete delivery and update order status
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Order status updated
+  Model --> Ctrl : COMPLETED
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show the order as completed
+else Owner updates processing status
+  User -> FE : Owner selects a new processing status
+  FE -> Route : PATCH /api/order-management/:id/status
+  Route -> Ctrl : orderManagementRoutes -> orderManagementController
+  Ctrl -> Model : update order status
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Order status updated
+  Model --> Ctrl : New status
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Refresh the managed order status
+end
+@enduml
+```
+
+### Sequence 2.7.8: Cancel order
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner / Sales" as User
+participant "Frontend API (orderManagementService.js)" as FE #FFE4B5
+participant "Express orderManagementRoutes" as Route #FFE4B5
+participant "orderManagementController.cancelOrder" as Ctrl #FFE4B5
+participant "CustomerOrderModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Hủy đơn hàng và ghi nhận lý do hủy (hủy cọc, đổi mẫu hoặc khách từ chối tiếp nhận)
+FE -> Route : POST /api/order-management/:id/cancel
+Route -> Ctrl : cancelOrder(req, res)
+Ctrl -> Model : cancelOrder(...)
+Model -> DB : Sequelize: ghi/cập nhật dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ cancelOrder
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.7.10 + 2.7.11: Assign leader to order
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Owner assigns a production leader
+  User -> FE : Owner loads active leaders and assigns one to an order
+  FE -> Route : GET /api/order-management/leaders
+  Route -> Ctrl : orderManagementRoutes -> orderManagementController
+  Ctrl -> Model : load active production leaders
+  Model -> DB : Sequelize user_account; user_role
+  DB --> Model : Active LeaderStaff accounts
+  Model --> Ctrl : Leader choices
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : POST /api/order-management/orders/:id/assign-leader
+  Route -> Ctrl : orderManagementRoutes -> orderManagementController
+  Ctrl -> Model : assign leader to the order
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Order linked to the selected leader
+  Model --> Ctrl : Assignment result
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show the assigned leader on the order
+end
+@enduml
+```
+
+## 7 Submit Purchase Request
+
+### Sequence 2.4.5: Submit Purchase Request
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Customer" as User
+participant "Frontend API (cartService.js)" as FE #FFE4B5
+participant "Express cartRoutes" as Route #FFE4B5
+participant "orderRequestController.createCartOrderRequest" as Ctrl #FFE4B5
+participant "OrderRequestModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chuyển toàn bộ sản phẩm trong giỏ hàng thành một Yêu cầu đặt hàng (Order Request loại READY) gửi tới nhân viên Sales xử lý
+FE -> Route : POST /api/cart/requests
+Route -> Ctrl : createCartOrderRequest(req, res)
+Ctrl -> Model : createReadyOrderRequestFromCart(...)
+Model -> DB : Sequelize: ghi/cập nhật dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ createReadyOrderRequestFromCart
+alt Thành công
+  Ctrl --> Route : 201 Created response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+---
+
+
+
+---
+
+
+
+## 8 Manage Customer
+
+### Sequence 2.6.2: View customer list
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "Sales" as User
+participant "CustomersPage" as FE #FFE4B5
+participant "Express saleOrderRoutes" as Route #FFE4B5
+participant "saleOrderController" as Ctrl #FFE4B5
+participant "userAccountModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Tìm khách hàng theo số điện thoại
+FE -> Route : GET /api/sale-orders/customers?search=0901234567&search_by=PHONE
+Route -> Ctrl : getSaleCustomers(req, res)
+Ctrl -> Model : Find customers by the supplied search criteria
+Model -> DB : Read matching customer account data
+DB --> Model : Matching customer data
+Model --> Ctrl : Customer account data
+alt Thành công
+  Ctrl --> Route : 200 OK { customer }
+  Route --> FE : HTTP response
+  FE --> User : Tự động điền họ tên, địa chỉ khách vào form hợp đồng
+else Lỗi
+  Ctrl --> Route : 200 OK { customer: null }
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị tùy chọn tạo hồ sơ khách hàng mới
+end
+@enduml
+```
+
+
+
+### Sequence 2.6.3: View customer details
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
 autonumber
 
 actor "Sales / Owner" as User
-participant "StaffLoginPage" as FE #E3F2FD
-participant "staffAuthController" as Ctrl #FFE4B5
-participant "staffAuthService" as Svc #FFE4B5
-participant "userAccountModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+participant "Frontend API (saleOrderService.js)" as FE #FFE4B5
+participant "Express saleOrderRoutes" as Route #FFE4B5
+participant "saleOrderController.getSaleCustomerById" as Ctrl #FFE4B5
+participant "SaleCustomerModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Nhập email nhân viên & password -> Click "Đăng nhập"
-activate FE
-
-FE -> Ctrl : POST /api/staff-auth/login { email, password }
-activate Ctrl
-
-Ctrl -> Svc : authenticateStaff(email, password)
-activate Svc
-
-Svc -> Model : findStaffWithRoleByEmail(email)
-activate Model
-
-Model -> DB : SELECT u.*, r.role_code FROM user_account u JOIN user_role r ON u.role_id = r.role_id WHERE u.email = ?
-activate DB
-DB --> Model : Staff record with role_code (SALES/LEADERSTAFF/OWNER)
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc -> Svc : Kiểm tra role != 'CUSTOMER' & tạo staff token
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK + Set-Cookie: staffRefreshToken { accessToken, user, role }
-  deactivate Ctrl
-  FE --> User : Chuyển hướng vào Dashboard tương ứng (/sale, /staff-leader, /owner)
-  deactivate FE
-else Unexpected error (Tài khoản là Customer / Sai mật khẩu / Bị khóa)
-  Svc --> Ctrl : Throw ApiError(403, 'Bạn không có quyền truy cập cổng quản trị')
-  deactivate Svc
-  Ctrl --> FE : 403 Forbidden / 401 Unauthorized { title, detail }
-  deactivate Ctrl
-  FE --> User : Hiển thị lỗi truy cập bị từ chối
-  deactivate FE
+User -> FE : Xem lịch sử mua hàng, địa chỉ giao nhận và hợp đồng liên quan của một khách hàng
+FE -> Route : GET /api/sale-orders/customers/:id
+Route -> Ctrl : getSaleCustomerById(req, res)
+Ctrl -> Model : findCustomerByIdModel(...)
+Model -> DB : Sequelize: đọc dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findCustomerByIdModel
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
 end
 @enduml
 ```
 
----
 
-## NHÓM 2.2: QUẢN LÝ HỒ SƠ & NHÂN SỰ (USER & STAFF MANAGEMENT)
 
-### Use Case 2.2.1: View Personal Profile (Xem thông tin hồ sơ cá nhân)
+## 9 Manage Order Requirement
+
+### Sequence 2.5.1 + 2.5.4: Create order requirement
 
 ```plantuml
 @startuml
@@ -187,493 +938,34 @@ skinparam maxMessageSize 150
 autonumber
 
 actor "User" as User
-participant "ProfilePage" as FE #E3F2FD
-participant "userController" as Ctrl #FFE4B5
-participant "userService" as Svc #FFE4B5
-participant "userAccountModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+participant "Cloudinary storage middleware" as Ext #FFE4B5
+participant "Cloudinary API" as Ext #FFE4B5
 
-User -> FE : Mở trang Hồ sơ cá nhân (Profile)
-activate FE
-
-FE -> Ctrl : GET /api/users/profile [Bearer Token]
-activate Ctrl
-
-Ctrl -> Svc : getUserProfile(userId)
-activate Svc
-
-Svc -> Model : findUserAccountById(userId)
-activate Model
-
-Model -> DB : SELECT user_account_id, email, full_name, phone_number, dob, gender, address, avatar_url FROM user_account WHERE user_account_id = ?
-activate DB
-DB --> Model : User profile data
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { userProfile }
-  deactivate Ctrl
-  FE --> User : Render thông tin cá nhân lên form hồ sơ
-  deactivate FE
-else Unexpected error (Token hết hạn hoặc người dùng không tồn tại)
-  Svc --> Ctrl : Throw ApiError(404, 'Không tìm thấy thông tin tài khoản')
-  deactivate Svc
-  Ctrl --> FE : 404 Not Found / 401 Unauthorized
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo không thể tải hồ sơ
-  deactivate FE
+alt Sales creates a custom requirement with design images
+  User -> FE : Sales uploads design images, enters custom requirements, and submits
+  FE -> Route : POST /api/sale-orders/upload-images (multipart/form-data)
+  Route -> Ext : Upload design images through upload middleware
+  Ext --> Route : Uploaded image URLs
+  Route --> FE : 200 OK { image URLs }
+  FE -> Route : POST /api/sale-orders/requests with uploaded image URLs
+  Route -> Ctrl : saleOrderRoutes -> orderRequestController
+  Ctrl -> Model : create request with items and image references
+  Model -> DB : Sequelize order_request; order_request_item; order_request_image
+  DB --> Model : New custom request and image references
+  Model --> Ctrl : Created requirement
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the new order requirement to Sales
 end
 @enduml
 ```
 
-### Use Case 2.2.2: Update Profile & Avatar (Cập nhật hồ sơ & Avatar qua Cloudinary)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "User" as User
-participant "ProfilePage" as FE #E3F2FD
-participant "userController" as Ctrl #FFE4B5
-participant "userService" as Svc #FFE4B5
-participant "cloudinaryService (Cloudinary API)" as Ext #FFE4B5
-participant "userAccountModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Upload ảnh avatar mới & sửa số điện thoại, địa chỉ -> Click 'Lưu thay đổi'
-activate FE
-
-FE -> Ctrl : PUT /api/users/profile (multipart/form-data: avatar file, phone_number, address)
-activate Ctrl
-
-Ctrl -> Svc : updateUserProfile(userId, updateData)
-activate Svc
-
-Svc -> Ext : uploadImageStream(fileBuffer, folder: 'avatars')
-activate Ext
-Ext --> Svc : Cloudinary URL { secure_url, public_id }
-deactivate Ext
-
-Svc -> Model : updateUserProfile(userId, { avatar_url, phone_number, address })
-activate Model
-
-Model -> DB : UPDATE user_account SET avatar_url = ?, phone_number = ?, address = ?, modifiedate = NOW() WHERE user_account_id = ?
-activate DB
-DB --> Model : Rows affected = 1
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Cập nhật hồ sơ thành công', user }
-  deactivate Ctrl
-  FE --> User : Cập nhật avatar trên Header & hiển thị thông báo thành công
-  deactivate FE
-else Unexpected error (Upload ảnh thất bại hoặc dữ liệu sai định dạng)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi tải ảnh lên Cloudinary')
-  deactivate Svc
-  Ctrl --> FE : 500 Internal Server Error { title, detail }
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo 'Cập nhật thất bại, vui lòng thử lại'
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.2.3: List Staff Accounts (Chủ xưởng xem danh sách nhân sự)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Owner" as User
-participant "ManageStaffAccountsPage" as FE #E3F2FD
-participant "staffAccountController" as Ctrl #FFE4B5
-participant "staffAccountService" as Svc #FFE4B5
-participant "userAccountModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Truy cập mục 'Quản lý nhân sự' trên Dashboard Owner
-activate FE
-
-FE -> Ctrl : GET /api/staff-accounts?page=1&limit=10&role=ALL
-activate Ctrl
-
-Ctrl -> Svc : getStaffAccountsList(filter)
-activate Svc
-
-Svc -> Model : getStaffAccounts(options)
-activate Model
-
-Model -> DB : SELECT u.*, r.role_code FROM user_account u JOIN user_role r ON u.role_id = r.role_id WHERE r.role_code IN ('SALES', 'LEADERSTAFF') LIMIT 10
-activate DB
-DB --> Model : { rows: staffList, count: total }
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { staffAccounts, totalCount, page }
-  deactivate Ctrl
-  FE --> User : Render bảng danh sách nhân viên kèm trạng thái ACTIVE/INACTIVE
-  deactivate FE
-else Unexpected error (Không có quyền Owner hoặc lỗi kết nối DB)
-  Svc --> Ctrl : Throw ApiError(403, 'Forbidden')
-  deactivate Svc
-  Ctrl --> FE : 403 Forbidden / 500 Error
-  deactivate Ctrl
-  FE --> User : Chuyển hướng về trang lỗi hoặc báo lỗi tải dữ liệu
-  deactivate FE
-end
-@enduml
-```
-
----
-
-## NHÓM 2.3: QUẢN LÝ SẢN PHẨM & DANH MỤC (PRODUCT & CATALOG)
-
-### Use Case 2.3.1: Get Public Product Metadata (Lấy bộ lọc danh mục & phòng)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Customer" as User
-participant "ProductPage" as FE #E3F2FD
-participant "productController" as Ctrl #FFE4B5
-participant "productService" as Svc #FFE4B5
-participant "productCategoryModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Vào trang danh mục sản phẩm (/products)
-activate FE
-
-FE -> Ctrl : GET /api/products/metadata
-activate Ctrl
-
-Ctrl -> Svc : getProductMetadata()
-activate Svc
-
-Svc -> Model : findAllCategoriesAndRooms()
-activate Model
-
-Model -> DB : SELECT * FROM product_category; SELECT * FROM product_room; SELECT * FROM product_material;
-activate DB
-DB --> Model : Metadata arrays (categories, rooms, materials)
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { categories, rooms, materials, colors }
-  deactivate Ctrl
-  FE --> User : Hiển thị thanh menu lọc sản phẩm bên trái
-  deactivate FE
-else Unexpected error (Lỗi truy vấn cơ sở dữ liệu)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi lấy metadata sản phẩm')
-  deactivate Svc
-  Ctrl --> FE : 500 Internal Server Error
-  deactivate Ctrl
-  FE --> User : Hiển thị menu lọc mặc định
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.3.2: Browse Products (Khách hàng tìm kiếm & duyệt sản phẩm)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Customer" as User
-participant "ProductPage" as FE #E3F2FD
-participant "productController" as Ctrl #FFE4B5
-participant "productService" as Svc #FFE4B5
-participant "productModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Chọn danh mục 'Bàn' & nhập từ khóa 'gỗ sồi' -> Bấm tìm
-activate FE
-
-FE -> Ctrl : GET /api/products?search=gỗ sồi&category_id=1&page=1&limit=12
-activate Ctrl
-
-Ctrl -> Svc : searchProducts(filter)
-activate Svc
-
-Svc -> Model : findAndCountAll({ where, limit, offset })
-activate Model
-
-Model -> DB : SELECT * FROM product WHERE status = 'ACTIVE' AND category_id = 1 AND product_name LIKE '%gỗ sồi%' LIMIT 12
-activate DB
-DB --> Model : { rows: products, count: total }
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { products, pagination }
-  deactivate Ctrl
-  FE --> User : Render lưới sản phẩm với ảnh, giá bán và nút thêm vào giỏ
-  deactivate FE
-else Unexpected error (Không tìm thấy sản phẩm nào phù hợp)
-  Svc --> Ctrl : Trả về danh sách rỗng rows: []
-  deactivate Svc
-  Ctrl --> FE : 200 OK { products: [], pagination: { total: 0 } }
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo 'Không tìm thấy sản phẩm phù hợp'
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.3.3: View Product Detail (Xem thông số chi tiết sản phẩm)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Customer" as User
-participant "ProductDetailPage" as FE #E3F2FD
-participant "productController" as Ctrl #FFE4B5
-participant "productService" as Svc #FFE4B5
-participant "productModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Click vào 1 sản phẩm trên danh sách
-activate FE
-
-FE -> Ctrl : GET /api/products/:productId
-activate Ctrl
-
-Ctrl -> Svc : getProductDetailById(productId)
-activate Svc
-
-Svc -> Model : findByPk(productId, { include: [category, room, material, set_items] })
-activate Model
-
-Model -> DB : SELECT p.*, c.category_name, m.material_name FROM product p LEFT JOIN product_category c ON ... WHERE p.product_id = ?
-activate DB
-DB --> Model : Chi tiết Product kèm thông số kích thước D x R x C
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { product }
-  deactivate Ctrl
-  FE --> User : Hiển thị ảnh gallery, thông số kỹ thuật và tình trạng còn hàng
-  deactivate FE
-else Unexpected error (Sản phẩm không tồn tại hoặc bị ẩn)
-  Svc --> Ctrl : Throw ApiError(404, 'Sản phẩm không tồn tại')
-  deactivate Svc
-  Ctrl --> FE : 404 Not Found
-  deactivate Ctrl
-  FE --> User : Hiển thị trang 404 Không tìm thấy sản phẩm
-  deactivate FE
-end
-@enduml
-```
-
----
-
-## NHÓM 2.4: GIỎ HÀNG TRỰC TUYẾN (SHOPPING CART)
-
-### Use Case 2.4.1: View Cart (Khách hàng xem giỏ hàng cá nhân)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Customer" as User
-participant "CartPage" as FE #E3F2FD
-participant "cartController" as Ctrl #FFE4B5
-participant "cartService" as Svc #FFE4B5
-participant "cartModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Click biểu tượng Giỏ hàng trên Header
-activate FE
-
-FE -> Ctrl : GET /api/cart [Bearer Token]
-activate Ctrl
-
-Ctrl -> Svc : getCartByCustomerId(userId)
-activate Svc
-
-Svc -> Model : findOrCreateCart(userId) & getItems()
-activate Model
-
-Model -> DB : SELECT ci.*, p.product_name, p.unit_price, p.image_url FROM cart c JOIN cart_item ci ON c.cart_id = ci.cart_id JOIN product p ON ci.product_id = p.product_id WHERE c.customer_account_id = ?
-activate DB
-DB --> Model : Cart entity with array of CartItems
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { cart, totalAmount, totalItems }
-  deactivate Ctrl
-  FE --> User : Render bảng sản phẩm trong giỏ, số lượng và tổng tiền tạm tính
-  deactivate FE
-else Unexpected error (Người dùng chưa đăng nhập)
-  Svc --> Ctrl : Throw ApiError(401, 'Unauthorized')
-  deactivate Svc
-  Ctrl --> FE : 401 Unauthorized
-  deactivate Ctrl
-  FE --> User : Chuyển hướng sang trang LoginPage
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.4.2: Add Item to Cart (Thêm sản phẩm vào giỏ hàng)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Customer" as User
-participant "ProductDetailPage" as FE #E3F2FD
-participant "cartController" as Ctrl #FFE4B5
-participant "cartService" as Svc #FFE4B5
-participant "cartItemModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Chọn số lượng = 2 -> Click 'Thêm vào giỏ'
-activate FE
-
-FE -> Ctrl : POST /api/cart/items { productId: 10, quantity: 2 }
-activate Ctrl
-
-Ctrl -> Svc : addItemToCart(userId, productId, quantity)
-activate Svc
-
-Svc -> Model : upsertCartItem(cartId, productId, quantity)
-activate Model
-
-Model -> DB : INSERT INTO cart_item (cart_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE quantity = quantity + 2
-activate DB
-DB --> Model : Cart item saved successfully
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Đã thêm vào giỏ hàng', cartCount }
-  deactivate Ctrl
-  FE --> User : Cập nhật số badge giỏ hàng trên Header & popup thông báo
-  deactivate FE
-else Unexpected error (Sản phẩm hết hàng (stock_quantity = 0))
-  Svc --> Ctrl : Throw ApiError(400, 'Sản phẩm đã hết hàng tồn kho')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Hiển thị cảnh báo 'Sản phẩm tạm thời hết hàng'
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.4.3: Update Cart Item Quantity (Thay đổi số lượng món trong giỏ)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Customer" as User
-participant "CartPage" as FE #E3F2FD
-participant "cartController" as Ctrl #FFE4B5
-participant "cartService" as Svc #FFE4B5
-participant "cartItemModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Bấm nút [+] để tăng số lượng từ 1 lên 2
-activate FE
-
-FE -> Ctrl : PATCH /api/cart/items/:productId { quantity: 2 }
-activate Ctrl
-
-Ctrl -> Svc : updateItemQuantity(cartId, productId, 2)
-activate Svc
-
-Svc -> Model : updateQuantity(cartId, productId, 2)
-activate Model
-
-Model -> DB : UPDATE cart_item SET quantity = 2 WHERE cart_id = ? AND product_id = ?
-activate DB
-DB --> Model : Rows affected = 1
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Đã cập nhật số lượng', totalAmount }
-  deactivate Ctrl
-  FE --> User : Tự động tính lại thành tiền dòng sản phẩm và tổng giá trị giỏ hàng
-  deactivate FE
-else Unexpected error (Số lượng vượt quá tồn kho khả dụng)
-  Svc --> Ctrl : Throw ApiError(400, 'Số lượng vượt quá số lượng tồn kho')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo giới hạn số lượng
-  deactivate FE
-end
-@enduml
-```
-
----
-
-## NHÓM 2.5: YÊU CẦU ĐẶT HÀNG & THIẾT KẾ (ORDER REQUESTS)
-
-### Use Case 2.5.1: Upload Design Images (Upload ảnh thiết kế / may đo qua Cloudinary)
+### Sequence 2.5.2: View order requirement list
 
 ```plantuml
 @startuml
@@ -682,110 +974,34 @@ skinparam maxMessageSize 150
 autonumber
 
 actor "Sales" as User
-participant "CreateOrderRequestPage" as FE #E3F2FD
+participant "RequestsPage" as FE #FFE4B5
+participant "Express saleOrderRoutes" as Route #FFE4B5
 participant "saleOrderController" as Ctrl #FFE4B5
-participant "orderManagementService" as Svc #FFE4B5
-participant "cloudinaryService (Cloudinary API)" as Ext #FFE4B5
-participant "orderRequestImageModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Kéo thả 2 file ảnh bản vẽ 3D -> Bấm 'Tải ảnh lên'
-activate FE
-
-FE -> Ctrl : POST /api/sale-orders/upload-images (multipart/form-data: files)
-activate Ctrl
-
-Ctrl -> Svc : formatDesignImagesResponse(urls)
-activate Svc
-
-Svc -> Ext : uploadMultipleImages(files, folder: 'design_requests')
-activate Ext
-Ext --> Svc : Array of uploaded URLs { secure_url, public_id }
-deactivate Ext
-
-Svc -> Model : prepareImageRecords(urls)
-activate Model
-
-Model -> DB : (Tạm lưu URL chờ submit phiếu yêu cầu)
-activate DB
-DB --> Model : URLs ready for submission
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { imageUrls: ['https://res.cloudinary.com/...'] }
-  deactivate Ctrl
-  FE --> User : Hiển thị thumbnail ảnh xem trước trong form yêu cầu
-  deactivate FE
-else Unexpected error (File không đúng định dạng ảnh hoặc quá dung lượng 5MB)
-  Svc --> Ctrl : Throw ApiError(400, 'Chỉ chấp nhận file ảnh dưới 5MB')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo file không hợp lệ
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.5.2: View Customer Requests (Nhân viên Sales xem danh sách yêu cầu)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Sales" as User
-participant "RequestsPage" as FE #E3F2FD
-participant "saleOrderController" as Ctrl #FFE4B5
-participant "orderManagementService" as Svc #FFE4B5
 participant "orderRequestModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+database "Data store" as DB #FFFFFF
 
 User -> FE : Mở menu 'Yêu cầu đặt hàng' (/sale/requests)
-activate FE
-
-FE -> Ctrl : GET /api/sale-orders/requests?status=PENDING&page=1
-activate Ctrl
-
-Ctrl -> Svc : getRequestsList(filter)
-activate Svc
-
-Svc -> Model : findAllRequests({ where: { status }, include: [customer] })
-activate Model
-
-Model -> DB : SELECT r.*, u.full_name, u.phone_number FROM order_request r JOIN user_account u ON r.customer_account_id = u.user_account_id WHERE r.status = 'PENDING'
-activate DB
+FE -> Route : GET /api/sale-orders/requests?status=PENDING&page=1
+Route -> Ctrl : gọi handler
+Ctrl -> Model : findAllRequests({ where: { status }, include: [customer] })
+Model -> DB : Sequelize: đọc dữ liệu trong bảng order_request
 DB --> Model : List of order requests
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { requests, total }
-  deactivate Ctrl
+Model --> Ctrl : Order request data
+alt Thành công
+  Ctrl --> Route : 200 OK { requests, total }
+  Route --> FE : HTTP response
   FE --> User : Hiển thị bảng yêu cầu kèm nhãn READY hoặc CUSTOM và trạng thái PENDING
-  deactivate FE
-else Unexpected error (Lỗi kết nối cơ sở dữ liệu)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi tải danh sách yêu cầu')
-  deactivate Svc
-  Ctrl --> FE : 500 Internal Server Error
-  deactivate Ctrl
+else Lỗi
+  Ctrl --> Route : 500 Internal Server Error
+  Route --> FE : HTTP response
   FE --> User : Hiển thị lỗi và nút 'Tải lại'
-  deactivate FE
 end
 @enduml
 ```
 
-### Use Case 2.5.3: View Request Detail (Xem chi tiết yêu cầu & ảnh thiết kế)
+
+
+### Sequence 2.5.5 + 2.5.7 + 2.5.8: Update customer request
 
 ```plantuml
 @startuml
@@ -793,382 +1009,341 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "Sales" as User
-participant "RequestsPage" as FE #E3F2FD
-participant "saleOrderController" as Ctrl #FFE4B5
-participant "orderManagementService" as Svc #FFE4B5
-participant "orderRequestModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+participant "Cloudinary API" as Ext #FFE4B5
 
-User -> FE : Bấm 'Xem chi tiết' một yêu cầu đặt hàng
-activate FE
+alt Sales edits request details
+  User -> FE : Sales edits dimensions, material, estimated price, or notes
+  FE -> Route : PUT /api/sale-orders/requests/:id
+  Route -> Ctrl : saleOrderRoutes -> orderRequestController
+  Ctrl -> Model : update request fields and items
+  Model -> DB : Sequelize order_request; order_request_item
+  DB --> Model : Updated request fields
+  Model --> Ctrl : Updated request
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Refresh request details
+else Owner adds a design file
+  User -> FE : Owner uploads an approved technical drawing to an existing request
+  FE -> Route : PATCH /api/sale-orders/requests/:id/design (multipart/form-data)
+  Route -> Ext : Upload design file through upload middleware
+  Ext --> Route : Uploaded design URL in req.file
+  Route -> Ctrl : updateDesignFile(req, res)
+  Ctrl -> Model : Save design URL and request details
+  Model -> DB : Sequelize order_request_image
+  DB --> Model : Design file reference saved
+  Model --> Ctrl : Updated attachments
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show the new design attachment
+else Authorized user removes a design image
+  User -> FE : User removes an image attached to the request
+  FE -> Route : DELETE /api/sale-orders/requests/:id/design/:imageId
+  Route -> Ctrl : saleOrderRoutes -> orderRequestController
+  Ctrl -> Model : Delete the design image reference from the request
+  Model -> DB : Sequelize order_request_image
+  DB --> Model : Image and reference removed
+  Model --> Ctrl : Updated attachments
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Refresh request attachments
+end
+@enduml
+```
 
-FE -> Ctrl : GET /api/sale-orders/requests/:requestId
-activate Ctrl
 
-Ctrl -> Svc : getRequestDetail(requestId)
-activate Svc
 
-Svc -> Model : findByPk(requestId, { include: [items, images, customer] })
-activate Model
 
-Model -> DB : SELECT * FROM order_request WHERE request_id = ?; SELECT * FROM order_request_item WHERE request_id = ?; SELECT * FROM order_request_image WHERE request_id = ?;
-activate DB
-DB --> Model : Full request aggregate data
-deactivate DB
+## 10 Manage Customer Requests
 
-Model --> Svc : Return entity / result
-deactivate Model
+### Sequence 2.5.3 + 2.5.10 + 2.5.12: View request details
 
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { requestDetail }
-  deactivate Ctrl
-  FE --> User : Mở Modal xem chi tiết kích thước, vật tư, bản vẽ thiết kế
-  deactivate FE
-else Unexpected error (Yêu cầu không tồn tại)
-  Svc --> Ctrl : Throw ApiError(404, 'Không tìm thấy yêu cầu đặt hàng')
-  deactivate Svc
-  Ctrl --> FE : 404 Not Found
-  deactivate Ctrl
-  FE --> User : Báo lỗi yêu cầu đã bị hủy hoặc không tồn tại
-  deactivate FE
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Application data" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+alt Sales views a request
+  User -> FE : Sales opens a customer order request
+  FE -> Route : GET /api/sale-orders/requests/:requestId
+  Route -> Ctrl : saleOrderRoutes -> saleOrderController
+  Ctrl -> Model : Load request, items, images, and customer data
+  Model -> DB : Read request details
+  DB --> Model : Request details
+  Model --> Ctrl : Request details
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show request details
+else Owner reviews a request
+  User -> FE : Owner opens a design request for review
+  FE -> Route : GET /api/order-management/owner/requests/:id
+  Route -> Ctrl : orderManagementRoutes -> orderManagementController
+  Ctrl -> Model : Load request, design, materials, and estimated price
+  Model -> DB : Read request details
+  DB --> Model : Request details
+  Model --> Ctrl : Request details
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show request details for review
+else Customer views own request
+  User -> FE : Customer checks the status of a submitted request
+  FE -> Route : GET /api/customer-orders/requests/:id
+  Route -> Ctrl : customerOrderRoutes -> customerOrderController
+  Ctrl -> Model : Load the customer's request and approval status
+  Model -> DB : Read request details
+  DB --> Model : Request details and status
+  Model --> Ctrl : Request details and status
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show request progress and approval status
+end
+alt Request not found or access denied
+  Ctrl --> Route : 404 Not Found / 403 Forbidden
+  Route --> FE : HTTP error
+  FE --> User : Show an access or not-found message
+end
+@enduml
+```
+
+
+
+### Sequence 2.5.9: View customer request list
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (orderManagementService.js)" as FE #FFE4B5
+participant "Express orderManagementRoutes" as Route #FFE4B5
+participant "orderManagementController.getOwnerRequests" as Ctrl #FFE4B5
+participant "SaleRequestModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chủ xưởng xem danh sách các yêu cầu thiết kế đặt riêng (CUSTOM) đang chờ thẩm định tính khả thi sản xuất và giá thành
+FE -> Route : GET /api/order-management/owner/requests
+Route -> Ctrl : getOwnerRequests(req, res)
+Ctrl -> Model : getRequestsWithPagination(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ getRequestsWithPagination
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.5.11: Update request information
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (orderManagementService.js)" as FE #FFE4B5
+participant "Express orderManagementRoutes" as Route #FFE4B5
+participant "orderManagementController.reviewRequest" as Ctrl #FFE4B5
+participant "SaleRequestModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chủ xưởng phê duyệt (APPROVED) hoặc từ chối (REJECTED kèm lý do) yêu cầu thiết kế của khách hàng
+FE -> Route : POST /api/order-management/owner/requests/:id/review
+Route -> Ctrl : reviewRequest(req, res)
+Ctrl -> Model : reviewOrderRequest(...)
+Model -> DB : Sequelize: ghi/cập nhật dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ reviewOrderRequest
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+## 11 Manage Contract
+
+### Sequence 2.5.6 + 2.6.1 + 2.6.4: Create contract / Convert Request to Order (draft contract step)
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Sales creates an offline contract
+  User -> FE : Sales searches products, selects a customer and items, and submits contract terms
+  FE -> Route : GET /api/sale-orders/products?search=...
+  Route -> Ctrl : saleOrderRoutes -> saleOrderController
+  Ctrl -> Model : search products available for the sales form
+  Model -> DB : Sequelize product
+  DB --> Model : Matching available products
+  Model --> Ctrl : Product choices
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : POST /api/sale-orders/contracts
+  Route -> Ctrl : saleOrderRoutes -> saleOrderController
+  Ctrl -> Model : create draft contract and contract items
+  Model -> DB : Sequelize contract; contract_item
+  DB --> Model : New draft contract with items
+  Model --> Ctrl : Created contract
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the draft contract for customer signing
+else Sales converts an approved request into a draft contract
+  User -> FE : Sales reviews an approved customer request and creates its draft contract
+  FE -> Route : POST /api/sale-orders/requests/:id/convert-to-contract
+  Route -> Ctrl : saleOrderRoutes -> saleOrderController.convertRequestToContract
+  Ctrl -> Model : Create a contract and contract items from the approved request
+  Model -> DB : Read request data and save the draft contract
+  DB --> Model : Draft contract created; request marked converted
+  Model --> Ctrl : Draft contract details
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the draft contract for customer signing
+end
+@enduml
+```
+
+### Sequence 2.6.5: View contract list
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Sales / Owner" as User
+participant "Frontend API (saleOrderService.js)" as FE #FFE4B5
+participant "Express saleOrderRoutes" as Route #FFE4B5
+participant "saleOrderController.getContracts" as Ctrl #FFE4B5
+participant "ContractModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xem danh sách toàn bộ hợp đồng bán hàng (DRAFT, SIGNED, CANCELLED), hỗ trợ lọc theo trạng thái và thời gian
+FE -> Route : GET /api/sale-orders/contracts
+Route -> Ctrl : getContracts(req, res)
+Ctrl -> Model : getContracts(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ getContracts
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.6.6: View contract details
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Sales / Owner" as User
+participant "Frontend API (saleOrderService.js)" as FE #FFE4B5
+participant "Express saleOrderRoutes" as Route #FFE4B5
+participant "saleOrderController.getContractById" as Ctrl #FFE4B5
+participant "ContractModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xem chi tiết nội dung hợp đồng, danh sách món đồ, giá trị cọc, điều khoản thanh toán và thông tin khách hàng
+FE -> Route : GET /api/sale-orders/contracts/:id
+Route -> Ctrl : getContractById(req, res)
+Ctrl -> Model : findContractById(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findContractById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.6.7: Create contract — Sign contract
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Sales / Owner" as User
+participant "Frontend API (saleOrderService.js)" as FE #FFE4B5
+participant "Express saleOrderRoutes" as Route #FFE4B5
+participant "saleOrderController.signContract" as Ctrl #FFE4B5
+participant "ContractModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Đánh dấu khách hàng đã ký hợp đồng tại cửa hàng (chuyển trạng thái sang SIGNED), làm căn cứ pháp lý để sinh đơn hàng
+FE -> Route : POST /api/sale-orders/contracts/:id/sign
+Route -> Ctrl : signContract(req, res)
+Ctrl -> Model : signContract(...)
+Model -> DB : Sequelize: ghi/cập nhật dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ signContract
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
 end
 @enduml
 ```
 
 ---
 
-## NHÓM 2.6: QUẢN LÝ HỢP ĐỒNG BÁN HÀNG (SALES CONTRACT)
 
-### Use Case 2.6.1: Get POS Warehouse Products (Tra cứu tồn kho sản phẩm tại quầy)
 
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
+## 12 Manage Accounts
 
-actor "Sales" as User
-participant "CreateOrderPage" as FE #E3F2FD
-participant "saleOrderController" as Ctrl #FFE4B5
-participant "saleOrderService" as Svc #FFE4B5
-participant "productModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Gõ tìm sản phẩm trong form tạo đơn tại quầy
-activate FE
-
-FE -> Ctrl : GET /api/sale-orders/products?search=sofa
-activate Ctrl
-
-Ctrl -> Svc : getAvailableProducts(search)
-activate Svc
-
-Svc -> Model : findActiveProducts(search)
-activate Model
-
-Model -> DB : SELECT product_id, product_code, product_name, stock_quantity, unit_price FROM product WHERE status = 'ACTIVE' AND product_name LIKE '%sofa%'
-activate DB
-DB --> Model : Products list with available stock
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { products }
-  deactivate Ctrl
-  FE --> User : Hiển thị danh sách gợi ý sản phẩm và giá bán để Sale chọn
-  deactivate FE
-else Unexpected error (Lỗi kết nối DB)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi tra cứu sản phẩm')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Báo lỗi không thể tìm kiếm sản phẩm
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.6.2: Search & View Sale Customers (Tra cứu thông tin khách hàng)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Sales" as User
-participant "CustomersPage" as FE #E3F2FD
-participant "saleOrderController" as Ctrl #FFE4B5
-participant "saleOrderService" as Svc #FFE4B5
-participant "userAccountModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Nhập số điện thoại khách hàng '0901234567'
-activate FE
-
-FE -> Ctrl : GET /api/sale-orders/customers?phone=0901234567
-activate Ctrl
-
-Ctrl -> Svc : findCustomerByPhone(phone)
-activate Svc
-
-Svc -> Model : findUserByPhone(phone)
-activate Model
-
-Model -> DB : SELECT user_account_id, full_name, phone_number, email, address FROM user_account WHERE phone_number = ?
-activate DB
-DB --> Model : Customer info record
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { customer }
-  deactivate Ctrl
-  FE --> User : Tự động điền họ tên, địa chỉ khách vào form hợp đồng
-  deactivate FE
-else Unexpected error (Khách hàng mới chưa có tài khoản)
-  Svc --> Ctrl : Trả về null (cho phép Sale nhập mới)
-  deactivate Svc
-  Ctrl --> FE : 200 OK { customer: null }
-  deactivate Ctrl
-  FE --> User : Hiển thị tùy chọn tạo hồ sơ khách hàng mới
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.6.3: Create Offline Contract (Lập hợp đồng bán hàng trực tiếp)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Sales" as User
-participant "ContractsPage" as FE #E3F2FD
-participant "saleOrderController" as Ctrl #FFE4B5
-participant "saleOrderService" as Svc #FFE4B5
-participant "contractModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Nhập số tiền cọc, ngày giao hẹn -> Bấm 'Lập hợp đồng'
-activate FE
-
-FE -> Ctrl : POST /api/sale-orders/contracts { customerId, items, depositAmount, deliveryDate }
-activate Ctrl
-
-Ctrl -> Svc : createOfflineContract(payload)
-activate Svc
-
-Svc -> Model : createContractWithItems(payload)
-activate Model
-
-Model -> DB : INSERT INTO contract (contract_code, customer_account_id, staff_account_id, source, status, total_amount, deposit_amount) VALUES (?, ?, ?, 'OFFLINE', 'DRAFT', ?, ?)
-activate DB
-DB --> Model : Contract created with status = 'DRAFT'
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 201 Created { contractId, contractCode }
-  deactivate Ctrl
-  FE --> User : Mở cửa sổ PrintContractModal cho khách ký trực tiếp
-  deactivate FE
-else Unexpected error (Tiền cọc lớn hơn tổng giá trị hợp đồng)
-  Svc --> Ctrl : Throw ApiError(400, 'Số tiền cọc không hợp lệ')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Hiển thị cảnh báo số tiền đặt cọc không hợp lệ
-  deactivate FE
-end
-@enduml
-```
-
----
-
-## NHÓM 2.7: QUẢN LÝ ĐƠN HÀNG BÁN (CUSTOMER ORDERS)
-
-### Use Case 2.7.1: Create Order From Contract (Sinh đơn hàng từ hợp đồng đã ký)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Sales" as User
-participant "ContractsPage" as FE #E3F2FD
-participant "saleOrderController" as Ctrl #FFE4B5
-participant "saleOrderService" as Svc #FFE4B5
-participant "customerOrderModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Khách đã ký hợp đồng -> Bấm 'Chuyển thành Đơn hàng'
-activate FE
-
-FE -> Ctrl : POST /api/sale-orders/orders/from-contract/:contractId
-activate Ctrl
-
-Ctrl -> Svc : convertContractToOrder(contractId)
-activate Svc
-
-Svc -> Model : createOrderFromContract(contractId)
-activate Model
-
-Model -> DB : INSERT INTO customer_order (order_code, contract_id, customer_account_id, order_status, total_amount) SELECT ..., 'PENDING', total_amount FROM contract WHERE contract_id = ? AND status = 'SIGNED'
-activate DB
-DB --> Model : Customer order created with code 'DH-...'
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 201 Created { orderId, orderCode, status: 'PENDING' }
-  deactivate Ctrl
-  FE --> User : Thông báo thành công & điều hướng sang trang Quản lý đơn hàng
-  deactivate FE
-else Unexpected error (Hợp đồng chưa được ký (status != 'SIGNED'))
-  Svc --> Ctrl : Throw ApiError(400, 'Hợp đồng chưa được ký kết')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Báo lỗi hợp đồng cần được ký trước khi tạo đơn
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.7.2: List POS Orders (Xem danh sách đơn hàng bán)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Sales" as User
-participant "OrdersPage" as FE #E3F2FD
-participant "saleOrderController" as Ctrl #FFE4B5
-participant "saleOrderService" as Svc #FFE4B5
-participant "customerOrderModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Vào trang Quản lý Đơn hàng (/sale/orders)
-activate FE
-
-FE -> Ctrl : GET /api/sale-orders/orders?page=1&limit=10
-activate Ctrl
-
-Ctrl -> Svc : getOrdersList(filter)
-activate Svc
-
-Svc -> Model : findAllOrders({ limit, offset })
-activate Model
-
-Model -> DB : SELECT o.*, u.full_name AS customer_name FROM customer_order o JOIN user_account u ON o.customer_account_id = u.user_account_id ORDER BY o.createdate DESC LIMIT 10
-activate DB
-DB --> Model : List of orders
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { orders, total }
-  deactivate Ctrl
-  FE --> User : Render bảng danh sách đơn hàng kèm trạng thái giao hàng
-  deactivate FE
-else Unexpected error (Lỗi kết nối máy chủ)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi lấy danh sách đơn hàng')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo không thể tải dữ liệu đơn hàng
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.7.3: Deliver Order (Bắt đầu xuất kho giao hàng cho khách)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Sales" as User
-participant "OrdersPage" as FE #E3F2FD
-participant "saleOrderController" as Ctrl #FFE4B5
-participant "saleOrderService" as Svc #FFE4B5
-participant "customerOrderModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Click 'Bắt đầu giao hàng' trên đơn đã hoàn thiện
-activate FE
-
-FE -> Ctrl : POST /api/sale-orders/orders/:orderId/deliver
-activate Ctrl
-
-Ctrl -> Svc : markOrderDelivering(orderId)
-activate Svc
-
-Svc -> Model : updateOrderStatus(orderId, 'DELIVERING')
-activate Model
-
-Model -> DB : UPDATE customer_order SET order_status = 'DELIVERING', modifiedate = NOW() WHERE order_id = ? AND order_status = 'COMPLETED'
-activate DB
-DB --> Model : Rows affected = 1
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Đơn hàng đang được giao' }
-  deactivate Ctrl
-  FE --> User : Cập nhật badge trạng thái đơn hàng thành 'Đang giao hàng'
-  deactivate FE
-else Unexpected error (Đơn hàng chưa hoàn thiện gia công)
-  Svc --> Ctrl : Throw ApiError(400, 'Đơn hàng chưa đủ điều kiện giao')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Cảnh báo đơn hàng chưa nghiệm thu hoàn tất
-  deactivate FE
-end
-@enduml
-```
-
----
-
-## NHÓM 2.8: QUẢN LÝ NHÀ CUNG CẤP (SUPPLIER MANAGEMENT)
-
-### Use Case 2.8.1: List Suppliers (Xem danh sách đối tác cung ứng)
+### Sequence 2.2.3: View account list
 
 ```plantuml
 @startuml
@@ -1177,51 +1352,562 @@ skinparam maxMessageSize 150
 autonumber
 
 actor "Owner" as User
-participant "ManageSuppliersPage" as FE #E3F2FD
+participant "ManageStaffAccountsPage" as FE #FFE4B5
+participant "Express staffAccountRoutes" as Route #FFE4B5
+participant "staffAccountController" as Ctrl #FFE4B5
+participant "userAccountModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+User -> FE : Truy cập mục 'Quản lý nhân sự' trên Dashboard Owner
+FE -> Route : GET /api/staff-accounts?page=1&limit=10&role=ALL
+Route -> Ctrl : gọi handler
+Ctrl -> Model : getStaffAccounts(options)
+Model -> DB : Sequelize: đọc dữ liệu trong bảng user_account
+DB --> Model : { rows: staffList, count: total }
+Model --> Ctrl : Staff account data
+alt Thành công
+  Ctrl --> Route : 200 OK { staffAccounts, totalCount, page }
+  Route --> FE : HTTP response
+  FE --> User : Render bảng danh sách nhân viên kèm trạng thái ACTIVE/INACTIVE
+else Lỗi
+  Ctrl --> Route : 403 Forbidden / 500 Error
+  Route --> FE : HTTP response
+  FE --> User : Chuyển hướng về trang lỗi hoặc báo lỗi tải dữ liệu
+end
+@enduml
+```
+
+
+
+### Sequence 2.2.4 + 2.2.6: Create new account
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Owner creates a staff account
+  User -> FE : Owner loads available roles, selects a role, and submits staff details
+  FE -> Route : GET /api/staff-accounts/roles
+  Route -> Ctrl : staffAccountRoutes -> staffAccountController
+  Ctrl -> Model : load staff roles
+  Model -> DB : Sequelize user_role
+  DB --> Model : Configured staff roles
+  Model --> Ctrl : Role list
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : POST /api/staff-accounts
+  Route -> Ctrl : staffAccountRoutes -> staffAccountController
+  Ctrl -> Model : validate and create staff account
+  Model -> DB : Sequelize user_account
+  DB --> Model : New staff account
+  Model --> Ctrl : Created account
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the created account in the staff list
+end
+@enduml
+```
+
+### Sequence 2.2.5: View account details
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (staffAccountService.js)" as FE #FFE4B5
+participant "Express staffAccountRoutes" as Route #FFE4B5
+participant "staffAccountController.getStaffAccountDetail" as Ctrl #FFE4B5
+participant "userAccount.model model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xem chi tiết thông tin cá nhân, quyền hạn và trạng thái của một tài khoản nhân viên cụ thể
+FE -> Route : GET /api/staff-accounts/:id
+Route -> Ctrl : getStaffAccountDetail(req, res)
+Ctrl -> Model : getStaffAccountById(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ getStaffAccountById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.2.7: Update account
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (staffAccountService.js)" as FE #FFE4B5
+participant "Express staffAccountRoutes" as Route #FFE4B5
+participant "staffAccountController.updateStaffAccount" as Ctrl #FFE4B5
+participant "userAccount.model model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chỉnh sửa thông tin cá nhân và thay đổi vai trò công việc của nhân viên cấp dưới
+FE -> Route : PUT /api/staff-accounts/:id
+Route -> Ctrl : updateStaffAccount(req, res)
+Ctrl -> Model : updateStaffAccountModel(...)
+Model -> DB : Sequelize: cập nhật bản ghi
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ getStaffAccountById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.2.8: Lock / unlock account
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (staffAccountService.js)" as FE #FFE4B5
+participant "Express staffAccountRoutes" as Route #FFE4B5
+participant "staffAccountController.changeStaffAccountStatus" as Ctrl #FFE4B5
+participant "userAccount.model model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Thay đổi trạng thái hoạt động của nhân viên giữa ACTIVE và INACTIVE (vô hiệu hóa quyền truy cập)
+FE -> Route : PATCH /api/staff-accounts/:id/status
+Route -> Ctrl : changeStaffAccountStatus(req, res)
+Ctrl -> Model : updateUserAccountStatus(...)
+Model -> DB : Sequelize: cập nhật trạng thái
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ getStaffAccountById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.2.9: Delete account
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (staffAccountService.js)" as FE #FFE4B5
+participant "Express staffAccountRoutes" as Route #FFE4B5
+participant "staffAccountController.removeStaffAccount" as Ctrl #FFE4B5
+participant "userAccount.model model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xóa tài khoản nhân viên khỏi hệ thống (chỉ khi chưa liên kết dữ liệu nghiệp vụ quan trọng)
+FE -> Route : DELETE /api/staff-accounts/:id
+Route -> Ctrl : removeStaffAccount(req, res)
+Ctrl -> Model : deleteStaffAccountModel(...)
+Model -> DB : Sequelize: xóa bản ghi
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ getStaffAccountById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+---
+
+
+
+## 13 Manage Warehouse
+
+### Sequence 2.3.4 + 2.3.6 + 2.3.7 + 2.3.8 + 2.3.11 + 2.3.12: Create new product / Update product
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+participant "Cloudinary storage middleware" as Ext #FFE4B5
+
+alt Create product
+  User -> FE : Owner opens a new-product form and enters its details
+  FE -> Route : GET /api/product-manager/metadata
+  Route -> Ctrl : productManagerRoutes -> productManagerController
+  Ctrl -> Model : load product form options
+  Model -> DB : Sequelize product_category; product_room; product_material; product_color
+  DB --> Model : Form options
+  Model --> Ctrl : Product categories, rooms, materials, and colors
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : GET /api/product-manager/next-code
+  Route -> Ctrl : productManagerRoutes -> productManagerController
+  Ctrl -> Model : generate next product code
+  Model -> DB : Sequelize product
+  DB --> Model : Next available code
+  Model --> Ctrl : Suggested product code
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  opt Owner adds a new material or color option
+    FE -> Route : POST /api/product-manager/materials or /colors
+    Route -> Ctrl : productManagerRoutes -> productManagerController
+    Ctrl -> Model : create selected material or color option
+    Model -> DB : Sequelize product_material; product_color
+    DB --> Model : Created option
+    Model --> Ctrl : Updated form options
+    Ctrl --> Route : 201 Created
+    Route --> FE : HTTP response
+  end
+  FE -> Route : POST /api/product-manager (multipart form data)
+  opt Product image attached
+    Route -> Ext : Upload image through upload middleware
+    Ext --> Route : Uploaded image URL in req.file
+  end
+  Route -> Ctrl : createProduct(req, res)
+  Ctrl -> Model : create product and set items
+  Model -> DB : Sequelize product; product_set_item
+  DB --> Model : New product and child items
+  Model --> Ctrl : Created product
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the new product in management
+else Update product
+  User -> FE : Owner opens an existing product, edits it, and saves
+  FE -> Route : GET /api/product-manager/metadata
+  Route -> Ctrl : productManagerRoutes -> productManagerController
+  Ctrl -> Model : load product form options
+  Model -> DB : Sequelize product_category; product_room; product_material; product_color
+  DB --> Model : Form options
+  Model --> Ctrl : Product categories, rooms, materials, and colors
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : PUT /api/product-manager/:id (multipart form data)
+  opt New product image attached
+    Route -> Ext : Upload image through upload middleware
+    Ext --> Route : Uploaded image URL in req.file
+  end
+  Route -> Ctrl : updateProduct(req, res)
+  Ctrl -> Model : update product and set items
+  Model -> DB : Sequelize product; product_set_item
+  DB --> Model : Updated product record
+  Model --> Ctrl : Updated product
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Refresh the product detail and management list
+end
+@enduml
+```
+
+### Sequence 2.3.5 + 2.9.1: Check stock quantity
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Finished products
+  User -> FE : Owner checks finished-product stock and low-stock items
+  FE -> Route : GET /api/product-manager/stock-summary
+  Route -> Ctrl : productManagerRoutes -> productManagerController
+  Ctrl -> Model : aggregate finished-product stock
+  Model -> DB : Sequelize product
+  DB --> Model : Product stock totals and low-stock rows
+  Model --> Ctrl : Finished product stock summary
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show finished-product quantities and alerts
+else Raw materials
+  User -> FE : Owner checks raw-material stock
+  FE -> Route : GET /api/raw-materials/stock-summary
+  Route -> Ctrl : rawMaterialRoutes -> rawMaterialController
+  Ctrl -> Model : aggregate raw-material stock metrics
+  Model -> DB : Sequelize raw_material
+  DB --> Model : Raw material stock metrics
+  Model --> Ctrl : Raw material stock summary
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show material quantities and alerts
+end
+@enduml
+```
+
+### Sequence 2.3.13: Delete product
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (productManagerService.js)" as FE #FFE4B5
+participant "Express productManagerRoutes" as Route #FFE4B5
+participant "productManagerController.deleteProduct" as Ctrl #FFE4B5
+participant "ProductModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xóa sản phẩm khỏi danh mục hệ thống (chỉ cho phép khi sản phẩm chưa từng phát sinh hợp đồng hoặc đơn hàng)
+FE -> Route : DELETE /api/product-manager/:id
+Route -> Ctrl : deleteProduct(req, res)
+Ctrl -> Model : deleteProductModel(...)
+Model -> DB : Sequelize: xóa bản ghi
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findProductById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+---
+
+
+
+### Sequence 2.9.2 + 2.9.5: Create material
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Owner creates a raw material
+  User -> FE : Owner obtains a suggested material code and submits material details
+  FE -> Route : GET /api/raw-materials/next-code
+  Route -> Ctrl : rawMaterialRoutes -> rawMaterialController
+  Ctrl -> Model : generate next raw material code
+  Model -> DB : Sequelize raw_material
+  DB --> Model : Next material code
+  Model --> Ctrl : Suggested code
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : POST /api/raw-materials
+  Route -> Ctrl : rawMaterialRoutes -> rawMaterialController
+  Ctrl -> Model : create raw material
+  Model -> DB : Sequelize raw_material
+  DB --> Model : New raw material record
+  Model --> Ctrl : Created material
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the material in the warehouse list
+end
+@enduml
+```
+
+### Sequence 2.9.3 + 2.9.4: View material list
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "Owner" as User
+participant "ManageMaterialsPage" as FE #FFE4B5
+participant "Express rawMaterialRoutes" as Route #FFE4B5
+participant "rawMaterialController" as Ctrl #FFE4B5
+participant "rawMaterialModel" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt View material list
+  User -> FE : Owner opens the material list with pagination and filters
+  FE -> Route : GET /api/raw-materials?page=1&limit=10
+  Route -> Ctrl : rawMaterialRoutes -> rawMaterialController
+  Ctrl -> Model : Load matching raw materials and total count
+  Model -> DB : Read raw material list data
+  DB --> Model : Materials and count
+  Model --> Ctrl : Material list data
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show the material list and stock quantities
+else View material details
+  User -> FE : Owner selects a material
+  FE -> Route : GET /api/raw-materials/:id
+  Route -> Ctrl : rawMaterialRoutes -> rawMaterialController.getRawMaterialById
+  Ctrl -> Model : Load material details and stock history
+  Model -> DB : Read selected material data
+  DB --> Model : Material details
+  Model --> Ctrl : Technical details, latest purchase price, minimum stock, and history
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Show material details
+end
+@enduml
+```
+
+
+
+### Sequence 2.9.6: Update material
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (rawMaterialService.js)" as FE #FFE4B5
+participant "Express rawMaterialRoutes" as Route #FFE4B5
+participant "rawMaterialController.updateRawMaterial" as Ctrl #FFE4B5
+participant "RawMaterialModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chỉnh sửa tên gọi, đơn vị tính (m³, tấm, kg, hộp...), ngưỡng an toàn tồn kho của nguyên vật liệu
+FE -> Route : PUT /api/raw-materials/:id
+Route -> Ctrl : updateRawMaterial(req, res)
+Ctrl -> Model : updateRawMaterialModel(...)
+Model -> DB : Sequelize: cập nhật bản ghi
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findRawMaterialById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.9.7: Delete material
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (rawMaterialService.js)" as FE #FFE4B5
+participant "Express rawMaterialRoutes" as Route #FFE4B5
+participant "rawMaterialController.deleteRawMaterial" as Ctrl #FFE4B5
+participant "RawMaterialModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xóa nguyên vật liệu khỏi danh mục kho (chỉ thực hiện được khi chưa phát sinh phiếu nhập/xuất kho liên quan)
+FE -> Route : DELETE /api/raw-materials/:id
+Route -> Ctrl : deleteRawMaterial(req, res)
+Ctrl -> Model : deleteRawMaterialModel(...)
+Model -> DB : Sequelize: xóa bản ghi
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findRawMaterialById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+---
+
+
+
+## 14 Manage Suppliers
+
+### Sequence 2.8.1: View supplier list
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "Owner" as User
+participant "ManageSuppliersPage" as FE #FFE4B5
+participant "Express supplierRoutes" as Route #FFE4B5
 participant "supplierController" as Ctrl #FFE4B5
-participant "supplierService" as Svc #FFE4B5
 participant "supplierModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+database "Data store" as DB #FFFFFF
 
 User -> FE : Mở menu 'Nhà cung cấp' trên Dashboard Owner
-activate FE
-
-FE -> Ctrl : GET /api/suppliers?page=1&limit=10
-activate Ctrl
-
-Ctrl -> Svc : getSuppliers(filter)
-activate Svc
-
-Svc -> Model : findAndCountAll({ limit, offset })
-activate Model
-
-Model -> DB : SELECT * FROM supplier ORDER BY createdate DESC LIMIT 10
-activate DB
-DB --> Model : { rows: suppliers, count: total }
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { suppliers, total }
-  deactivate Ctrl
+FE -> Route : GET /api/suppliers?page=1&limit=10
+Route -> Ctrl : gọi handler
+Ctrl -> Model : findAndCountAll({ limit, offset })
+Model -> DB : Sequelize: đọc dữ liệu trong bảng supplier
+  DB --> Model : Supplier rows and total count
+  Model --> Ctrl : Supplier list data
+alt Thành công
+  Ctrl --> Route : 200 OK { suppliers, total }
+  Route --> FE : HTTP response
   FE --> User : Render bảng danh sách nhà cung cấp kèm mã, SĐT, mã số thuế
-  deactivate FE
-else Unexpected error (Lỗi kết nối CSDL)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi lấy danh sách nhà cung cấp')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
+else Lỗi
+  Ctrl --> Route : 500 Error
+  Route --> FE : HTTP response
   FE --> User : Báo lỗi không thể tải danh sách nhà cung cấp
-  deactivate FE
 end
 @enduml
 ```
 
-### Use Case 2.8.2: Get Active Suppliers (Lấy danh sách NCC phục vụ nhập kho)
+
+
+### Sequence 2.8.3 + 2.8.5: Create supplier
 
 ```plantuml
 @startuml
@@ -1229,272 +1915,143 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "Owner" as User
-participant "ManagePurchaseReceiptsPage" as FE #E3F2FD
-participant "supplierController" as Ctrl #FFE4B5
-participant "supplierService" as Svc #FFE4B5
-participant "supplierModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Mở form 'Lập phiếu nhập kho nguyên vật liệu'
-activate FE
-
-FE -> Ctrl : GET /api/suppliers/active
-activate Ctrl
-
-Ctrl -> Svc : getActiveSuppliers()
-activate Svc
-
-Svc -> Model : findAll({ where: { status: 'ACTIVE' } })
-activate Model
-
-Model -> DB : SELECT supplier_id, supplier_code, supplier_name FROM supplier WHERE status = 'ACTIVE'
-activate DB
-DB --> Model : Active suppliers array
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { suppliers }
-  deactivate Ctrl
-  FE --> User : Điền danh sách NCC vào dropdown combobox để người dùng chọn
-  deactivate FE
-else Unexpected error (Không có NCC nào đang hoạt động)
-  Svc --> Ctrl : Trả về mảng rỗng []
-  deactivate Svc
-  Ctrl --> FE : 200 OK { suppliers: [] }
-  deactivate Ctrl
-  FE --> User : Hiển thị cảnh báo 'Cần thêm Nhà cung cấp trước khi nhập kho'
-  deactivate FE
+alt Owner creates a supplier
+  User -> FE : Owner loads a suggested supplier code and submits supplier details
+  FE -> Route : GET /api/suppliers/next-code
+  Route -> Ctrl : supplierRoutes -> supplierController
+  Ctrl -> Model : generate next supplier code
+  Model -> DB : Sequelize supplier
+  DB --> Model : Next available supplier code
+  Model --> Ctrl : Suggested code
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : POST /api/suppliers
+  Route -> Ctrl : supplierRoutes -> supplierController
+  Ctrl -> Model : create supplier
+  Model -> DB : Sequelize supplier
+  DB --> Model : New supplier record
+  Model --> Ctrl : Created supplier
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the new supplier in the directory
 end
 @enduml
 ```
 
-### Use Case 2.8.3: Create Supplier (Thêm mới đối tác cung ứng gỗ/vật tư)
+### Sequence 2.8.4: View supplier details
 
 ```plantuml
 @startuml
-skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
 autonumber
-
 actor "Owner" as User
-participant "ManageSuppliersPage" as FE #E3F2FD
-participant "supplierController" as Ctrl #FFE4B5
-participant "supplierService" as Svc #FFE4B5
-participant "supplierModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Điền tên NCC, MST, SĐT, địa chỉ -> Bấm 'Tạo nhà cung cấp'
-activate FE
-
-FE -> Ctrl : POST /api/suppliers { supplier_name, contact_name, phone_number, tax_code, address }
-activate Ctrl
-
-Ctrl -> Svc : createSupplier(payload)
-activate Svc
-
-Svc -> Model : create(payload)
-activate Model
-
-Model -> DB : INSERT INTO supplier (supplier_code, supplier_name, contact_name, phone_number, address, status) VALUES (?, ?, ?, ?, ?, 'ACTIVE')
-activate DB
-DB --> Model : Supplier record created with code 'NCC-...'
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 201 Created { supplier }
-  deactivate Ctrl
-  FE --> User : Đóng modal & cập nhật thêm dòng NCC mới vào bảng
-  deactivate FE
-else Unexpected error (Mã số thuế hoặc SĐT đã tồn tại)
-  Svc --> Ctrl : Throw ApiError(409, 'Nhà cung cấp đã tồn tại')
-  deactivate Svc
-  Ctrl --> FE : 409 Conflict
-  deactivate Ctrl
-  FE --> User : Hiển thị lỗi trùng lặp thông tin
-  deactivate FE
+participant "Frontend API (supplierService.js)" as FE #FFE4B5
+participant "Express supplierRoutes" as Route #FFE4B5
+participant "supplierController.getSupplierById" as Ctrl #FFE4B5
+participant "SupplierModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xem chi tiết thông tin liên hệ, mã số thuế, địa chỉ và lịch sử các phiếu nhập nguyên vật liệu liên kết
+FE -> Route : GET /api/suppliers/:id
+Route -> Ctrl : getSupplierById(req, res)
+Ctrl -> Model : getSupplierWithReceiptHistory(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ getSupplierWithReceiptHistory
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
 end
 @enduml
 ```
 
----
 
-## NHÓM 2.9: QUẢN LÝ NGUYÊN VẬT LIỆU & TỒN KHO (RAW MATERIAL)
 
-### Use Case 2.9.1: Get Raw Material Stock Summary (Thống kê tổng quan tồn kho NVL)
+### Sequence 2.8.6: Update supplier
 
 ```plantuml
 @startuml
-skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
 autonumber
-
 actor "Owner" as User
-participant "ManageMaterialsPage" as FE #E3F2FD
-participant "rawMaterialController" as Ctrl #FFE4B5
-participant "rawMaterialService" as Svc #FFE4B5
-participant "rawMaterialModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Truy cập trang Quản lý kho nguyên vật liệu
-activate FE
-
-FE -> Ctrl : GET /api/raw-materials/stock-summary
-activate Ctrl
-
-Ctrl -> Svc : getStockSummary()
-activate Svc
-
-Svc -> Model : calculateStockMetrics()
-activate Model
-
-Model -> DB : SELECT COUNT(*) as total_items, SUM(quantity_on_hand * latest_import_price) as total_value, SUM(CASE WHEN quantity_on_hand <= minimum_stock_level THEN 1 ELSE 0 END) as low_stock_count FROM raw_material
-activate DB
-DB --> Model : Stock summary metrics
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { totalItems, totalValue, lowStockCount }
-  deactivate Ctrl
-  FE --> User : Hiển thị 3 thẻ Card thống kê (Tổng mặt hàng, Giá trị tồn, Cảnh báo sắp hết)
-  deactivate FE
-else Unexpected error (Lỗi truy vấn DB)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi thống kê kho')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Hiển thị giá trị 0
-  deactivate FE
+participant "Frontend API (supplierService.js)" as FE #FFE4B5
+participant "Express supplierRoutes" as Route #FFE4B5
+participant "supplierController.updateSupplier" as Ctrl #FFE4B5
+participant "SupplierModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chỉnh sửa số điện thoại, người liên hệ, email, địa chỉ và trạng thái hoạt động của đối tác cung ứng
+FE -> Route : PUT /api/suppliers/:id
+Route -> Ctrl : updateSupplier(req, res)
+Ctrl -> Model : updateSupplierModel(...)
+Model -> DB : Sequelize: cập nhật bản ghi
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findSupplierById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
 end
 @enduml
 ```
 
-### Use Case 2.9.2: List Raw Materials (Xem danh mục nguyên vật liệu)
+
+
+### Sequence 2.8.7: Delete supplier
 
 ```plantuml
 @startuml
-skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
-autonumber
-
-actor "Owner" as User
-participant "ManageMaterialsPage" as FE #E3F2FD
-participant "rawMaterialController" as Ctrl #FFE4B5
-participant "rawMaterialService" as Svc #FFE4B5
-participant "rawMaterialModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Xem bảng danh sách vật tư kèm lọc theo loại
-activate FE
-
-FE -> Ctrl : GET /api/raw-materials?page=1&limit=10
-activate Ctrl
-
-Ctrl -> Svc : getRawMaterials(filter)
-activate Svc
-
-Svc -> Model : findAndCountAll({ limit, offset })
-activate Model
-
-Model -> DB : SELECT * FROM raw_material ORDER BY material_name ASC LIMIT 10
-activate DB
-DB --> Model : Raw materials list
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { rawMaterials, total }
-  deactivate Ctrl
-  FE --> User : Render bảng danh sách gỗ, sơn, keo kèm số lượng tồn kho `quantity_on_hand`
-  deactivate FE
-else Unexpected error (Lỗi kết nối)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi tải danh mục vật tư')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Báo lỗi không thể tải danh sách
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.9.3: Create Raw Material (Thêm mới loại nguyên vật liệu vào kho)
-
-```plantuml
-@startuml
 skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
 autonumber
-
 actor "Owner" as User
-participant "ManageMaterialsPage" as FE #E3F2FD
-participant "rawMaterialController" as Ctrl #FFE4B5
-participant "rawMaterialService" as Svc #FFE4B5
-participant "rawMaterialModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Nhập 'Gỗ Sồi Nga', ĐVT: 'tấm', ngưỡng an toàn: 10 -> Bấm Lưu
-activate FE
-
-FE -> Ctrl : POST /api/raw-materials { material_name, unit: 'tấm', minimum_stock_level: 10 }
-activate Ctrl
-
-Ctrl -> Svc : createRawMaterial(payload)
-activate Svc
-
-Svc -> Model : create(payload)
-activate Model
-
-Model -> DB : INSERT INTO raw_material (material_code, material_name, unit, quantity_on_hand, minimum_stock_level, status) VALUES (?, 'Gỗ Sồi Nga', 'tấm', 0, 10, 'ACTIVE')
-activate DB
-DB --> Model : New raw material created with quantity_on_hand = 0
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 201 Created { rawMaterial }
-  deactivate Ctrl
-  FE --> User : Đóng modal & hiển thị vật tư mới trên bảng
-  deactivate FE
-else Unexpected error (Tên nguyên vật liệu bị trùng)
-  Svc --> Ctrl : Throw ApiError(409, 'Tên nguyên vật liệu đã tồn tại')
-  deactivate Svc
-  Ctrl --> FE : 409 Conflict
-  deactivate Ctrl
-  FE --> User : Báo lỗi trùng tên nguyên vật liệu
-  deactivate FE
+participant "Frontend API (supplierService.js)" as FE #FFE4B5
+participant "Express supplierRoutes" as Route #FFE4B5
+participant "supplierController.deleteSupplier" as Ctrl #FFE4B5
+participant "SupplierModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xóa nhà cung cấp khỏi danh bạ hệ thống (chỉ cho phép khi chưa phát sinh phiếu nhập kho nào)
+FE -> Route : DELETE /api/suppliers/:id
+Route -> Ctrl : deleteSupplier(req, res)
+Ctrl -> Model : deleteSupplierModel(...)
+Model -> DB : Sequelize: xóa bản ghi
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findSupplierById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
 end
 @enduml
 ```
 
 ---
 
-## NHÓM 2.10: NHẬP KHO NGUYÊN VẬT LIỆU (MATERIAL PURCHASE & RECEIPT)
 
-### Use Case 2.10.1: Get Purchase Receipt Summary (Thống kê phiếu nhập kho)
+
+## 15 Manage Purchase Receipts
+
+### Sequence 2.8.2 + 2.10.2 + 2.10.5: Create purchase receipt
 
 ```plantuml
 @startuml
@@ -1502,52 +2059,45 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "Owner" as User
-participant "ManagePurchaseReceiptsPage" as FE #E3F2FD
-participant "purchaseReceiptController" as Ctrl #FFE4B5
-participant "purchaseReceiptService" as Svc #FFE4B5
-participant "materialReceiptModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Mở trang Nhập kho nguyên vật liệu
-activate FE
-
-FE -> Ctrl : GET /api/purchase-receipts/summary
-activate Ctrl
-
-Ctrl -> Svc : getReceiptSummary()
-activate Svc
-
-Svc -> Model : calculateReceiptSummary()
-activate Model
-
-Model -> DB : SELECT COUNT(*) as total_receipts, SUM(total_amount) as total_spent, SUM(CASE WHEN status = 'DRAFT' THEN 1 ELSE 0 END) as draft_count FROM material_receipt
-activate DB
-DB --> Model : Summary numbers
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { totalReceipts, totalSpent, draftCount }
-  deactivate Ctrl
-  FE --> User : Hiển thị các Card tóm tắt chi phí nhập hàng và số phiếu nháp
-  deactivate FE
-else Unexpected error (Lỗi kết nối)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi lấy thống kê')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Hiển thị 0
-  deactivate FE
+alt Owner creates a purchase receipt
+  User -> FE : Owner selects an active supplier, gets a receipt code, and enters material lines
+  FE -> Route : GET /api/suppliers/active
+  Route -> Ctrl : supplierRoutes -> supplierController
+  Ctrl -> Model : load active suppliers for the receipt form
+  Model -> DB : Sequelize supplier
+  DB --> Model : Active supplier rows
+  Model --> Ctrl : Supplier choices
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : GET /api/purchase-receipts/next-code?date=...
+  Route -> Ctrl : purchaseReceiptRoutes -> purchaseReceiptController
+  Ctrl -> Model : generate next receipt code
+  Model -> DB : Sequelize material_receipt
+  DB --> Model : Next receipt code
+  Model --> Ctrl : Suggested code
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : POST /api/purchase-receipts
+  Route -> Ctrl : purchaseReceiptRoutes -> purchaseReceiptController
+  Ctrl -> Model : create receipt and receipt items
+  Model -> DB : Sequelize material_receipt; material_receipt_item
+  DB --> Model : New receipt and item rows
+  Model --> Ctrl : Created receipt
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the new purchase receipt
 end
 @enduml
 ```
 
-### Use Case 2.10.2: List Purchase Receipts (Xem danh sách phiếu nhập kho)
+### Sequence 2.10.1 + 2.10.3: View purchase receipt list
 
 ```plantuml
 @startuml
@@ -1555,52 +2105,105 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "Owner" as User
-participant "ManagePurchaseReceiptsPage" as FE #E3F2FD
-participant "purchaseReceiptController" as Ctrl #FFE4B5
-participant "purchaseReceiptService" as Svc #FFE4B5
-participant "materialReceiptModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Xem bảng các phiếu nhập kho gần nhất
-activate FE
-
-FE -> Ctrl : GET /api/purchase-receipts?page=1&limit=10
-activate Ctrl
-
-Ctrl -> Svc : getReceipts(filter)
-activate Svc
-
-Svc -> Model : findAllReceipts({ limit, offset, include: [supplier] })
-activate Model
-
-Model -> DB : SELECT r.*, s.supplier_name FROM material_receipt r JOIN supplier s ON r.supplier_id = s.supplier_id ORDER BY r.receipt_date DESC LIMIT 10
-activate DB
-DB --> Model : Receipts list
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { receipts, total }
-  deactivate Ctrl
-  FE --> User : Render bảng danh sách phiếu nhập kèm trạng thái DRAFT / CONFIRMED
-  deactivate FE
-else Unexpected error (Lỗi server)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi server')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Báo lỗi không thể tải danh sách phiếu nhập
-  deactivate FE
+alt Owner opens purchase receipts
+  User -> FE : Owner opens the receipt page
+  FE -> Route : GET /api/purchase-receipts/summary
+  Route -> Ctrl : purchaseReceiptRoutes -> purchaseReceiptController
+  Ctrl -> Model : calculate receipt summary
+  Model -> DB : Sequelize material_receipt
+  DB --> Model : Receipt totals and status counts
+  Model --> Ctrl : Summary cards
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : GET /api/purchase-receipts?page=...&limit=...
+  Route -> Ctrl : purchaseReceiptRoutes -> purchaseReceiptController
+  Ctrl -> Model : load paginated receipts with suppliers
+  Model -> DB : Sequelize material_receipt; supplier
+  DB --> Model : Receipt rows and page count
+  Model --> Ctrl : Receipt list
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render summary cards and the receipt table
 end
 @enduml
 ```
 
-### Use Case 2.10.3: Confirm Purchase Receipt (Xác nhận nhập kho chính thức & tăng tồn kho)
+### Sequence 2.10.4: View receipt details
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (purchaseReceiptService.js)" as FE #FFE4B5
+participant "Express purchaseReceiptRoutes" as Route #FFE4B5
+participant "purchaseReceiptController.getReceiptById" as Ctrl #FFE4B5
+participant "MaterialReceiptModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xem thông tin chi tiết nhà cung cấp, ngày nhập, người nhận hàng và bảng kê từng loại vật tư, số lượng, đơn giá nhập
+FE -> Route : GET /api/purchase-receipts/:id
+Route -> Ctrl : getReceiptById(req, res)
+Ctrl -> Model : findReceiptById(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findReceiptById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.10.6: Update purchase receipt
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (purchaseReceiptService.js)" as FE #FFE4B5
+participant "Express purchaseReceiptRoutes" as Route #FFE4B5
+participant "purchaseReceiptController.updateReceipt" as Ctrl #FFE4B5
+participant "MaterialReceiptModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chỉnh sửa số lượng, đơn giá, nhà cung cấp cho các phiếu nhập đang ở trạng thái DRAFT
+FE -> Route : PUT /api/purchase-receipts/:id
+Route -> Ctrl : updateReceipt(req, res)
+Ctrl -> Model : updateReceiptWithItems(...)
+Model -> DB : Sequelize: cập nhật phiếu nhập và các dòng vật tư
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findReceiptById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.10.7: Confirm purchase receipt
 
 ```plantuml
 @startuml
@@ -1609,55 +2212,258 @@ skinparam maxMessageSize 150
 autonumber
 
 actor "Owner" as User
-participant "ManagePurchaseReceiptsPage" as FE #E3F2FD
+participant "ManagePurchaseReceiptsPage" as FE #FFE4B5
+participant "Express purchaseReceiptRoutes" as Route #FFE4B5
 participant "purchaseReceiptController" as Ctrl #FFE4B5
-participant "purchaseReceiptService" as Svc #FFE4B5
 participant "materialReceiptModel & rawMaterialModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+database "Data store" as DB #FFFFFF
 
 User -> FE : Kiểm tra hàng thực nhận -> Bấm 'Xác nhận nhập kho'
-activate FE
-
-FE -> Ctrl : POST /api/purchase-receipts/:receiptId/confirm
-activate Ctrl
-
-Ctrl -> Svc : confirmReceipt(receiptId)
-activate Svc
-
-Svc -> Model : confirmReceiptAndUpdateStock(receiptId)
-activate Model
-
-Model -> DB : UPDATE material_receipt SET status = 'CONFIRMED' WHERE receipt_id = ?; UPDATE raw_material SET quantity_on_hand = quantity_on_hand + ? WHERE material_id = ?;
-activate DB
-DB --> Model : Receipt status changed to CONFIRMED & stock quantity incremented
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Đã xác nhận nhập kho và cộng dồn tồn kho' }
-  deactivate Ctrl
+FE -> Route : POST /api/purchase-receipts/:receiptId/confirm
+Route -> Ctrl : gọi handler
+Ctrl -> Model : confirmReceiptAndUpdateStock(receiptId)
+Model -> DB : Sequelize: cập nhật bản ghi trong bảng material_receipt
+DB --> Model : Receipt confirmed and material stock updated
+Model --> Ctrl : Confirmed receipt data
+alt Thành công
+  Ctrl --> Route : 200 OK { message: 'Đã xác nhận nhập kho và cộng dồn tồn kho' }
+  Route --> FE : HTTP response
   FE --> User : Chuyển badge trạng thái thành 'Đã nhập kho' & vô hiệu hóa nút sửa
-  deactivate FE
-else Unexpected error (Phiếu đã ở trạng thái CONFIRMED hoặc CANCELLED)
-  Svc --> Ctrl : Throw ApiError(400, 'Phiếu không ở trạng thái DRAFT')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
+else Lỗi
+  Ctrl --> Route : 400 Bad Request
+  Route --> FE : HTTP response
   FE --> User : Báo lỗi trạng thái phiếu không hợp lệ
-  deactivate FE
+end
+@enduml
+```
+
+
+
+### Sequence 2.10.8: Manage Purchase Receipts — Cancel receipt
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (purchaseReceiptService.js)" as FE #FFE4B5
+participant "Express purchaseReceiptRoutes" as Route #FFE4B5
+participant "purchaseReceiptController.cancelReceipt" as Ctrl #FFE4B5
+participant "MaterialReceiptModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Hủy phiếu nhập kho; nếu phiếu đã từng CONFIRMED thì hệ thống tự động trừ hoàn lại số lượng tồn kho NVL tương ứng
+FE -> Route : POST /api/purchase-receipts/:id/cancel
+Route -> Ctrl : cancelReceipt(req, res)
+Ctrl -> Model : updateReceiptWithItems(...)
+Model -> DB : Sequelize: cập nhật phiếu nhập và tồn kho NVL
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findReceiptById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.10.9: Delete receipt
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (purchaseReceiptService.js)" as FE #FFE4B5
+participant "Express purchaseReceiptRoutes" as Route #FFE4B5
+participant "purchaseReceiptController.deleteReceipt" as Ctrl #FFE4B5
+participant "MaterialReceiptModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xóa hẳn phiếu nhập kho khỏi hệ thống (chỉ áp dụng cho phiếu ở trạng thái DRAFT hoặc CANCELLED)
+FE -> Route : DELETE /api/purchase-receipts/:id
+Route -> Ctrl : deleteReceipt(req, res)
+Ctrl -> Model : deleteReceiptModel(...)
+Model -> DB : Sequelize: xóa phiếu nhập
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findReceiptById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
 end
 @enduml
 ```
 
 ---
 
-## NHÓM 2.11: LỆNH SẢN XUẤT & GIA CÔNG XƯỞNG (PRODUCTION ORDERS)
 
-### Use Case 2.11.1: Get Eligible Orders for Production (Lấy đơn hàng đủ điều kiện gia công)
+
+## 16 Manage Material Export
+
+### Sequence 2.12.1 + 2.12.4: View material export slip list
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Owner opens material exports
+  User -> FE : Owner opens the material export page
+  FE -> Route : GET /api/material-exports/summary
+  Route -> Ctrl : materialExportRoutes -> materialExportController
+  Ctrl -> Model : calculate export summary
+  Model -> DB : Sequelize material_issue
+  DB --> Model : Export totals and status counts
+  Model --> Ctrl : Summary cards
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : GET /api/material-exports?page=...&limit=...
+  Route -> Ctrl : materialExportRoutes -> materialExportController
+  Ctrl -> Model : load paginated export slips
+  Model -> DB : Sequelize material_issue; production_order
+  DB --> Model : Export rows and page count
+  Model --> Ctrl : Material export list
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render summary cards and the export table
+end
+@enduml
+```
+
+### Sequence 2.12.2 + 2.12.3 + 2.12.6: Create material export slip
+
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+
+alt Owner creates a material export slip
+  User -> FE : Owner selects a production order, gets a slip code, and enters material quantities
+  FE -> Route : GET /api/material-exports/production-orders
+  Route -> Ctrl : materialExportRoutes -> materialExportController
+  Ctrl -> Model : load production orders eligible for material issue
+  Model -> DB : Sequelize production_order
+  DB --> Model : Eligible production orders
+  Model --> Ctrl : Production order choices
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : GET /api/material-exports/next-code?date=...
+  Route -> Ctrl : materialExportRoutes -> materialExportController
+  Ctrl -> Model : generate next export code
+  Model -> DB : Sequelize material_issue
+  DB --> Model : Next export slip code
+  Model --> Ctrl : Suggested code
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : POST /api/material-exports
+  Route -> Ctrl : materialExportRoutes -> materialExportController
+  Ctrl -> Model : create export slip and item rows
+  Model -> DB : Sequelize material_issue; material_issue_item
+  DB --> Model : New export slip and items
+  Model --> Ctrl : Created slip
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the new material export slip
+end
+@enduml
+```
+
+### Sequence 2.12.5: View material export slip details
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (materialExportService.js)" as FE #FFE4B5
+participant "Express materialExportRoutes" as Route #FFE4B5
+participant "materialExportController.getMaterialExportById" as Ctrl #FFE4B5
+participant "MaterialIssueModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xem chi tiết lệnh gia công tương ứng, thợ nhận vật tư, danh sách từng loại gỗ/vải/ốc vít và số lượng xuất
+FE -> Route : GET /api/material-exports/:id
+Route -> Ctrl : getMaterialExportById(req, res)
+Ctrl -> Model : findIssueById(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findIssueById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.12.7: Update material export slip
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (materialExportService.js)" as FE #FFE4B5
+participant "Express materialExportRoutes" as Route #FFE4B5
+participant "materialExportController.updateMaterialExport" as Ctrl #FFE4B5
+participant "MaterialIssueModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Chỉnh sửa định mức số lượng hoặc chủng loại vật tư xuất kho khi phiếu còn ở trạng thái DRAFT
+FE -> Route : PUT /api/material-exports/:id
+Route -> Ctrl : updateMaterialExport(req, res)
+Ctrl -> Model : updateIssueWithItems(...)
+Model -> DB : Sequelize: cập nhật phiếu xuất và các dòng vật tư
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findIssueById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.12.8: Confirm material export slip
 
 ```plantuml
 @startuml
@@ -1666,324 +2472,106 @@ skinparam maxMessageSize 150
 autonumber
 
 actor "Owner" as User
-participant "ManageProductionOrdersPage" as FE #E3F2FD
-participant "productionOrderController" as Ctrl #FFE4B5
-participant "productionOrderService" as Svc #FFE4B5
-participant "customerOrderModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Bấm 'Tạo lệnh sản xuất mới'
-activate FE
-
-FE -> Ctrl : GET /api/production-orders/eligible-orders
-activate Ctrl
-
-Ctrl -> Svc : getEligibleOrders()
-activate Svc
-
-Svc -> Model : findCustomOrdersWithoutProduction()
-activate Model
-
-Model -> DB : SELECT order_id, order_code, total_amount FROM customer_order WHERE order_type = 'CUSTOM' AND order_status = 'PENDING'
-activate DB
-DB --> Model : Eligible orders array
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { orders }
-  deactivate Ctrl
-  FE --> User : Hiển thị danh sách đơn cần gia công vào dropdown
-  deactivate FE
-else Unexpected error (Không có đơn hàng nào cần đóng mới)
-  Svc --> Ctrl : Trả về danh sách rỗng []
-  deactivate Svc
-  Ctrl --> FE : 200 OK { orders: [] }
-  deactivate Ctrl
-  FE --> User : Hiển thị thông báo 'Hiện không có đơn hàng nào cần gia công'
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.11.2: Create Production Order (Tạo lệnh gia công & phân công Tổ trưởng)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Owner" as User
-participant "ManageProductionOrdersPage" as FE #E3F2FD
-participant "productionOrderController" as Ctrl #FFE4B5
-participant "productionOrderService" as Svc #FFE4B5
-participant "productionOrderModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Chọn đơn hàng, chọn Tổ trưởng xưởng, hạn hoàn thành -> Bấm 'Giao việc'
-activate FE
-
-FE -> Ctrl : POST /api/production-orders { orderId, leaderId, dueDate, items }
-activate Ctrl
-
-Ctrl -> Svc : createProductionOrder(payload)
-activate Svc
-
-Svc -> Model : createOrderWithItems(payload)
-activate Model
-
-Model -> DB : INSERT INTO production_order (production_order_code, customer_order_id, leader_account_id, due_date, status, progress_percent) VALUES (?, ?, ?, ?, 'PENDING', 0)
-activate DB
-DB --> Model : Production order created with code 'LSX-...'
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 201 Created { productionOrder }
-  deactivate Ctrl
-  FE --> User : Thông báo giao việc thành công & hiển thị lệnh trên bảng tiến độ
-  deactivate FE
-else Unexpected error (Tổ trưởng xưởng không tồn tại hoặc bị khóa)
-  Svc --> Ctrl : Throw ApiError(400, 'Tổ trưởng không hợp lệ')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Báo lỗi không thể giao việc
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.11.3: Update Manufacturing Progress (Tổ trưởng cập nhật tiến độ thi công)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "LeaderStaff" as User
-participant "LeaderOrdersPage" as FE #E3F2FD
-participant "leaderStaffController" as Ctrl #FFE4B5
-participant "leaderStaffService" as Svc #FFE4B5
-participant "productionOrderModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Kéo thanh tiến độ lên 70% (đã sơn lót, chờ lắp ráp) -> Bấm 'Cập nhật'
-activate FE
-
-FE -> Ctrl : POST /api/leader-staff/orders/:orderId/progress { progressPercent: 70, notes: 'Đã hoàn thiện sơn lót' }
-activate Ctrl
-
-Ctrl -> Svc : updateProgress(orderId, 70, notes)
-activate Svc
-
-Svc -> Model : updateProgressPercent(orderId, 70)
-activate Model
-
-Model -> DB : UPDATE production_order SET progress_percent = 70, status = 'IN_PROGRESS', notes = ?, modifiedate = NOW() WHERE production_order_id = ?
-activate DB
-DB --> Model : Rows affected = 1
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Cập nhật tiến độ thành công', progressPercent: 70 }
-  deactivate Ctrl
-  FE --> User : Cập nhật thanh Progress Bar thành 70% màu xanh
-  deactivate FE
-else Unexpected error (Tiến độ nhỏ hơn 0 hoặc lớn hơn 100)
-  Svc --> Ctrl : Throw ApiError(400, 'Tỷ lệ tiến độ phải từ 0 đến 100')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Hiển thị cảnh báo giá trị không hợp lệ
-  deactivate FE
-end
-@enduml
-```
-
----
-
-## NHÓM 2.12: XUẤT KHO NGUYÊN VẬT LIỆU (MATERIAL EXPORT / ISSUE)
-
-### Use Case 2.12.1: Get Material Export Summary (Thống kê phiếu xuất kho NVL)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Owner" as User
-participant "ManageMaterialExportPage" as FE #E3F2FD
+participant "ManageMaterialExportPage" as FE #FFE4B5
+participant "Express materialExportRoutes" as Route #FFE4B5
 participant "materialExportController" as Ctrl #FFE4B5
-participant "materialExportService" as Svc #FFE4B5
-participant "materialIssueModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Mở trang Xuất kho nguyên vật liệu
-activate FE
-
-FE -> Ctrl : GET /api/material-exports/summary
-activate Ctrl
-
-Ctrl -> Svc : getExportSummary()
-activate Svc
-
-Svc -> Model : calculateExportMetrics()
-activate Model
-
-Model -> DB : SELECT COUNT(*) as total_exports, SUM(total_cost) as total_value_issued FROM material_issue WHERE status = 'CONFIRMED'
-activate DB
-DB --> Model : Summary metrics
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { totalExports, totalCost }
-  deactivate Ctrl
-  FE --> User : Hiển thị Card thống kê chi phí vật tư đã cấp phát cho xưởng
-  deactivate FE
-else Unexpected error (Lỗi kết nối)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi thống kê')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Hiển thị 0
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.12.2: List Material Exports (Xem danh sách phiếu xuất kho)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Owner" as User
-participant "ManageMaterialExportPage" as FE #E3F2FD
-participant "materialExportController" as Ctrl #FFE4B5
-participant "materialExportService" as Svc #FFE4B5
-participant "materialIssueModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Xem bảng các phiếu xuất vật tư gần nhất
-activate FE
-
-FE -> Ctrl : GET /api/material-exports?page=1&limit=10
-activate Ctrl
-
-Ctrl -> Svc : getMaterialExports(filter)
-activate Svc
-
-Svc -> Model : findAllIssues({ limit, offset, include: [production_order] })
-activate Model
-
-Model -> DB : SELECT i.*, p.production_order_code FROM material_issue i JOIN production_order p ON i.production_order_id = p.production_order_id ORDER BY i.issue_date DESC LIMIT 10
-activate DB
-DB --> Model : Exports list
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { exports, total }
-  deactivate Ctrl
-  FE --> User : Render bảng danh sách phiếu xuất vật tư kèm trạng thái DRAFT/CONFIRMED
-  deactivate FE
-else Unexpected error (Lỗi kết nối)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi tải phiếu xuất')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Báo lỗi không thể tải danh sách
-  deactivate FE
-end
-@enduml
-```
-
-### Use Case 2.12.3: Confirm Material Export Slip (Xác nhận xuất kho & trừ tồn kho NVL)
-
-```plantuml
-@startuml
-skinparam sequenceMessageAlign center
-skinparam maxMessageSize 150
-autonumber
-
-actor "Owner" as User
-participant "ManageMaterialExportPage" as FE #E3F2FD
-participant "materialExportController" as Ctrl #FFE4B5
-participant "materialExportService" as Svc #FFE4B5
 participant "materialIssueModel & rawMaterialModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+database "Data store" as DB #FFFFFF
 
 User -> FE : Bàn giao gỗ/ốc vít cho thợ -> Bấm 'Xác nhận xuất kho'
-activate FE
-
-FE -> Ctrl : POST /api/material-exports/:issueId/confirm
-activate Ctrl
-
-Ctrl -> Svc : confirmMaterialExport(issueId)
-activate Svc
-
-Svc -> Model : confirmIssueAndDeductStock(issueId)
-activate Model
-
-Model -> DB : UPDATE material_issue SET status = 'CONFIRMED' WHERE issue_id = ?; UPDATE raw_material SET quantity_on_hand = quantity_on_hand - ? WHERE material_id = ?;
-activate DB
-DB --> Model : Status = CONFIRMED & stock quantity decremented
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Đã xuất kho và giảm tồn kho nguyên vật liệu' }
-  deactivate Ctrl
+FE -> Route : POST /api/material-exports/:issueId/confirm
+Route -> Ctrl : gọi handler
+Ctrl -> Model : confirmIssueAndDeductStock(issueId)
+Model -> DB : Sequelize: cập nhật bản ghi trong bảng material_issue
+DB --> Model : Export slip confirmed and material stock deducted
+Model --> Ctrl : Confirmed export slip data
+alt Thành công
+  Ctrl --> Route : 200 OK { message: 'Đã xuất kho và giảm tồn kho nguyên vật liệu' }
+  Route --> FE : HTTP response
   FE --> User : Chuyển nhãn thành 'Đã xuất kho' & cập nhật số lượng tồn mới
-  deactivate FE
-else Unexpected error (Tồn kho không đủ để xuất)
-  Svc --> Ctrl : Throw ApiError(400, 'Số lượng tồn kho không đủ để xuất')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
+else Lỗi
+  Ctrl --> Route : 400 Bad Request
+  Route --> FE : HTTP response
   FE --> User : Báo lỗi tồn kho không đủ để xuất cho lệnh gia công
-  deactivate FE
+end
+@enduml
+```
+
+
+
+### Sequence 2.12.9: Cancel material export slip
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (materialExportService.js)" as FE #FFE4B5
+participant "Express materialExportRoutes" as Route #FFE4B5
+participant "materialExportController.cancelMaterialExport" as Ctrl #FFE4B5
+participant "MaterialIssueModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Hủy phiếu xuất kho đang ở trạng thái DRAFT (chưa trừ tồn kho)
+FE -> Route : POST /api/material-exports/:id/cancel
+Route -> Ctrl : cancelMaterialExport(req, res)
+Ctrl -> Model : updateIssueWithItems(...)
+Model -> DB : Sequelize: cập nhật phiếu xuất
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findIssueById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.12.10: Delete material export slip
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (materialExportService.js)" as FE #FFE4B5
+participant "Express materialExportRoutes" as Route #FFE4B5
+participant "materialExportController.deleteMaterialExport" as Ctrl #FFE4B5
+participant "MaterialIssueModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xóa phiếu xuất kho khỏi hệ thống (chỉ áp dụng cho phiếu ở trạng thái DRAFT hoặc CANCELLED)
+FE -> Route : DELETE /api/material-exports/:id
+Route -> Ctrl : deleteMaterialExport(req, res)
+Ctrl -> Model : deleteIssue(...)
+Model -> DB : Sequelize: xóa phiếu xuất
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findIssueById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
 end
 @enduml
 ```
 
 ---
 
-## NHÓM 2.13: NGHIỆM THU & NHẬP KHO THÀNH PHẨM (FINISHED GOODS)
 
-### Use Case 2.13.1: Upload Inspection Images (Tổ trưởng tải ảnh thành phẩm qua Cloudinary)
+
+## 18 Manage Production Jobs
+
+### Sequence 2.11.1 + 2.11.2 + 2.11.4: Create production order
 
 ```plantuml
 @startuml
@@ -1991,58 +2579,45 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "LeaderStaff" as User
-participant "LeaderOrdersPage" as FE #E3F2FD
-participant "leaderStaffController" as Ctrl #FFE4B5
-participant "leaderStaffService" as Svc #FFE4B5
-participant "cloudinaryService (Cloudinary API)" as Ext #FFE4B5
-participant "customerOrderImageModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Chụp ảnh sản phẩm hoàn thiện ở 3 góc độ -> Bấm 'Tải ảnh nghiệm thu'
-activate FE
-
-FE -> Ctrl : POST /api/leader-staff/upload-inspection-image (multipart/form-data: images)
-activate Ctrl
-
-Ctrl -> Svc : saveInspectionImageUrls(orderId, urls)
-activate Svc
-
-Svc -> Ext : uploadMultipleImages(images, folder: 'finished_goods_inspection')
-activate Ext
-Ext --> Svc : Cloudinary URLs array
-deactivate Ext
-
-Svc -> Model : createInspectionImages(orderId, urls)
-activate Model
-
-Model -> DB : INSERT INTO customer_order_image (order_id, image_url, image_type) VALUES (?, ?, 'INSPECTION')
-activate DB
-DB --> Model : Images saved
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { imageUrls }
-  deactivate Ctrl
-  FE --> User : Hiển thị ảnh thành phẩm trên form nộp nghiệm thu
-  deactivate FE
-else Unexpected error (Lỗi tải ảnh lên Cloudinary)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi tải ảnh')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Báo lỗi tải ảnh thất bại
-  deactivate FE
+alt Owner creates and assigns a production order
+  User -> FE : Owner loads eligible orders and active leaders, then creates the job
+  FE -> Route : GET /api/production-orders/eligible-orders
+  Route -> Ctrl : productionOrderRoutes -> productionOrderController
+  Ctrl -> Model : load eligible orders
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Orders eligible for production
+  Model --> Ctrl : Order choices
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : GET /api/production-orders/staff-leaders
+  Route -> Ctrl : productionOrderRoutes -> productionOrderController
+  Ctrl -> Model : load active production leaders
+  Model -> DB : Sequelize user_account; user_role
+  DB --> Model : Active leader accounts
+  Model --> Ctrl : Leader choices
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE -> Route : POST /api/production-orders
+  Route -> Ctrl : productionOrderRoutes -> productionOrderController
+  Ctrl -> Model : create production order and items
+  Model -> DB : Sequelize production_order; production_order_item
+  DB --> Model : New production order with leader assignment
+  Model --> Ctrl : Created production job
+  Ctrl --> Route : 201 Created
+  Route --> FE : HTTP response
+  FE --> User : Show the new assigned production job
 end
 @enduml
 ```
 
-### Use Case 2.13.2: Submit for Inspection (Tổ trưởng gửi yêu cầu nghiệm thu lên Chủ xưởng)
+### Sequence 2.11.3 + 2.11.7: View assigned jobs / production orders
 
 ```plantuml
 @startuml
@@ -2050,109 +2625,142 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "LeaderStaff" as User
-participant "LeaderOrdersPage" as FE #E3F2FD
-participant "leaderStaffController" as Ctrl #FFE4B5
-participant "leaderStaffService" as Svc #FFE4B5
-participant "finishedGoodsReceiptModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Kiểm tra sản phẩm đạt yêu cầu -> Bấm 'Gửi nghiệm thu'
-activate FE
-
-FE -> Ctrl : POST /api/leader-staff/orders/:orderId/submit-inspection { notes }
-activate Ctrl
-
-Ctrl -> Svc : submitInspection(orderId, notes)
-activate Svc
-
-Svc -> Model : createInspectionReceipt(orderId, notes)
-activate Model
-
-Model -> DB : INSERT INTO finished_goods_receipt (receipt_code, customer_order_id, inspection_status) VALUES (?, ?, 'PENDING'); UPDATE customer_order SET order_status = 'INSPECTING' WHERE order_id = ?;
-activate DB
-DB --> Model : Receipt created with status PENDING & order status = INSPECTING
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Đã gửi yêu cầu nghiệm thu lên Chủ xưởng' }
-  deactivate Ctrl
-  FE --> User : Hiển thị trạng thái 'Chờ Chủ xưởng nghiệm thu'
-  deactivate FE
-else Unexpected error (Chưa upload ảnh thành phẩm thực tế)
-  Svc --> Ctrl : Throw ApiError(400, 'Phải có ít nhất 1 ảnh chụp thực tế')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Cảnh báo cần chụp ảnh thành phẩm trước khi gửi nghiệm thu
-  deactivate FE
+alt Owner views production orders
+  User -> FE : Owner opens the production order list
+  FE -> Route : GET /api/production-orders?status=...
+  Route -> Ctrl : productionOrderRoutes -> productionOrderController
+  Ctrl -> Model : load production orders
+  Model -> DB : Sequelize production_order
+  DB --> Model : Production order rows
+  Model --> Ctrl : Production order list
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render the production management list
+else Staff Leader views assigned jobs
+  User -> FE : Staff Leader opens their assigned jobs
+  FE -> Route : GET /api/leader-staff/orders
+  Route -> Ctrl : leaderStaffRoutes -> leaderStaffController
+  Ctrl -> Model : load jobs assigned to the current leader
+  Model -> DB : Sequelize production_order; customer_order
+  DB --> Model : Assigned production jobs
+  Model --> Ctrl : Assigned job list
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render assigned production jobs
 end
 @enduml
 ```
 
-### Use Case 2.13.3: Owner Inspect & Accept (Chủ xưởng thẩm định, duyệt Đạt & tăng tồn kho)
+### Sequence 2.11.5: Manage Production Jobs — Assign production leader
 
 ```plantuml
 @startuml
-skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
 autonumber
-
 actor "Owner" as User
-participant "ManageOrdersPage" as FE #E3F2FD
-participant "orderManagementController" as Ctrl #FFE4B5
-participant "orderManagementService" as Svc #FFE4B5
-participant "finishedGoodsReceiptModel & productModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
-
-User -> FE : Xem ảnh chụp thành phẩm -> Đánh giá Đạt -> Bấm 'Nghiệm thu Đạt'
-activate FE
-
-FE -> Ctrl : POST /api/order-management/orders/:orderId/inspect { decision: 'PASSED', qualityGrade: 'A' }
-activate Ctrl
-
-Ctrl -> Svc : approveInspection(orderId, grade)
-activate Svc
-
-Svc -> Model : confirmInspectionAndIncrementStock(orderId)
-activate Model
-
-Model -> DB : UPDATE finished_goods_receipt SET inspection_status = 'PASSED' WHERE customer_order_id = ?; UPDATE product SET stock_quantity = stock_quantity + 1 WHERE ...; UPDATE customer_order SET order_status = 'COMPLETED';
-activate DB
-DB --> Model : Inspection marked PASSED, stock quantity incremented, order ready to deliver
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Nghiệm thu thành công, đã nhập kho thành phẩm' }
-  deactivate Ctrl
-  FE --> User : Chuyển trạng thái đơn sang 'Hoàn thành gia công / Sẵn sàng giao hàng'
-  deactivate FE
-else Unexpected error (Sản phẩm lỗi không đạt tiêu chuẩn kỹ thuật (decision: 'REJECTED'))
-  Svc --> Ctrl : Update inspection_status = 'REJECTED' & order_status = 'IN_PROGRESS'
-  deactivate Svc
-  Ctrl --> FE : 200 OK { message: 'Đã từ chối nghiệm thu, chuyển trả xưởng chỉnh sửa' }
-  deactivate Ctrl
-  FE --> User : Chuyển đơn về cho Tổ trưởng gia công lại kèm ghi chú lỗi
-  deactivate FE
+participant "Frontend API (productionOrderService.js)" as FE #FFE4B5
+participant "Express productionOrderRoutes" as Route #FFE4B5
+participant "productionOrderController.assignLeader" as Ctrl #FFE4B5
+participant "ProductionOrderModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Phân công hoặc chuyển đổi Tổ trưởng xưởng (LeaderStaff) trực tiếp quản lý ca kíp gia công lệnh này
+FE -> Route : PATCH /api/production-orders/:id/assign-leader
+Route -> Ctrl : assignLeader(req, res)
+Ctrl -> Model : assignLeaderToOrder(...)
+Model -> DB : Sequelize: cập nhật phân công
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findProductionOrderById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
 end
 @enduml
 ```
 
----
 
-## NHÓM 2.14: BÁO CÁO TÀI CHÍNH & DOANH THU (FINANCIAL REPORTS)
 
-### Use Case 2.14.1: View Financial Summary & Charts (Chủ xưởng xem tổng quan doanh thu)
+### Sequence 2.11.6: Manage Production Jobs — Cancel production order
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "Owner" as User
+participant "Frontend API (productionOrderService.js)" as FE #FFE4B5
+participant "Express productionOrderRoutes" as Route #FFE4B5
+participant "productionOrderController.cancelProductionOrderHandler" as Ctrl #FFE4B5
+participant "ProductionOrderModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Hủy lệnh gia công khi có sự thay đổi từ phía khách hàng hoặc điều chỉnh kế hoạch sản xuất của xưởng
+FE -> Route : POST /api/production-orders/:id/cancel
+Route -> Ctrl : cancelProductionOrderHandler(req, res)
+Ctrl -> Model : cancelProductionOrder(...)
+Model -> DB : Sequelize: cập nhật trạng thái lệnh
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findProductionOrderById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.11.8: View job details
+
+```plantuml
+@startuml
+skinparam maxMessageSize 150
+skinparam sequenceMessageAlign center
+autonumber
+actor "LeaderStaff / Owner" as User
+participant "Frontend API (leaderStaffService.js)" as FE #FFE4B5
+participant "Express leaderStaffRoutes" as Route #FFE4B5
+participant "leaderStaffController.getLeaderOrderDetail" as Ctrl #FFE4B5
+participant "CustomerOrderModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Tổ trưởng kiểm tra chi tiết kích thước (Dài x Rộng x Cao cm), chất liệu khung/bề mặt, màu sắc và bản vẽ kỹ thuật chi tiết
+FE -> Route : GET /api/leader-staff/orders/:id
+Route -> Ctrl : getLeaderOrderDetail(req, res)
+Ctrl -> Model : findOrderById(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ findOrderById
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```
+
+
+
+### Sequence 2.11.9 + 2.11.10: Update production progress
 
 ```plantuml
 @startuml
@@ -2160,52 +2768,37 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "Owner" as User
-participant "ManageFinancialReportsPage" as FE #E3F2FD
-participant "financialReportController" as Ctrl #FFE4B5
-participant "financialReportService" as Svc #FFE4B5
-participant "customerOrderModel & materialReceiptModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Mở trang 'Báo cáo tài chính & Doanh thu' trên Dashboard
-activate FE
-
-FE -> Ctrl : GET /api/financial-reports/summary?month=11&year=2026
-activate Ctrl
-
-Ctrl -> Svc : calculateFinancialSummary(month, year)
-activate Svc
-
-Svc -> Model : aggregateRevenueAndExpenses(month, year)
-activate Model
-
-Model -> DB : SELECT SUM(total_amount) as revenue FROM customer_order WHERE order_status = 'COMPLETED'; SELECT SUM(total_amount) as expenses FROM material_receipt WHERE status = 'CONFIRMED';
-activate DB
-DB --> Model : Aggregated financial numbers
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { totalRevenue, totalExpenses, grossProfit, chartData, topProducts }
-  deactivate Ctrl
-  FE --> User : Render 3 thẻ doanh thu/chi phí/lợi nhuận gộp & biểu đồ cột doanh thu 12 tháng
-  deactivate FE
-else Unexpected error (Khoảng thời gian không hợp lệ)
-  Svc --> Ctrl : Throw ApiError(400, 'Tháng/năm không hợp lệ')
-  deactivate Svc
-  Ctrl --> FE : 400 Bad Request
-  deactivate Ctrl
-  FE --> User : Báo lỗi thời gian thống kê
-  deactivate FE
-end
+User -> FE : Staff Leader accepts the assigned job
+FE -> Route : POST /api/leader-staff/orders/:id/accept
+Route -> Ctrl : leaderStaffRoutes -> leaderStaffController
+Ctrl -> Model : Mark production order as in progress
+Model -> DB : Update production order status
+DB --> Model : Updated production order
+Model --> Ctrl : Accepted job
+Ctrl --> Route : 200 OK
+Route --> FE : HTTP response
+FE --> User : Show the job as in progress
+User -> FE : Staff Leader submits progress percentage and notes
+FE -> Route : POST /api/leader-staff/orders/:orderId/progress
+Route -> Ctrl : leaderStaffRoutes -> leaderStaffController
+Ctrl -> Model : Save production progress and notes
+Model -> DB : Update production progress
+DB --> Model : Updated progress and notes
+Model --> Ctrl : Progress update
+Ctrl --> Route : 200 OK
+Route --> FE : HTTP response
+FE --> User : Refresh job progress
 @enduml
 ```
 
-### Use Case 2.14.2: View Order Revenue Breakdown (Xem bảng kê doanh thu theo đơn hàng)
+### Sequence 2.13.1 + 2.13.2 + 2.13.3: Upload production images / inspect finished goods
 
 ```plantuml
 @startuml
@@ -2213,52 +2806,47 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "Owner" as User
-participant "ManageFinancialReportsPage" as FE #E3F2FD
-participant "financialReportController" as Ctrl #FFE4B5
-participant "financialReportService" as Svc #FFE4B5
-participant "customerOrderModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "Staff Leader" as Leader
+actor "Owner" as Owner
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+participant "Cloudinary API" as Ext #FFE4B5
 
-User -> FE : Chọn tab 'Bảng kê đơn hàng'
-activate FE
-
-FE -> Ctrl : GET /api/financial-reports/orders?startDate=2026-01-01&endDate=2026-11-30
-activate Ctrl
-
-Ctrl -> Svc : getOrderRevenueBreakdown(dateRange)
-activate Svc
-
-Svc -> Model : findCompletedOrders(dateRange)
-activate Model
-
-Model -> DB : SELECT order_code, createdate, total_amount, deposit_amount, remaining_amount, order_status FROM customer_order WHERE createdate BETWEEN ? AND ?
-activate DB
-DB --> Model : Orders breakdown array
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { ordersBreakdown, totalRevenue }
-  deactivate Ctrl
-  FE --> User : Render bảng danh sách từng đơn hàng, tiền cọc, số tiền đã thu, công nợ
-  deactivate FE
-else Unexpected error (Lỗi kết nối)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi tải bảng kê')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Báo lỗi không thể tải dữ liệu
-  deactivate FE
-end
+Leader -> FE : Upload inspection images for completed production
+  FE -> Route : POST /api/leader-staff/upload-inspection-image (multipart/form-data)
+  Route -> Ctrl : leaderStaffRoutes -> upload middleware
+  Route -> Ext : Upload inspection images through upload middleware
+  Ext --> Route : Uploaded image URLs
+  Route --> FE : 200 OK { image URLs }
+  FE --> Leader : Show uploaded inspection images
+FE -> Route : POST /api/leader-staff/orders/:orderId/submit-inspection
+Route -> Ctrl : leaderStaffRoutes -> leaderStaffController
+Ctrl -> Model : save inspection request and image references
+Model -> DB : Sequelize production_order; production_order_image
+DB --> Model : Inspection request submitted
+Model --> Ctrl : Awaiting owner inspection
+Ctrl --> Route : 200 OK
+Route --> FE : HTTP response
+FE --> Leader : Show the job as awaiting inspection
+Owner -> FE : Review submitted images and record a decision
+FE -> Route : POST /api/order-management/orders/:orderId/inspect
+Route -> Ctrl : orderManagementRoutes -> orderManagementController
+Ctrl -> Model : record inspection decision and update finished-goods stock when accepted
+Model -> DB : Sequelize production_order; finished_goods_receipt; product
+DB --> Model : Inspection result and related stock update
+Model --> Ctrl : Accepted or rejected result
+Ctrl --> Route : 200 OK
+Route --> FE : HTTP response
+FE --> Owner : Show the inspection decision and job status
 @enduml
 ```
 
-### Use Case 2.14.3: View Material Expense Breakdown (Xem bảng kê chi phí mua vật tư)
+## 19 Manage Financial Reports
+
+### Sequence 2.14.1 + 2.14.2 + 2.14.3: View financial reports
 
 ```plantuml
 @startuml
@@ -2266,50 +2854,78 @@ skinparam sequenceMessageAlign center
 skinparam maxMessageSize 150
 autonumber
 
-actor "Owner" as User
-participant "ManageFinancialReportsPage" as FE #E3F2FD
-participant "financialReportController" as Ctrl #FFE4B5
-participant "financialReportService" as Svc #FFE4B5
-participant "materialReceiptModel" as Model #FFE4B5
-database "MySQL Database" as DB #E0E0E0
+actor "User" as User
+participant "React page / Axios service" as FE #FFE4B5
+participant "Express routes / middleware" as Route #FFE4B5
+participant "Controller" as Ctrl #FFE4B5
+participant "Sequelize model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
 
-User -> FE : Chọn tab 'Chi phí vật tư'
-activate FE
-
-FE -> Ctrl : GET /api/financial-reports/receipts?startDate=2026-01-01&endDate=2026-11-30
-activate Ctrl
-
-Ctrl -> Svc : getExpenseBreakdown(dateRange)
-activate Svc
-
-Svc -> Model : findConfirmedReceipts(dateRange)
-activate Model
-
-Model -> DB : SELECT r.receipt_code, r.receipt_date, s.supplier_name, r.total_amount FROM material_receipt r JOIN supplier s ON r.supplier_id = s.supplier_id WHERE r.status = 'CONFIRMED'
-activate DB
-DB --> Model : Material expense array
-deactivate DB
-
-Model --> Svc : Return entity / result
-deactivate Model
-
-alt Operation successful
-  Svc --> Ctrl : Return DTO / data
-  deactivate Svc
-  Ctrl --> FE : 200 OK { receiptsBreakdown, totalExpenses }
-  deactivate Ctrl
-  FE --> User : Render bảng chi tiết các đợt thanh toán mua gỗ, vật tư cho từng nhà cung cấp
-  deactivate FE
-else Unexpected error (Lỗi kết nối máy chủ)
-  Svc --> Ctrl : Throw ApiError(500, 'Lỗi kết nối')
-  deactivate Svc
-  Ctrl --> FE : 500 Error
-  deactivate Ctrl
-  FE --> User : Báo lỗi không thể tải danh sách chi phí
-  deactivate FE
+alt Summary and charts
+  User -> FE : Owner selects a reporting period on the summary tab
+  FE -> Route : GET /api/financial-reports/summary?startDate=...&endDate=...
+  Route -> Ctrl : financialReportRoutes -> financialReportController
+  Ctrl -> Model : calculate financial summary
+  Model -> DB : Sequelize customer_order; material_receipt
+  DB --> Model : Revenue and expense totals
+  Model --> Ctrl : Summary and charts
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render financial summary
+else Order revenue breakdown
+  User -> FE : Owner selects the order revenue tab
+  FE -> Route : GET /api/financial-reports/orders?startDate=...&endDate=...
+  Route -> Ctrl : financialReportRoutes -> financialReportController
+  Ctrl -> Model : load completed-order revenue breakdown
+  Model -> DB : Sequelize customer_order
+  DB --> Model : Order revenue rows and totals
+  Model --> Ctrl : Order revenue report
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render order revenue details
+else Material expense breakdown
+  User -> FE : Owner selects the material expense tab
+  FE -> Route : GET /api/financial-reports/receipts?startDate=...&endDate=...
+  Route -> Ctrl : financialReportRoutes -> financialReportController
+  Ctrl -> Model : load confirmed-receipt expense breakdown
+  Model -> DB : Sequelize material_receipt
+  DB --> Model : Receipt expense rows and totals
+  Model --> Ctrl : Material expense report
+  Ctrl --> Route : 200 OK
+  Route --> FE : HTTP response
+  FE --> User : Render material expense details
 end
 @enduml
 ```
 
----
+### Sequence 2.14.4: Export financial reports
 
+```plantuml
+@startuml
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 150
+autonumber
+actor "Owner" as User
+participant "Frontend API (financialReportService.js)" as FE #FFE4B5
+participant "Express financialReportRoutes" as Route #FFE4B5
+participant "financialReportController.exportFinancialReport" as Ctrl #FFE4B5
+participant "financialReportModel model" as Model #FFE4B5
+database "Data store" as DB #FFFFFF
+User -> FE : Xuất toàn bộ dữ liệu báo cáo doanh thu, chi phí, danh sách đơn hàng và phiếu nhập kho ra định dạng CSV/Excel phục vụ lưu trữ kế toán
+FE -> Route : GET /api/financial-reports/export
+Route -> Ctrl : exportFinancialReport(req, res)
+Ctrl -> Model : financialReportModel.getFinancialExportData(...)
+Model -> DB : Sequelize: truy vấn dữ liệu
+DB --> Model : Kết quả truy vấn
+Model --> Ctrl : Kết quả từ financialReportModel.getFinancialExportData
+alt Thành công
+  Ctrl --> Route : 200 OK response
+  Route --> FE : HTTP response
+  FE --> User : Hiển thị kết quả thành công
+else Lỗi
+  Ctrl --> Route : Error response
+  Route --> FE : HTTP error
+  FE --> User : Hiển thị lỗi
+end
+@enduml
+```

@@ -56,60 +56,7 @@ async function getStaffRoleIds() {
   return ids;
 }
 
-async function register(req, res, next) {
-  const { fullName, email, phone: phoneNumber, password } = req.body || {};
-
-  try {
-    const validationError = validateRegistrationInput({ email, password, fullName, phoneNumber });
-    if (validationError) {
-      throw new ApiError(400, validationError);
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedFullName = fullName.trim();
-    const existingAccount = await findUserAccountByEmail(normalizedEmail);
-    if (existingAccount) {
-      throw new ApiError(409, 'Email đã được sử dụng');
-    }
-
-    const customerRole = await findUserRoleByCode('CUSTOMER');
-    if (!customerRole) {
-      throw new ApiError(500, 'Chưa cấu hình vai trò CUSTOMER');
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await createUserAccount({
-      roleId: customerRole.role_id,
-      email: normalizedEmail,
-      passwordHash,
-      fullName: normalizedFullName,
-      phoneNumber: phoneNumber ? phoneNumber.trim() : null,
-      createBy: 'SYSTEM',
-    });
-
-    return res.status(201).json(buildSuccessResponse({
-      status: 201,
-      message: 'Đăng ký tài khoản thành công',
-      data: {
-        email: user?.email || normalizedEmail,
-        fullName: user?.full_name || normalizedFullName,
-      },
-      req,
-    }));
-  } catch (error) {
-    if (isDuplicateEmailError(error)) {
-      return next(new ApiError(409, 'Email đã được sử dụng'));
-    }
-
-    if (error instanceof ApiError) {
-      return next(error);
-    }
-
-    const apiError = new ApiError(500, 'Không thể tạo tài khoản');
-    apiError.cause = error;
-    return next(apiError);
-  }
-}
+ 
 
 async function login(req, res, next) {
   try {
