@@ -31,6 +31,8 @@ export async function getProductMetadata() {
 
 /**
  * 4. Tạo biên bản hợp đồng bán hàng trực tiếp tại quầy (OFFLINE DRAFT)
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: contract }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function createOfflineContract(payload) {
   const response = await api.post('/sale-orders/contracts', payload);
@@ -39,6 +41,8 @@ export async function createOfflineContract(payload) {
 
 /**
  * 5. Ký và chốt hợp đồng tại quầy (Chuyển sang SIGNED)
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: contract }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function signContract(contractId, payload = {}) {
   const isFormData = payload instanceof FormData;
@@ -62,6 +66,8 @@ export async function uploadContractProof(file) {
 
 /**
  * 6. Lấy danh sách hợp đồng
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: contracts, meta: pagination }
+ * @returns {Promise<{ status: number, message: string, data: Array, meta?: Object }>}
  */
 export async function getContracts(params = {}) {
   const response = await api.get('/sale-orders/contracts', { params });
@@ -70,6 +76,8 @@ export async function getContracts(params = {}) {
 
 /**
  * 7. Lấy chi tiết hợp đồng theo ID
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: contract }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function getContractById(contractId) {
   const response = await api.get(`/sale-orders/contracts/${contractId}`);
@@ -78,6 +86,8 @@ export async function getContractById(contractId) {
 
 /**
  * 8. Tạo đơn hàng từ hợp đồng đã ký kết
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: order }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function createOrderFromContract(contractId) {
   const response = await api.post(`/sale-orders/orders/from-contract/${contractId}`);
@@ -86,6 +96,8 @@ export async function createOrderFromContract(contractId) {
 
 /**
  * 9. Lấy danh sách đơn hàng
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: orders, meta: pagination }
+ * @returns {Promise<{ status: number, message: string, data: Array, meta?: Object }>}
  */
 export async function getOrders(params = {}) {
   const response = await api.get('/sale-orders/orders', { params });
@@ -94,6 +106,8 @@ export async function getOrders(params = {}) {
 
 /**
  * 10. Lấy chi tiết đơn hàng theo ID
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: order }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function getOrderById(orderId) {
   const response = await api.get(`/sale-orders/orders/${orderId}`);
@@ -102,6 +116,8 @@ export async function getOrderById(orderId) {
 
 /**
  * 11. Lấy danh sách yêu cầu của khách hàng (dành cho Sale)
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: requests, meta: pagination }
+ * @returns {Promise<{ status: number, message: string, data: Array, meta?: Object }>}
  */
 export async function getRequests(params = {}) {
   const response = await api.get('/sale-orders/requests', { params });
@@ -110,6 +126,8 @@ export async function getRequests(params = {}) {
 
 /**
  * 12. Lấy chi tiết 1 yêu cầu
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: request }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function getRequestById(requestId) {
   const response = await api.get(`/sale-orders/requests/${requestId}`);
@@ -118,6 +136,8 @@ export async function getRequestById(requestId) {
 
 /**
  * 13. Chuyển yêu cầu thành hợp đồng DRAFT
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: contract }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function convertRequestToContract(requestId, payload = {}) {
   const response = await api.post(`/sale-orders/requests/${requestId}/convert-to-contract`, payload);
@@ -126,6 +146,9 @@ export async function convertRequestToContract(requestId, payload = {}) {
 
 /**
  * 14. Lấy danh sách khách hàng phục vụ dropdown/autocomplete và trang quản lý cho Sales
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: customers, meta: pagination }
+ * @param {Object} params - { page, limit, search, search_by, status, mode }
+ * @returns {Promise<{ status: number, message: string, data: Array, meta?: Object }>}
  */
 export async function getSaleCustomers(params = {}) {
   const response = await api.get('/sale-orders/customers', { params });
@@ -135,6 +158,9 @@ export const getCustomers = getSaleCustomers;
 
 /**
  * 14b. Lấy chi tiết 1 khách hàng kèm lịch sử cho Sales
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: customer }
+ * @param {number|string} customerId
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function getSaleCustomerById(customerId) {
   const response = await api.get(`/sale-orders/customers/${customerId}`);
@@ -144,6 +170,9 @@ export const getCustomerById = getSaleCustomerById;
 
 /**
  * 14c. Tạo mới khách hàng cho Sales
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: customer }
+ * @param {Object} payload - { fullName, phoneNumber, email, address, note }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
  */
 export async function createSaleCustomer(payload) {
   const response = await api.post('/sale-orders/customers', payload);

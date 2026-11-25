@@ -260,7 +260,7 @@ export const OrdersPage = () => {
       }
 
       const res = await getOrders(params);
-      setOrders(res.data || []);
+      setOrders(res.orders || res.data || []);
       if (res.pagination) {
         setPagination(res.pagination);
       }
@@ -302,7 +302,8 @@ export const OrdersPage = () => {
       setModalOpen(true);
       setSelectedOrder(order);
       const res = await getOrderById(order.orderId);
-      if (res.data) setSelectedOrder(res.data);
+      const orderData = res.order || res.data;
+      if (orderData) setSelectedOrder(orderData);
     } catch (err) {
       console.error('Lỗi lấy chi tiết đơn hàng:', err);
       toast.error('Không thể tải chi tiết đơn hàng');

@@ -30,6 +30,7 @@ const {
   validateCreateSalesRequestInput,
   toContractDTO,
 } = require('../utils/saleOrderValidator');
+const { buildSuccessResponse } = require('../utils/successResponse');
 
 /**
  * DTO chuyển đổi OrderRequest sang JSON trả về FE
@@ -179,10 +180,15 @@ async function createOfflineContract(req, res) {
       items,
     });
 
-    return res.status(201).json({
+    const contractDTO = toContractDTO(contract);
+    const responsePayload = buildSuccessResponse({
+      status: 201,
       message: 'Lập biên bản hợp đồng thành công',
-      data: toContractDTO(contract),
+      data: contractDTO,
+      req,
     });
+    responsePayload.contract = contractDTO;
+    return res.status(201).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.createOfflineContract]', error);
     const isInventoryShortage = error.message && error.message.includes('chỉ còn');
@@ -237,10 +243,15 @@ async function signContract(req, res) {
       );
     }
 
-    return res.status(200).json({
+    const contractDTO = toContractDTO(contract);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: 'Chốt và ký hợp đồng thành công',
-      data: toContractDTO(contract),
+      data: contractDTO,
+      req,
     });
+    responsePayload.contract = contractDTO;
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.signContract]', error);
     return res.status(400).json({
@@ -276,16 +287,27 @@ async function getContracts(req, res) {
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
     });
 
-    return res.status(200).json({
+    const contractsDTO = (result.contracts || []).map(toContractDTO);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: 'Lấy danh sách hợp đồng thành công',
-      data: (result.contracts || []).map(toContractDTO),
-      pagination: {
-        totalItems: result.totalItems,
+      data: contractsDTO,
+      meta: {
+        page: result.currentPage,
+        limit: result.itemsPerPage,
+        total: result.totalItems,
         totalPages: result.totalPages,
-        currentPage: result.currentPage,
-        itemsPerPage: result.itemsPerPage,
       },
+      req,
     });
+    responsePayload.contracts = contractsDTO;
+    responsePayload.pagination = {
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      itemsPerPage: result.itemsPerPage,
+    };
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.getContracts]', error);
     return res.status(500).json({
@@ -312,10 +334,15 @@ async function getContractById(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy hợp đồng.' });
     }
 
-    return res.status(200).json({
+    const contractDTO = toContractDTO(contract);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: 'Lấy thông tin hợp đồng thành công',
-      data: toContractDTO(contract),
+      data: contractDTO,
+      req,
     });
+    responsePayload.contract = contractDTO;
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.getContractById]', error);
     return res.status(500).json({
@@ -351,16 +378,27 @@ async function getRequests(req, res) {
       limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 10)),
     });
 
-    return res.status(200).json({
+    const requestsDTO = (result.requests || []).map(toRequestDTO);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: 'Lấy danh sách yêu cầu thành công',
-      data: (result.requests || []).map(toRequestDTO),
-      pagination: {
-        totalItems: result.totalItems,
+      data: requestsDTO,
+      meta: {
+        page: result.currentPage,
+        limit: result.itemsPerPage,
+        total: result.totalItems,
         totalPages: result.totalPages,
-        currentPage: result.currentPage,
-        itemsPerPage: result.itemsPerPage,
       },
+      req,
     });
+    responsePayload.requests = requestsDTO;
+    responsePayload.pagination = {
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      currentPage: result.currentPage,
+      itemsPerPage: result.itemsPerPage,
+    };
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.getRequests]', error);
     return res.status(500).json({
@@ -387,10 +425,15 @@ async function getRequestById(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy yêu cầu.' });
     }
 
-    return res.status(200).json({
+    const requestDTO = toRequestDTO(request);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: 'Lấy chi tiết yêu cầu thành công',
-      data: toRequestDTO(request),
+      data: requestDTO,
+      req,
     });
+    responsePayload.request = requestDTO;
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.getRequestById]', error);
     return res.status(500).json({
@@ -456,10 +499,14 @@ async function convertRequestToContract(req, res) {
       createBy: req.user?.email || 'STAFF',
     });
 
-    return res.status(201).json({
+    const responsePayload = buildSuccessResponse({
+      status: 201,
       message: 'Chuyển yêu cầu thành hợp đồng thành công',
       data: result,
+      req,
     });
+    responsePayload.contract = result;
+    return res.status(201).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.convertRequestToContract]', error);
     const statusCode = error.statusCode || (
@@ -565,10 +612,15 @@ async function createSalesRequest(req, res) {
       createBy: req.user?.email || 'STAFF',
     });
 
-    return res.status(201).json({
+    const requestDTO = toRequestDTO(result);
+    const responsePayload = buildSuccessResponse({
+      status: 201,
       message: 'Tạo yêu cầu đặt hàng thiết kế thành công',
-      data: toRequestDTO(result),
+      data: requestDTO,
+      req,
     });
+    responsePayload.request = requestDTO;
+    return res.status(201).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.createSalesRequest]', error);
     return res.status(500).json({
@@ -599,10 +651,15 @@ async function updateSalesRequest(req, res) {
       modifieBy: req.user?.email || 'STAFF',
     });
 
-    return res.status(200).json({
+    const requestDTO = toRequestDTO(result);
+    const responsePayload = buildSuccessResponse({
+      status: 200,
       message: 'Cập nhật yêu cầu thiết kế thành công',
-      data: toRequestDTO(result),
+      data: requestDTO,
+      req,
     });
+    responsePayload.request = requestDTO;
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.updateSalesRequest]', error);
     return res.status(500).json({

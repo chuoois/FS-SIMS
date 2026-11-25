@@ -175,7 +175,7 @@ export const CreateOrderPage = () => {
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const res = await getSaleCustomers({ search: value.trim(), mode: 'dropdown' });
-        setCustomerSuggestions(res.data || []);
+        setCustomerSuggestions(res?.customers ?? res?.data ?? []);
       } catch (err) {
         console.error('Lỗi tìm kiếm khách hàng:', err);
       } finally {

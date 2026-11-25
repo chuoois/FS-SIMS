@@ -112,7 +112,7 @@ export const ContractsPage = () => {
       if (statusFilter !== 'ALL') params.status = statusFilter;
 
       const res = await getContracts(params);
-      setContracts(res.data || []);
+      setContracts(res.contracts || res.data || []);
       if (res.pagination) setPagination(res.pagination);
     } catch (err) {
       console.error('Lỗi tải danh sách hợp đồng:', err);
@@ -167,9 +167,10 @@ export const ContractsPage = () => {
       if (contractFileInputRef.current) contractFileInputRef.current.value = '';
 
       const res = await getContractById(contract.contractId);
-      if (res.data) {
-        setSelectedContract(res.data);
-        setContractProofPreview(res.data.contractFileUrl || '');
+      const contractData = res.contract || res.data;
+      if (contractData) {
+        setSelectedContract(contractData);
+        setContractProofPreview(contractData.contractFileUrl || '');
       }
     } catch (err) {
       console.error('Lỗi lấy chi tiết hợp đồng:', err);
@@ -182,7 +183,8 @@ export const ContractsPage = () => {
       let full = contract;
       if (!contract.items || contract.items.length === 0) {
         const res = await getContractById(contract.contractId);
-        if (res.data) full = res.data;
+        const contractData = res.contract || res.data;
+        if (contractData) full = contractData;
       }
       setContractToPrint(full);
       setPrintModalOpen(true);
@@ -227,10 +229,11 @@ export const ContractsPage = () => {
         contract_file_url: finalFileUrl,
       });
 
-      if (res.data) {
-        setSelectedContract(res.data);
+      const updatedContract = res.contract || res.data;
+      if (updatedContract) {
+        setSelectedContract(updatedContract);
         setContractProofFile(null);
-        setContractProofPreview(res.data.contractFileUrl || '');
+        setContractProofPreview(updatedContract.contractFileUrl || '');
         toast.success('Đã xác nhận ký hợp đồng thành công');
         fetchContractsList();
       }
@@ -247,8 +250,9 @@ export const ContractsPage = () => {
     try {
       setLoadingAction(true);
       const res = await createOrderFromContract(selectedContract.contractId);
-      if (res.data) {
-        toast.success(`Đã tạo đơn hàng ${res.data.orderCode}`);
+      const createdOrder = res.order || res.data;
+      if (createdOrder) {
+        toast.success(`Đã tạo đơn hàng ${createdOrder.orderCode || ''}`);
         setModalOpen(false);
         navigate('/sale/orders');
       }
