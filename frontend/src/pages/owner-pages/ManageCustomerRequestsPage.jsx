@@ -851,7 +851,7 @@ export function ManageCustomerRequestsPage() {
   // Thống kê nhanh theo các trạng thái dành riêng cho Chủ xưởng
   const stats = useMemo(() => {
     const designing = displayedRequests.filter((r) =>
-      ['DESIGNING', 'DRAFTING'].includes(r.status)
+      ['DESIGNING'].includes(r.status)
     ).length;
     const designed = displayedRequests.filter((r) =>
       ['DESIGNED', 'CONFIRMED', 'APPROVED'].includes(r.status)

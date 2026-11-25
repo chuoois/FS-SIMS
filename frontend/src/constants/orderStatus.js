@@ -1,7 +1,7 @@
 /* Tiện ích & hằng số dùng chung cho trang danh sách / chi tiết đơn hàng
  *
  * Trạng thái đồng bộ với database (db_2026_fssims):
- *   order_request  : PENDING, DRAFTING, DESIGNING, DESIGNED, CONFIRMED,
+ *   order_request  : PENDING, DESIGNING, DESIGNED, CONFIRMED,
  *                    CONTRACT_CREATED, CONVERTED, REJECTED, CANCELLED
  *   customer_order : NEW, ASSIGNED, IN_PROGRESS, PENDING_APPROVAL,
  *                    READY_TO_DELIVER, COMPLETED, CANCELLED
@@ -23,7 +23,6 @@ export const formatDate = (value) => {
 export const statusNames = {
   /* order_request */
   PENDING: 'Chờ sale xử lý',
-  DRAFTING: 'Chờ chủ thiết kế',
   DESIGNING: 'Chờ thiết kế',
   DESIGNED: 'Đã có bản vẽ',
   CONFIRMED: 'Đã xác nhận',
@@ -47,7 +46,6 @@ export const statusNames = {
 
 export const statusClasses = {
   PENDING: 'bg-amber-100 text-amber-800',
-  DRAFTING: 'bg-amber-100 text-amber-800',
   DESIGNING: 'bg-blue-100 text-blue-800',
   DESIGNED: 'bg-violet-100 text-violet-800',
   CONFIRMED: 'bg-emerald-100 text-emerald-800',
@@ -72,7 +70,7 @@ export const STATUS_TABS = [
   {
     key: 'WAITING',
     label: 'Chờ xử lý',
-    statuses: ['PENDING', 'DRAFTING', 'DESIGNING', 'DESIGNED', 'NEW'],
+    statuses: ['PENDING', 'DESIGNING', 'DESIGNED', 'NEW'],
   },
   {
     key: 'PROCESSING',
@@ -113,7 +111,6 @@ const ORDER_STEP_INDEX = {
 
 const REQUEST_STEP_INDEX = {
   PENDING: 0,
-  DRAFTING: 0,
   DESIGNING: 0,
   DESIGNED: 0,
   CONFIRMED: 1,
@@ -135,7 +132,6 @@ export const getProgress = (status, isRequest) => {
 /* Lời nhắn dễ hiểu cho khách theo từng trạng thái */
 export const statusHints = {
   PENDING: 'Đang chờ sale tiếp nhận. Bạn không cần làm gì thêm.',
-  DRAFTING: 'Yêu cầu đã được chuyển đến chủ cửa hàng để làm bản vẽ.',
   DESIGNING: 'Chủ cửa hàng đang thực hiện bản vẽ cho bạn.',
   DESIGNED: 'Bản vẽ đã hoàn thành. Sale sẽ liên hệ để xác nhận với bạn.',
   CONFIRMED: 'Đơn hàng hoặc yêu cầu đã được xác nhận và chuyển tiếp để thực hiện.',

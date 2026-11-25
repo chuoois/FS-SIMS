@@ -893,7 +893,7 @@ export function RequestsPage() {
     const total = totalItems || requests.length;
     const pending = requests.filter((r) => r.status === 'PENDING').length;
     const designing = requests.filter((r) =>
-      ['DESIGNING', 'DRAFTING'].includes(r.status)
+      ['DESIGNING'].includes(r.status)
     ).length;
     const designed = requests.filter((r) =>
       ['DESIGNED', 'CONFIRMED', 'APPROVED', 'DESIGN_FINALIZED'].includes(r.status)
