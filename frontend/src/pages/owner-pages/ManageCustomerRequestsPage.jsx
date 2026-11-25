@@ -2,11 +2,12 @@
 // ManageCustomerRequestsPage.jsx
 // Quản lý Yêu Cầu Khách Hàng (Hàng Đặt Làm - Custom Requests) — dành cho Chủ xưởng (Owner)
 // Chức năng:
-// 1. Xem danh sách yêu cầu đặt làm theo mẫu (CUSTOM) từ khách hàng
-// 2. Thống kê tổng quan (Cards)
-// 3. Tìm kiếm, lọc theo trạng thái, từ khóa
-// 4. Xem chi tiết yêu cầu, quy cách kỹ thuật & danh sách ảnh thiết kế (order_request_image)
-// 5. Chủ xưởng gửi ảnh bản thiết kế (lưu vào order_request_image) và mô tả kỹ thuật (lưu vào description)
+// 1. Xem danh sách yêu cầu đặt đóng theo mẫu (CUSTOM) từ khách hàng
+// 2. Tabs lọc theo trạng thái tuần tự chuẩn Design System FSSIMS
+// 3. Tìm kiếm linh hoạt theo Mã yêu cầu, Tên khách hàng, Số điện thoại
+// 4. Xem chi tiết yêu cầu, quy cách kỹ thuật & danh sách ảnh thiết kế
+// 5. Chủ xưởng gửi ảnh bản vẽ thiết kế kỹ thuật và mô tả quy cách sang bộ phận Sales
+// Chuẩn hóa 100% theo FSSIMS Design System (Xưởng sản xuất đồ gỗ nội thất)
 // =========================================================
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -31,7 +32,6 @@ import {
   Image as ImageIcon,
   Send,
   Layers,
-  RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -47,111 +47,55 @@ import {
   isPdfDesignUrl,
 } from '../../components/common/DesignGallery';
 import { TablePagination } from '../../components/common/TablePagination';
+import { OrderRequestStatusBadge } from '../../components/common/StatusBadge';
+import {
+  formatVND as formatCurrency,
+  formatDateVN as formatDate,
+  formatDateTimeVN as formatDateTime,
+} from '../../utils/formatters';
 
 // ─── Hằng số ──────────────────────────────────────────────
-const STATUSES = ['ALL', 'PENDING', 'PROCESSING', 'CONVERTED', 'REJECTED'];
+const STATUSES = [
+  'ALL',
+  'DESIGNING',
+  'DESIGNED',
+  'DRAFT',
+  'CONVERTED',
+  'REJECTED',
+];
 
-const STATUS_LABELS = {
-  PENDING: 'Chờ xử lý',
-  PROCESSING: 'Đang xử lý',
-  CONVERTED: 'Đã chuyển HĐ',
-  REJECTED: 'Đã từ chối',
-};
+const OWNER_ALLOWED_STATUSES = [
+  'DESIGNING',
+  'DESIGNED',
+  'DRAFT',
+  'CONVERTED',
+  'CONTRACT_CREATED',
+  'REJECTED',
+];
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const SEARCH_BY_OPTIONS = [
+  { value: 'ALL', label: 'Tất cả tiêu chí' },
+  { value: 'REQUEST_CODE', label: 'Mã yêu cầu' },
+  { value: 'CUSTOMER_NAME', label: 'Tên khách hàng' },
+  { value: 'PHONE', label: 'Số điện thoại' },
+];
 
-// ─── Helpers ──────────────────────────────────────────────
-const formatCurrency = (amount) => {
-  if (amount === undefined || amount === null || isNaN(amount)) return '0 ₫';
-  return Number(amount).toLocaleString('vi-VN') + ' ₫';
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-const formatDateTime = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return dateString;
-  }
-};
-
-// ─── Huy hiệu trạng thái yêu cầu ──────────────────────────
-function StatusBadge({ status }) {
-  switch (status) {
-    case 'PENDING':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
-          <Clock className="h-3.5 w-3.5" />
-          Chờ xử lý
-        </span>
-      );
-    case 'PROCESSING':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200">
-          <Clock className="h-3.5 w-3.5" />
-          Đang xử lý
-        </span>
-      );
-    case 'CONVERTED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Đã chuyển HĐ
-        </span>
-      );
-    case 'REJECTED':
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
-          <XCircle className="h-3.5 w-3.5" />
-          Đã từ chối
-        </span>
-      );
-    default:
-      return (
-        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700">
-          {status}
-        </span>
-      );
-  }
-}
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
 // ─── Huy hiệu trạng thái bản thiết kế (đếm số ảnh từ order_request_image) ─
 function DesignStatusBadge({ count = 0 }) {
   if (count > 0) {
     return (
-      <span key="has-design" className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        <span>Đã có {count} ảnh</span>
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 border border-emerald-200">
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" />
+        <span>Đã có {count} bản vẽ</span>
       </span>
     );
   }
   return (
-    <span key="no-design" className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600 border border-stone-200">
+    <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600 border border-stone-200">
       <Clock className="h-3.5 w-3.5 text-stone-400" />
-      <span>Chưa có ảnh</span>
+      <span>Chưa có bản vẽ</span>
     </span>
   );
 }
@@ -183,17 +127,17 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
     ownerImages.length > 0
       ? ownerImages
       : lastSavedFallback
-      ? [lastSavedFallback]
-      : [];
+        ? [lastSavedFallback]
+        : [];
   const latestSavedImage = displaySavedImages[displaySavedImages.length - 1] || null;
 
-  // Nếu sản phẩm không có ảnh mẫu riêng, lấy ảnh tham khảo chung của yêu cầu (nếu có)
+  // Nếu sản phẩm không có ảnh mẫu riêng, lấy ảnh tham khảo chung của yêu cầu
   const customerImages =
     directCustomerImages.length > 0
       ? directCustomerImages
       : (generalImages || [])
-          .map((img) => (typeof img === 'string' ? { imageUrl: img } : img))
-          .filter((img) => img?.imageUrl && !isOwnerDesignImage(img));
+        .map((img) => (typeof img === 'string' ? { imageUrl: img } : img))
+        .filter((img) => img?.imageUrl && !isOwnerDesignImage(img));
 
   const handleClearSelectedFile = () => {
     setSelectedFile(null);
@@ -225,7 +169,7 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
     e.preventDefault();
     if (submitLockRef.current || submitting) return;
     if (!selectedFile && !description.trim()) {
-      toast.error('Vui lòng chọn ảnh bản vẽ thiết kế hoặc nhập mô tả kỹ thuật.');
+      toast.error('Vui lòng chọn ảnh bản vẽ kỹ thuật hoặc nhập mô tả quy cách gỗ.');
       return;
     }
 
@@ -303,19 +247,19 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
   const isUsingGeneral = directCustomerImages.length === 0 && customerImages.length > 0;
 
   return (
-    <div className="rounded-xl border border-stone-300 bg-white p-4 shadow-xs space-y-3.5 transition hover:border-amber-400">
+    <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs space-y-3.5 transition hover:border-amber-400">
       {/* Header sản phẩm */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-stone-100">
         <div className="flex items-start gap-2.5">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 font-bold text-xs text-amber-800">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-stone-100 font-mono text-xs font-semibold text-stone-700">
             #{index + 1}
           </div>
           <div>
-            <h4 className="font-bold text-sm text-stone-900">{item.itemName}</h4>
+            <h4 className="font-semibold text-xs text-stone-900">{item.itemName}</h4>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 mt-0.5">
               <span>
                 Kích thước:{' '}
-                <strong className="text-stone-700">
+                <strong className="font-mono text-stone-700">
                   {item.lengthCm && item.widthCm && item.heightCm
                     ? `${item.lengthCm} × ${item.widthCm} × ${item.heightCm} cm`
                     : 'Theo thiết kế'}
@@ -323,12 +267,12 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
               </span>
               <span>•</span>
               <span>
-                Số lượng: <strong className="text-stone-700">{item.quantity}</strong>
+                Số lượng: <strong className="font-mono text-stone-700">{item.quantity}</strong>
               </span>
               <span>•</span>
               <span>
                 Đơn giá dự kiến:{' '}
-                <strong className="text-amber-800">
+                <strong className="font-mono text-amber-900">
                   {item.unitPrice != null ? formatCurrency(item.unitPrice) : 'Chờ báo giá'}
                 </strong>
               </span>
@@ -338,52 +282,50 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
 
         <div className="flex items-center gap-2 self-start sm:self-center flex-wrap">
           {itemImages.length > 0 ? (
-            <span key="item-has-images" className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-              <CheckCircle2 className="h-3.5 w-3.5" />
+            <span key="item-has-images" className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800 border border-emerald-200">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700" />
               <span>Đã có {itemImages.length} ảnh thiết kế</span>
             </span>
           ) : (
-            <span key="item-no-images" className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500 border border-stone-200">
+            <span key="item-no-images" className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600 border border-stone-200">
               <Clock className="h-3.5 w-3.5 text-stone-400" />
               <span>Chưa có ảnh</span>
             </span>
           )}
           {customerImages.length > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700 border border-sky-200">
+            <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-700 border border-stone-200">
               {customerImages.length} ảnh khách
             </span>
           )}
           {ownerImages.length > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 border border-amber-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 border border-amber-300">
               {ownerImages.length} bản vẽ xưởng
             </span>
           )}
         </div>
       </div>
 
-      {/* Mô tả kỹ thuật hiện tại của món (nếu có) */}
+      {/* Mô tả kỹ thuật hiện tại của món */}
       {item.description && (
         <div className="rounded-lg bg-stone-50 border border-stone-200 p-2.5 text-xs text-stone-700">
-          <span className="font-semibold text-stone-800 block mb-0.5">Mô tả kỹ thuật hiện tại:</span>
+          <span className="font-semibold text-stone-800 block mb-0.5">Mô tả quy cách kỹ thuật hiện tại:</span>
           <p className="whitespace-pre-line">{item.description}</p>
         </div>
       )}
 
-      {/* ── KHỐI PHÂN BIỆT RÕ RÀNG: ẢNH CỦA KHÁCH VS BẢN VẼ CỦA CHỦ XƯỞNG ── */}
+      {/* ── Khối đối chiếu: Ảnh của khách vs Bản vẽ của Chủ xưởng ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {/* Khối 1: Ảnh mẫu tham khảo do khách hàng gửi */}
-        <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3.5 space-y-2.5 flex flex-col justify-between">
+        <div className="rounded-lg border border-stone-200 bg-stone-50/50 p-3 space-y-2 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-2 border-b border-sky-100">
+            <div className="flex items-center justify-between pb-1.5 border-b border-stone-200">
               <div className="flex items-center gap-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 text-sky-700">
-                  <ImageIcon className="h-3 w-3" />
-                </span>
-                <h5 className="text-xs font-bold text-sky-950 uppercase tracking-wide">
+                <ImageIcon className="h-3.5 w-3.5 text-stone-600" />
+                <h5 className="text-[11px] font-semibold text-stone-800 uppercase tracking-wide">
                   Ảnh mẫu khách gửi
                 </h5>
               </div>
-              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+              <span className="rounded-full bg-stone-200 px-2 py-0.5 text-[10px] font-semibold text-stone-700">
                 {customerImages.length} ảnh
               </span>
             </div>
@@ -391,30 +333,28 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
             <DesignGallery
               images={customerImages}
               badgeText={isUsingGeneral ? 'Khách gửi (Ảnh chung)' : 'Khách gửi'}
-              badgeClassName="bg-sky-700/90"
-              borderClassName="border-sky-200 hover:border-sky-400"
-              emptyText="Khách không đính kèm ảnh mẫu tham khảo."
-              emptyClassName="rounded-lg border border-dashed border-sky-200 bg-sky-50/60 p-4 text-center text-xs text-sky-600 mt-2.5"
+              badgeClassName="bg-stone-800/90"
+              borderClassName="border-stone-200 hover:border-stone-400"
+              emptyText="Khách hàng không đính kèm ảnh mẫu tham khảo."
+              emptyClassName="rounded-lg border border-dashed border-stone-200 bg-stone-50 p-3 text-center text-[11px] text-stone-500 mt-2"
             />
           </div>
-          <p className="text-[11px] text-sky-600/90 italic mt-2">
-            💡 Dùng làm tư liệu tham khảo yêu cầu thực tế của khách hàng.
+          <p className="text-[11px] text-stone-500 italic mt-1">
+            Dùng làm tư liệu tham khảo yêu cầu thực tế của khách hàng.
           </p>
         </div>
 
         {/* Khối 2: Bản vẽ kỹ thuật thiết kế của Chủ xưởng */}
-        <div className="rounded-xl border border-amber-300 bg-amber-50/40 p-3.5 space-y-2.5 flex flex-col justify-between">
+        <div className="rounded-lg border border-amber-200 bg-amber-50/30 p-3 space-y-2 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between pb-2 border-b border-amber-200/80">
+            <div className="flex items-center justify-between pb-1.5 border-b border-amber-200">
               <div className="flex items-center gap-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-amber-900">
-                  <FileUp className="h-3 w-3" />
-                </span>
-                <h5 className="text-xs font-bold text-amber-950 uppercase tracking-wide">
-                  Bản vẽ thiết kế của Chủ xưởng
+                <FileUp className="h-3.5 w-3.5 text-amber-800" />
+                <h5 className="text-[11px] font-semibold text-amber-900 uppercase tracking-wide">
+                  Bản vẽ thiết kế của xưởng
                 </h5>
               </div>
-              <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
                 {ownerImages.length} bản vẽ
               </span>
             </div>
@@ -422,43 +362,43 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
             <DesignGallery
               images={ownerImages}
               badgeText="Bản vẽ xưởng"
-              badgeClassName="bg-amber-800/90"
-              borderClassName="border-amber-300 hover:border-amber-500"
-              emptyText="Chưa có bản vẽ xưởng nào cho món này. Hãy tải ảnh bản vẽ ở biểu mẫu phía dưới."
-              emptyClassName="rounded-lg border border-dashed border-amber-200 bg-amber-50/60 p-4 text-center text-xs text-amber-700 mt-2.5"
+              badgeClassName="bg-amber-900/90"
+              borderClassName="border-amber-200 hover:border-amber-400"
+              emptyText="Chưa có bản vẽ xưởng cho món này. Hãy tải ảnh bản vẽ ở biểu mẫu phía dưới."
+              emptyClassName="rounded-lg border border-dashed border-amber-200 bg-amber-50/50 p-3 text-center text-[11px] text-amber-700 mt-2"
               onDelete={handleDeleteOwnerImage}
               deletingImageId={deletingImageId}
             />
           </div>
-          <p className="text-[11px] text-amber-700/90 italic mt-2">
-            📐 Bản vẽ đã gửi được lưu giữ tại đây để Chủ xưởng & Sales cùng theo dõi.
+          <p className="text-[11px] text-amber-800 italic mt-1">
+            Bản vẽ đã gửi được lưu giữ tại đây để Chủ xưởng & Sales cùng theo dõi.
           </p>
         </div>
       </div>
 
       {/* Form tải lên bản thiết kế & cập nhật mô tả kỹ thuật cho món */}
-      <form onSubmit={handleSendItemDesign} className="rounded-lg bg-stone-50/80 p-3.5 border border-stone-200 space-y-3">
+      <form onSubmit={handleSendItemDesign} className="rounded-lg bg-stone-50 p-3.5 border border-stone-200 space-y-3">
         <p className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
-          <FileUp className="h-4 w-4 text-amber-700" />
-          Tải ảnh bản vẽ thiết kế mới và cập nhật mô tả kỹ thuật cho món này:
+          <FileUp className="h-4 w-4 text-stone-600" />
+          Tải ảnh bản vẽ kỹ thuật mới và cập nhật quy cách mộng/gỗ:
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
           <div>
             <label className="block text-xs font-medium text-stone-700 mb-1">
-              Chọn ảnh bản vẽ kỹ thuật / phối cảnh (JPG, PNG, WebP tối đa 20MB)
+              Chọn ảnh bản vẽ kỹ thuật / phối cảnh (JPG, PNG, PDF tối đa 20MB)
             </label>
             <input
               ref={fileInputRef}
               type="file"
               accept=".png,.jpg,.jpeg,.webp,.pdf"
               onChange={handleFileChange}
-              className="w-full text-xs text-stone-500 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer"
+              className="w-full text-xs text-stone-500 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-stone-300 file:text-xs file:font-medium file:bg-white file:text-stone-700 hover:file:bg-stone-50 cursor-pointer"
             />
             {filePreview && (
-              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/60 p-2 space-y-1.5">
+              <div className="mt-2 rounded-lg border border-stone-200 bg-white p-2 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-medium text-amber-800">Ảnh mới chuẩn bị gửi:</p>
+                  <p className="text-[11px] font-medium text-stone-800">Ảnh mới chuẩn bị gửi:</p>
                   <button
                     type="button"
                     onClick={handleClearSelectedFile}
@@ -470,7 +410,7 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
                 <img
                   src={filePreview}
                   alt="Preview"
-                  className="max-h-24 rounded border border-amber-200 bg-white object-contain"
+                  className="max-h-24 rounded border border-stone-200 bg-white object-contain"
                 />
               </div>
             )}
@@ -495,8 +435,8 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
                   <span className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                     {justSent
-                      ? 'Đã gửi sang Sales & giữ lại ảnh bản vẽ:'
-                      : `Ảnh bản vẽ đã gửi & đang giữ (${displaySavedImages.length}):`}
+                      ? 'Đã gửi sang Sales & lưu giữ bản vẽ:'
+                      : `Bản vẽ đã gửi sang Sales (${displaySavedImages.length}):`}
                   </span>
                   {latestSavedImage?.imageUrl && (
                     <a
@@ -517,26 +457,25 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
                     return (
                       <div
                         key={imgId}
-                        className={`rounded-lg border bg-white p-1 ${
-                          isLatest ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-stone-200'
-                        }`}
+                        className={`rounded-lg border bg-white p-1 ${isLatest ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-stone-200'
+                          }`}
                       >
                         <a href={img.imageUrl} target="_blank" rel="noreferrer" className="block">
                           {isPdf ? (
-                            <div className="flex h-20 w-20 flex-col items-center justify-center rounded bg-stone-50 text-[10px] font-semibold text-stone-700">
+                            <div className="flex h-16 w-16 flex-col items-center justify-center rounded bg-stone-50 text-[10px] font-semibold text-stone-700">
                               <ExternalLink className="h-4 w-4 text-rose-600 mb-1" />
                               PDF #{imgIdx + 1}
                             </div>
                           ) : (
                             <img
                               src={img.imageUrl}
-                              alt={`Ảnh bản vẽ đã lưu ${imgIdx + 1}`}
-                              className="h-20 w-20 rounded object-cover"
+                              alt={`Bản vẽ ${imgIdx + 1}`}
+                              className="h-16 w-16 rounded object-cover"
                             />
                           )}
                         </a>
                         {isLatest && (
-                          <span className="mt-1 block text-center text-[10px] font-semibold text-emerald-700">
+                          <span className="mt-0.5 block text-center text-[10px] font-semibold text-emerald-700">
                             Mới nhất
                           </span>
                         )}
@@ -550,14 +489,14 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
 
           <div>
             <label className="block text-xs font-medium text-stone-700 mb-1">
-              Mô tả kỹ thuật cho món này
+              Mô tả quy cách kỹ thuật cho món này
             </label>
             <textarea
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Bản vẽ chi tiết kích thước, chất liệu khung, mặt đá, kết cấu mộng gỗ..."
-              className="w-full rounded-lg border border-stone-300 p-2 text-xs text-stone-900 outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+              placeholder="Quy cách kích thước chi tiết, loại gỗ tự nhiên, độ ẩm tiêu chuẩn, kết cấu mộng âm dương, màu sơn PU..."
+              className="w-full rounded-lg border border-stone-300 p-2 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             />
           </div>
         </div>
@@ -573,20 +512,14 @@ function ItemDesignCard({ item, index, requestId, generalImages = [], onUpdated 
           <button
             type="submit"
             disabled={submitting}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-3.5 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-900 active:scale-95 disabled:opacity-50 transition"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-950 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
           >
-            <span hidden={!submitting} className={submitting ? 'inline-flex' : 'hidden'} aria-hidden="true">
+            {submitting ? (
               <RotateCw className="h-3.5 w-3.5 animate-spin" />
-            </span>
-            <span hidden={submitting} className={submitting ? 'hidden' : 'inline-flex'} aria-hidden="true">
+            ) : (
               <Send className="h-3.5 w-3.5" />
-            </span>
-            <span hidden={!submitting} className={submitting ? 'inline' : 'hidden'}>
-              Đang gửi...
-            </span>
-            <span hidden={submitting} className={submitting ? 'hidden' : 'inline'}>
-              Gửi bản thiết kế sang Sales
-            </span>
+            )}
+            <span>{submitting ? 'Đang gửi...' : 'Gửi bản thiết kế sang Sales'}</span>
           </button>
         </div>
       </form>
@@ -618,7 +551,17 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
     };
   }, [requestId]);
 
-  // Tính tổng số ảnh thiết kế do Chủ xưởng gửi (ở các món sản phẩm)
+  // Phím tắt Esc đóng Modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const totalDesignImages = useMemo(() => {
     if (!detail) return 0;
     return (detail.items || []).reduce(
@@ -629,183 +572,135 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl border border-stone-200 my-8 flex flex-col">
         {/* Header modal */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-200 bg-white px-6 py-4">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-amber-700" />
-            <h2 className="text-lg font-bold text-stone-900">
-              Chi tiết yêu cầu đặt làm
+        <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-base font-bold text-stone-900">
+              Chi tiết yêu cầu đặt đóng
             </h2>
+            {detail && (
+              <span className="font-mono text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                #{detail.requestCode}
+              </span>
+            )}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600 transition"
-            aria-label="Đóng"
+            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+            aria-label="Đóng cửa sổ"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-5 text-xs text-stone-800">
           {loading ? (
-            <div className="py-12 text-center text-stone-500">
-              <RotateCw className="mx-auto h-6 w-6 animate-spin text-amber-700 mb-2" />
+            <div className="py-16 text-center text-stone-500">
+              <RotateCw className="mx-auto h-6 w-6 animate-spin text-stone-400 mb-2" />
               <span>Đang tải thông tin chi tiết...</span>
             </div>
           ) : !detail ? (
-            <div className="py-12 text-center text-rose-500 font-medium">
+            <div className="py-16 text-center text-rose-600 font-medium">
               Không tìm thấy yêu cầu này.
             </div>
           ) : (
             <>
               {/* Mã yêu cầu & Trạng thái */}
-              <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-stone-100">
-                <div>
-                  <p className="text-xs text-stone-400">Mã yêu cầu</p>
-                  <p className="font-mono text-base font-bold text-amber-800">
-                    {detail.requestCode}
-                  </p>
-                </div>
+              <div className="flex items-center justify-between flex-wrap gap-2 p-3.5 rounded-lg border border-stone-200 bg-stone-50">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 border border-violet-200">
-                    Đặt theo yêu cầu 
-                  </span>
-                  <StatusBadge status={detail.status} />
+                  <span className="font-semibold text-stone-700">Trạng thái:</span>
+                  <OrderRequestStatusBadge status={detail.status} />
+                </div>
+                <div className="font-mono text-stone-500 text-xs">
+                  Ngày gửi: <span className="font-semibold text-stone-800">{formatDateTime(detail.createdAt || detail.createdate)}</span>
                 </div>
               </div>
 
-              {/* Thông tin khách hàng */}
-              <div className="rounded-xl border border-stone-200 p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-                  <User className="h-4 w-4 text-amber-700" /> Thông tin khách hàng
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-xs text-stone-400">Họ và tên</p>
-                    <p className="font-medium text-stone-900">{detail.customerName}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-stone-400">Số điện thoại</p>
-                    <p className="font-medium text-stone-900 flex items-center gap-1">
+              {/* Thông tin khách hàng & Yêu cầu */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg border border-stone-200 p-4 space-y-2.5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
+                    <User className="h-4 w-4 text-stone-600" /> Thông tin khách hàng
+                  </h3>
+                  <div className="space-y-1.5 text-xs">
+                    <p className="font-bold text-stone-900 text-sm">{detail.customerName}</p>
+                    <p className="text-stone-600 flex items-center gap-2 font-mono">
                       <Phone className="h-3.5 w-3.5 text-stone-400" />
-                      {detail.customerPhone}
+                      <span>{detail.customerPhone}</span>
+                    </p>
+                    {detail.customerEmail && (
+                      <p className="text-stone-600 truncate">{detail.customerEmail}</p>
+                    )}
+                    <p className="text-stone-600 flex items-start gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-stone-400 mt-0.5 shrink-0" />
+                      <span>{detail.deliveryAddress || 'Chưa cung cấp địa chỉ'}</span>
                     </p>
                   </div>
-                  {detail.customerEmail && (
-                    <div className="sm:col-span-2">
-                      <p className="text-xs text-stone-400">Email</p>
-                      <p className="font-medium text-stone-900">{detail.customerEmail}</p>
+                </div>
+
+                <div className="rounded-lg border border-stone-200 p-4 space-y-2.5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4 text-stone-600" /> Tiến độ & Phụ trách
+                  </h3>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Tiêu đề đặt đóng:</span>
+                      <span className="font-medium text-stone-900">{detail.title}</span>
                     </div>
-                  )}
-                  <div className="sm:col-span-2">
-                    <p className="text-xs text-stone-400">Địa chỉ giao hàng</p>
-                    {detail.deliveryAddress ? (
-                      <p className="font-medium text-stone-900 flex items-start gap-1">
-                        <MapPin className="h-3.5 w-3.5 text-stone-400 mt-0.5 shrink-0" />
-                        {detail.deliveryAddress}
-                      </p>
-                    ) : (
-                      <p className="text-xs font-medium text-stone-500 bg-stone-100 rounded px-2 py-1 inline-block mt-0.5">
-                        Chưa có địa chỉ cụ thể
-                      </p>
+                    {detail.expectedDate && (
+                      <div className="flex justify-between">
+                        <span className="text-stone-500">Ngày mong muốn:</span>
+                        <span className="font-medium text-stone-800">{formatDate(detail.expectedDate)}</span>
+                      </div>
+                    )}
+                    {(detail.budgetMin || detail.budgetMax) && (
+                      <div className="flex justify-between">
+                        <span className="text-stone-500">Ngân sách dự kiến:</span>
+                        <span className="font-mono text-stone-800">
+                          {detail.budgetMin && detail.budgetMax
+                            ? `${formatCurrency(detail.budgetMin)} – ${formatCurrency(detail.budgetMax)}`
+                            : detail.budgetMin
+                              ? `Từ ${formatCurrency(detail.budgetMin)}`
+                              : `Đến ${formatCurrency(detail.budgetMax)}`}
+                        </span>
+                      </div>
+                    )}
+                    {detail.assigneeName && (
+                      <div className="flex justify-between">
+                        <span className="text-stone-500">Sales phụ trách:</span>
+                        <span className="font-medium text-stone-800">{detail.assigneeName}</span>
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Thông tin chung yêu cầu đặt làm */}
-              <div className="rounded-xl border border-stone-200 p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-                  <Calendar className="h-4 w-4 text-amber-700" /> Thông tin chung yêu cầu đặt làm
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  <div className="sm:col-span-2">
-                    <p className="text-xs text-stone-400">Tiêu đề yêu cầu</p>
-                    <p className="font-semibold text-stone-900">{detail.title}</p>
-                  </div>
-                  {detail.expectedDate && (
-                    <div>
-                      <p className="text-xs text-stone-400">Ngày mong muốn nhận</p>
-                      <p className="font-medium text-stone-900 flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5 text-stone-400" />
-                        {formatDate(detail.expectedDate)}
-                      </p>
-                    </div>
-                  )}
-                  {(detail.budgetMin || detail.budgetMax) && (
-                    <div>
-                      <p className="text-xs text-stone-400">Ngân sách dự kiến</p>
-                      <p className="font-medium text-stone-900 flex items-center gap-1">
-                        <DollarSign className="h-3.5 w-3.5 text-stone-400" />
-                        {detail.budgetMin && detail.budgetMax
-                          ? `${formatCurrency(detail.budgetMin)} – ${formatCurrency(detail.budgetMax)}`
-                          : detail.budgetMin
-                          ? `Từ ${formatCurrency(detail.budgetMin)}`
-                          : `Đến ${formatCurrency(detail.budgetMax)}`}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-xs text-stone-400">Ngày gửi yêu cầu</p>
-                    <p className="font-medium text-stone-900">
-                      {formatDateTime(detail.createdAt || detail.createdate)}
-                    </p>
-                  </div>
-                  {detail.assigneeName && (
-                    <div>
-                      <p className="text-xs text-stone-400">Sales phụ trách</p>
-                      <p className="font-medium text-stone-900">{detail.assigneeName}</p>
-                    </div>
-                  )}
+              {detail.description && (
+                <div className="rounded-lg bg-stone-50 border border-stone-200 p-3 text-xs text-stone-700">
+                  <span className="font-semibold text-stone-800 block mb-0.5">Yêu cầu từ khách hàng:</span>
+                  <p className="whitespace-pre-line">{detail.description}</p>
                 </div>
-
-                {detail.staffNote && (
-                  <div>
-                    <p className="text-xs text-stone-400 mb-1">Ghi chú của Sales</p>
-                    <p className="text-sm text-blue-900 bg-blue-50 rounded-lg p-3 border border-blue-200">
-                      {detail.staffNote}
-                    </p>
-                  </div>
-                )}
-                {detail.rejectReason && (
-                  <div>
-                    <p className="text-xs text-stone-400 mb-1">Lý do từ chối</p>
-                    <p className="text-sm text-rose-900 bg-rose-50 rounded-lg p-3 border border-rose-200">
-                      {detail.rejectReason}
-                    </p>
-                  </div>
-                )}
-                {detail.description && (
-                  <div>
-                    <p className="text-xs text-stone-400 mb-1">Ghi chú / Yêu cầu của khách hàng</p>
-                    <p className="text-sm text-stone-800 bg-stone-50 rounded-lg p-3 border border-stone-200 whitespace-pre-line">
-                      {detail.description}
-                    </p>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* KHỐI TRỌNG TÂM: BẢN THIẾT KẾ CHO TỪNG SẢN PHẨM */}
-              <div className="rounded-xl border-2 border-amber-300 bg-amber-50/40 p-5 space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2 border-b border-stone-200 pb-2.5">
                   <div>
-                    <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-                      <FileUp className="h-5 w-5 text-amber-700" />
-                      Hồ sơ thiết kế gửi cho bộ phận Sales
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-800 flex items-center gap-1.5">
+                      <FileUp className="h-4 w-4 text-stone-600" />
+                      Hồ sơ bản vẽ kỹ thuật gửi bộ phận Sales
                     </h3>
-                    <p className="text-xs text-stone-500 mt-0.5">
-                      Gửi ảnh bản vẽ thiết kế và mô tả kỹ thuật riêng cho từng sản phẩm
-                    </p>
                   </div>
                   <DesignStatusBadge count={totalDesignImages} />
                 </div>
 
                 {/* Danh sách từng món để gửi bản thiết kế */}
-                <div className="space-y-4">
+                <div className="space-y-3.5">
                   {detail.items && detail.items.length > 0 ? (
                     detail.items.map((item, idx) => (
                       <ItemDesignCard
@@ -828,38 +723,28 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
                 </div>
               </div>
 
-              {/* Hợp đồng liên kết */}
+              {/* Hợp đồng liên kết nếu đã tạo */}
               {detail.contract && (
-                <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3.5 flex items-start gap-2.5 text-xs text-emerald-900">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-emerald-900">
-                      Đã chuyển thành hợp đồng
-                    </p>
-                    <p className="text-sm text-emerald-800 mt-0.5">
-                      Mã HĐ:{' '}
-                      <span className="font-bold font-mono">{detail.contract.contractCode}</span>
-                      {' · '}Trạng thái: {detail.contract.status}
+                    <p className="font-semibold">Đã tạo hợp đồng bán hàng</p>
+                    <p className="mt-0.5 font-mono">
+                      Mã HĐ: <strong className="font-bold">{detail.contract.contractCode}</strong> • Trạng thái: {detail.contract.status}
                     </p>
                   </div>
                 </div>
               )}
-
-              {/* Thông báo phân quyền */}
-              <div className="rounded-xl bg-stone-50 border border-stone-200 p-3.5 flex items-center gap-2 text-xs text-stone-600">
-                <AlertCircle className="h-4 w-4 shrink-0 text-amber-700" />
-                Chủ xưởng gửi ảnh bản thiết kế và mô tả kỹ thuật cho từng sản phẩm sang cho Sales. Việc chốt hợp đồng và báo giá do nhân viên Sales thực hiện.
-              </div>
             </>
           )}
         </div>
 
         {/* Footer modal */}
-        <div className="sticky bottom-0 z-10 flex justify-end border-t border-stone-200 bg-white px-6 py-3.5">
+        <div className="flex justify-end border-t border-stone-200 bg-stone-50 px-6 py-3.5">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95"
+            className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
           >
             Đóng
           </button>
@@ -875,6 +760,7 @@ function RequestDetailModal({ requestId, onClose, onUpdated }) {
 export function ManageCustomerRequestsPage() {
   // ── States bộ lọc ──
   const [search, setSearch] = useState('');
+  const [searchBy, setSearchBy] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -904,10 +790,25 @@ export function ManageCustomerRequestsPage() {
       const params = {
         page,
         limit: pageSize,
-        order_type: 'CUSTOM', // Chỉ lấy đơn đặt theo yêu cầu
+        order_type: 'CUSTOM',
         ...(statusFilter !== 'ALL' && { status: statusFilter }),
-        ...(search.trim() && { search: search.trim() }),
       };
+
+      if (search.trim()) {
+        const keyword = search.trim();
+        if (searchBy === 'REQUEST_CODE') {
+          params.request_code = keyword;
+        } else if (searchBy === 'CUSTOMER_NAME') {
+          params.customer_name = keyword;
+        } else if (searchBy === 'PHONE') {
+          params.search = keyword;
+          params.search_by = 'PHONE';
+        } else {
+          params.search = keyword;
+          params.search_by = 'ALL';
+        }
+      }
+
       const res = await getRequests(params);
       const items = res.data || res.requests || [];
       setRequests(items);
@@ -929,7 +830,7 @@ export function ManageCustomerRequestsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [page, pageSize, statusFilter, search]);
+  }, [page, pageSize, statusFilter, search, searchBy]);
 
   useEffect(() => {
     fetchRequests();
@@ -937,221 +838,268 @@ export function ManageCustomerRequestsPage() {
 
   const handleResetFilters = () => {
     setSearch('');
+    setSearchBy('ALL');
     setStatusFilter('ALL');
     setPage(1);
   };
 
-  // ── Thống kê Cards nhanh ──
+  // Lọc chỉ hiển thị các yêu cầu thuộc 4 trạng thái chủ xưởng quản lý
+  const displayedRequests = useMemo(() => {
+    return requests.filter((r) => OWNER_ALLOWED_STATUSES.includes(r.status));
+  }, [requests]);
+
+  // Thống kê nhanh theo các trạng thái dành riêng cho Chủ xưởng
   const stats = useMemo(() => {
-    const total = pagination.totalItems || requests.length;
-    const pending = requests.filter((r) => r.status === 'PENDING').length;
-    const processing = requests.filter((r) => r.status === 'PROCESSING').length;
-    // Kiểm tra xem đơn đã có ảnh thiết kế (cấp request hoặc cấp từng món)
-    const withImages = requests.filter(
-      (r) =>
-        (r.images && r.images.length > 0) ||
-        (r.items && r.items.some((it) => it.images && it.images.length > 0))
+    const designing = displayedRequests.filter((r) =>
+      ['DESIGNING'].includes(r.status)
     ).length;
-    return { total, pending, processing, withImages };
-  }, [pagination.totalItems, requests]);
+    const designed = displayedRequests.filter((r) =>
+      ['DESIGNED', 'CONFIRMED', 'APPROVED'].includes(r.status)
+    ).length;
+    const draft = displayedRequests.filter((r) =>
+      ['DRAFT', 'CONTRACT_CREATED'].includes(r.status)
+    ).length;
+    const converted = displayedRequests.filter((r) => r.status === 'CONVERTED').length;
+    const rejected = displayedRequests.filter((r) =>
+      ['REJECTED', 'CANCELLED'].includes(r.status)
+    ).length;
+    const total = pagination.totalItems || displayedRequests.length;
+    return { total, designing, designed, draft, converted, rejected };
+  }, [pagination.totalItems, displayedRequests]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (search.trim()) count++;
+    if (statusFilter !== 'ALL') count++;
+    if (searchBy !== 'ALL') count++;
+    return count;
+  }, [search, statusFilter, searchBy]);
+
+  const searchPlaceholder = useMemo(() => {
+    switch (searchBy) {
+      case 'REQUEST_CODE':
+        return 'Nhập mã yêu cầu cần tìm (ví dụ: REQ-20261124-0001)...';
+      case 'CUSTOMER_NAME':
+        return 'Nhập tên khách hàng cần tìm...';
+      case 'PHONE':
+        return 'Nhập số điện thoại khách hàng...';
+      default:
+        return 'Tìm theo mã yêu cầu, tên khách hàng, số điện thoại...';
+    }
+  }, [searchBy]);
 
   return (
-    <div className="space-y-6">
-      {/* ── Tiêu đề & Nút thao tác ───────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6 text-stone-900">
+      {/* ── 1. TIÊU ĐỀ TRANG ─────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-            Quản Lý Yêu Cầu Khách Hàng
+          <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
+            Quản lý yêu cầu khách hàng
           </h1>
-          <p className="mt-1 text-sm text-stone-500">
-            Xem và theo dõi các yêu cầu đặt làm theo mẫu của khách hàng, tải lên ảnh bản thiết kế và gửi sang cho bộ phận Sales.
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Xem và theo dõi các yêu cầu đặt đóng đồ gỗ của khách hàng, tải lên bản vẽ thiết kế kỹ thuật và chuyển tiếp thông tin cho bộ phận kinh doanh.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2.5">
           <button
+            type="button"
             onClick={() => fetchRequests(true)}
             disabled={loading || refreshing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             title="Tải lại danh sách"
           >
-            <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin text-amber-700' : ''}`} />
+            <RotateCw className={`h-3.5 w-3.5 text-stone-500 ${refreshing || loading ? 'animate-spin' : ''}`} />
             <span>Làm mới</span>
           </button>
         </div>
       </div>
 
-      {/* ── Thống kê tổng quan (Cards) ─────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Tổng yêu cầu đặt làm */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm transition hover:shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-stone-500">Tổng yêu cầu</span>
-            <div className="rounded-lg bg-stone-100 p-2 text-stone-700">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-stone-900">{stats.total}</span>
-            <span className="text-xs text-stone-400">yêu cầu</span>
-          </div>
+      {/* ── 2. BỘ LỌC & TÌM KIẾM ─────────────────────────────── */}
+      <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs space-y-4">
+        {/* Tabs trạng thái kèm số lượng (Các trạng thái thuộc phạm vi quản lý của Chủ xưởng) */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 pb-3">
+          {[
+            { key: 'ALL', label: 'Tất cả yêu cầu', count: stats?.total ?? 0 },
+            { key: 'DESIGNING', label: 'Chờ thiết kế', count: stats?.designing ?? 0 },
+            { key: 'DESIGNED', label: 'Đã có bản vẽ', count: stats?.designed ?? 0 },
+            { key: 'DRAFT', label: 'Chờ ký hợp đồng', count: stats?.draft ?? 0 },
+            { key: 'CONVERTED', label: 'Đã chuyển đơn hàng', count: stats?.converted ?? 0 },
+            { key: 'REJECTED', label: 'Đã từ chối', count: stats?.rejected ?? 0 },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(tab.key);
+                  setPage(1);
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 ${isActive
+                  ? 'bg-stone-900 text-white font-semibold'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+                  }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-mono font-medium ${isActive ? 'bg-stone-700 text-white' : 'bg-stone-200 text-stone-700'
+                    }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Chờ xử lý */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm transition hover:shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-amber-800">Chờ xử lý</span>
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-700">
-              <Clock className="h-5 w-5" />
-            </div>
+        {/* Thanh tìm kiếm & bộ lọc */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          {/* Dropdown tiêu chí tìm kiếm */}
+          <div className="w-full lg:w-44 shrink-0">
+            <select
+              aria-label="Tiêu chí tìm kiếm"
+              value={searchBy}
+              onChange={(e) => {
+                setSearchBy(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-stone-300 bg-white py-2 px-3 text-xs text-stone-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+            >
+              {SEARCH_BY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-900">{stats.pending}</span>
-            <span className="text-xs text-amber-600">chờ lên bản vẽ</span>
-          </div>
-        </div>
 
-        {/* Đang xử lý */}
-        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-5 shadow-sm transition hover:shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-blue-800">Đang xử lý</span>
-            <div className="rounded-lg bg-blue-100 p-2 text-blue-700">
-              <RefreshCw className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-blue-900">{stats.processing}</span>
-            <span className="text-xs text-blue-600">đang trao đổi Sales</span>
-          </div>
-        </div>
-
-        {/* Đã có ảnh thiết kế */}
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm transition hover:shadow">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-emerald-800">Đã có ảnh thiết kế</span>
-            <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-900">{stats.withImages}</span>
-            <span className="text-xs text-emerald-600">sẵn sàng báo giá</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Bộ lọc & Tìm kiếm ─────────────────────────────── */}
-      <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Ô tìm kiếm */}
+          {/* Ô nhập từ khóa tìm kiếm */}
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
-              placeholder="Tìm theo mã yêu cầu, tên khách hàng, số điện thoại..."
+              placeholder={searchPlaceholder}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-9 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             />
-          </div>
-
-          {/* Lọc Trạng thái */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <select
-              aria-label="Lọc theo trạng thái"
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s === 'ALL' ? 'Tất cả trạng thái' : STATUS_LABELS[s]}
-                </option>
-              ))}
-            </select>
-
-            {(search || statusFilter !== 'ALL') && (
+            {search && (
               <button
                 type="button"
-                onClick={handleResetFilters}
-                className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-600 transition hover:bg-stone-50"
+                onClick={() => {
+                  setSearch('');
+                  setPage(1);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600 focus-visible:outline-none"
+                title="Xóa từ khóa"
               >
-                Xóa bộ lọc
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
+
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-700 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>Đặt lại ({activeFilterCount})</span>
+            </button>
+          )}
         </div>
-      </div>
+
+        {/* Thông tin tóm tắt kết quả */}
+        <div className="flex items-center justify-between border-t border-stone-100 pt-2.5 text-xs text-stone-500">
+          <span>
+            Hiển thị <strong className="font-semibold text-stone-800">{displayedRequests.length}</strong> trên tổng số{' '}
+            <strong className="font-semibold text-stone-800">{pagination.totalItems}</strong> yêu cầu đặt đóng
+            {search.trim() && (
+              <span> với từ khóa &ldquo;<strong className="text-stone-900">{search.trim()}</strong>&rdquo;</span>
+            )}
+          </span>
+          {pagination.totalPages > 1 && (
+            <span>
+              Trang {pagination.currentPage} / {pagination.totalPages}
+            </span>
+          )}
+        </div>
+      </section>
 
       {/* ── Thông báo lỗi (nếu có) ────────────────────────── */}
       {error && (
-        <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
-          <AlertCircle className="h-5 w-5 shrink-0" />
-          {error}
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* ── Bảng danh sách yêu cầu ────────────────────────── */}
-      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+      {/* ── 3. BẢNG DANH SÁCH YÊU CẦU ────────────────────────── */}
+      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
+          <table className="min-w-full divide-y divide-stone-200 text-left text-xs">
             <thead className="bg-stone-50 font-semibold text-stone-700">
               <tr>
-                <th className="py-3.5 pl-4 pr-3 sm:pl-6 w-14">STT</th>
-                <th className="px-3 py-3.5">Mã yêu cầu</th>
-                <th className="px-3 py-3.5">Khách hàng</th>
-                <th className="px-3 py-3.5">Tiêu đề đặt làm</th>
-                <th className="px-3 py-3.5">Ngày gửi</th>
-                <th className="px-3 py-3.5">Bản thiết kế</th>
-                <th className="px-3 py-3.5">Trạng thái</th>
-                <th className="py-3.5 pl-3 pr-4 text-center sm:pr-6">Thao tác</th>
+                <th className="py-3 pl-4 pr-3 sm:pl-6 w-12 text-stone-500">STT</th>
+                <th className="px-3 py-3">Mã yêu cầu</th>
+                <th className="px-3 py-3">Khách hàng</th>
+                <th className="px-3 py-3">Tiêu đề đặt đóng</th>
+                <th className="px-3 py-3">Ngày gửi</th>
+                <th className="px-3 py-3 text-center">Bản thiết kế</th>
+                <th className="px-3 py-3 text-center">Trạng thái</th>
+                <th className="py-3 pl-3 pr-4 text-center sm:pr-6">Thao tác</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-stone-200 bg-white">
+            <tbody className="divide-y divide-stone-100 bg-white">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-stone-500">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <RotateCw className="h-6 w-6 animate-spin text-amber-700" />
-                      <span>Đang tải danh sách yêu cầu...</span>
-                    </div>
+                  <td colSpan={8} className="py-16 text-center text-stone-500">
+                    <RotateCw className="mx-auto h-6 w-6 animate-spin text-stone-400 mb-2" />
+                    <p className="text-xs">Đang tải danh sách yêu cầu...</p>
                   </td>
                 </tr>
-              ) : requests.length === 0 ? (
+              ) : displayedRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-stone-500">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <ClipboardList className="h-10 w-10 text-stone-300" />
-                      <p className="font-medium text-stone-700">Không tìm thấy yêu cầu đặt làm nào</p>
-                      <p className="text-xs text-stone-400">
-                        {search || statusFilter !== 'ALL'
-                          ? 'Thử thay đổi từ khóa hoặc bộ lọc trạng thái.'
-                          : 'Các yêu cầu gia công từ khách hàng sẽ xuất hiện tại đây.'}
-                      </p>
-                    </div>
+                  <td colSpan={8} className="py-16 text-center text-stone-500">
+                    <ClipboardList className="mx-auto h-10 w-10 text-stone-300 mb-2" />
+                    <p className="text-sm font-semibold text-stone-800">Không tìm thấy yêu cầu đặt đóng nào</p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      {search || statusFilter !== 'ALL'
+                        ? 'Thử thay đổi từ khóa hoặc bộ lọc trạng thái.'
+                        : 'Các yêu cầu gia công từ khách hàng sẽ xuất hiện tại đây.'}
+                    </p>
+                    {activeFilterCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleResetFilters}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-stone-50 px-3.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        <span>Đặt lại bộ lọc</span>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (
-                requests.map((req, idx) => {
+                displayedRequests.map((req, idx) => {
                   const rowNum =
                     (pagination.currentPage - 1) * pagination.itemsPerPage + idx + 1;
 
                   return (
                     <tr
                       key={req.requestId}
-                      className="transition hover:bg-stone-50/80"
+                      className="hover:bg-stone-50 transition"
                     >
-                      <td className="whitespace-nowrap py-3.5 pl-4 pr-3 sm:pl-6 text-xs text-stone-400 font-medium">
+                      <td className="whitespace-nowrap py-3.5 pl-4 pr-3 sm:pl-6 text-stone-400 font-mono">
                         {rowNum}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3.5 font-semibold font-mono text-amber-800">
+                      <td className="whitespace-nowrap px-3 py-3.5 font-bold font-mono text-amber-900">
                         {req.requestCode}
                       </td>
                       <td className="px-3 py-3.5">
@@ -1159,19 +1107,19 @@ export function ManageCustomerRequestsPage() {
                           <span className="font-medium text-stone-900">
                             {req.customerName}
                           </span>
-                          <span className="text-xs text-stone-500 flex items-center gap-1 mt-0.5">
+                          <span className="text-[11px] text-stone-500 font-mono flex items-center gap-1 mt-0.5">
                             <Phone className="h-3 w-3 text-stone-400" />
                             {req.customerPhone}
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-3.5 max-w-[260px] truncate text-stone-800" title={req.title}>
+                      <td className="px-3 py-3.5 max-w-[240px] truncate text-stone-800" title={req.title}>
                         {req.title}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3.5 text-xs text-stone-600">
+                      <td className="whitespace-nowrap px-3 py-3.5 text-stone-600">
                         {formatDate(req.createdAt || req.createdate)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3.5">
+                      <td className="whitespace-nowrap px-3 py-3.5 text-center">
                         <DesignStatusBadge
                           count={
                             (req.images?.length || 0) +
@@ -1179,15 +1127,15 @@ export function ManageCustomerRequestsPage() {
                           }
                         />
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3.5">
-                        <StatusBadge status={req.status} />
+                      <td className="whitespace-nowrap px-3 py-3.5 text-center">
+                        <OrderRequestStatusBadge status={req.status} />
                       </td>
                       <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
                         <button
                           type="button"
                           onClick={() => setViewingId(req.requestId)}
-                          aria-label={`Xem chi tiết ${req.requestCode}`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800 active:scale-95"
+                          className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 transition hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                          title={`Xem chi tiết & gửi bản vẽ ${req.requestCode}`}
                         >
                           <Eye className="h-3.5 w-3.5 text-stone-500" />
                           <span>Xem & Gửi thiết kế</span>
@@ -1201,26 +1149,28 @@ export function ManageCustomerRequestsPage() {
           </table>
         </div>
 
-        {!loading && requests.length > 0 && (
-          <TablePagination
-            currentPage={pagination.currentPage}
-            totalPages={pagination.totalPages}
-            totalItems={pagination.totalItems}
-            currentCount={requests.length}
-            itemsPerPage={pagination.itemsPerPage}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
-            onPageChange={(p) => setPage(p)}
-            onPageSizeChange={(s) => {
-              setPageSize(s);
-              setPage(1);
-            }}
-            itemLabel="yêu cầu"
-            loading={loading}
-          />
+        {!loading && displayedRequests.length > 0 && (
+          <div className="p-3 border-t border-stone-200 bg-stone-50/50">
+            <TablePagination
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              totalItems={pagination.totalItems}
+              currentCount={displayedRequests.length}
+              itemsPerPage={pagination.itemsPerPage}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              onPageChange={(p) => setPage(p)}
+              onPageSizeChange={(s) => {
+                setPageSize(s);
+                setPage(1);
+              }}
+              itemLabel="yêu cầu"
+              loading={loading}
+            />
+          </div>
         )}
       </div>
 
-      {/* ── Detail Modal ── */}
+      {/* ── 4. MODAL CHI TIẾT ─────────────────────────────── */}
       {viewingId && (
         <RequestDetailModal
           requestId={viewingId}

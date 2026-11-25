@@ -11,7 +11,7 @@
 // 6. Nhận lại đơn nếu Chủ xưởng nghiệm thu chưa đạt (khắc phục và nộp lại)
 // =========================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Package,
   Search,
@@ -43,16 +43,26 @@ import {
   getLeaderOrderDetail,
 } from '../../services/leaderStaffService';
 import { TablePagination } from '../../components/common/TablePagination';
+import { formatVND, formatDateVN } from '../../utils/formatters';
 
-const formatVND = (val) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(val || 0);
+const focusRing =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900';
+
+const STATUS_TABS = [
+  { key: 'ALL', label: 'Tất cả đơn' },
+  { key: 'CONFIRMED', label: 'Chờ tiếp nhận' },
+  { key: 'IN_PRODUCTION', label: 'Đang gia công' },
+  { key: 'UNDER_INSPECTION', label: 'Chờ nghiệm thu' },
+  { key: 'READY_TO_DELIVER', label: 'Nghiệm thu đạt' },
+  { key: 'COMPLETED', label: 'Hoàn tất' },
+];
 
 const getStatusBadge = (status, rejectReason) => {
   // Nếu IN_PRODUCTION có rejectReason => hiển thị đặc biệt
   if (status === 'IN_PRODUCTION' && rejectReason) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
-        <AlertCircle className="h-3 w-3" />
+      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
+        <AlertCircle className="h-3 w-3 shrink-0" />
         Làm lại (Nghiệm thu chưa đạt)
       </span>
     );
@@ -60,49 +70,49 @@ const getStatusBadge = (status, rejectReason) => {
   switch (status) {
     case 'CONFIRMED':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
-          <Clock className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+          <Clock className="h-3 w-3 shrink-0" />
           Chờ tiếp nhận
         </span>
       );
     case 'IN_PRODUCTION':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
-          <Hammer className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+          <Hammer className="h-3 w-3 shrink-0" />
           Đang gia công
         </span>
       );
     case 'UNDER_INSPECTION':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">
-          <Clock className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-800">
+          <Clock className="h-3 w-3 shrink-0" />
           Chờ Owner nghiệm thu
         </span>
       );
     case 'READY_TO_DELIVER':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800">
-          <CheckCircle2 className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-800">
+          <CheckCircle2 className="h-3 w-3 shrink-0" />
           Nghiệm thu đạt (Chờ giao)
         </span>
       );
     case 'DELIVERING':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-800">
-          <Truck className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800">
+          <Truck className="h-3 w-3 shrink-0" />
           Đang giao hàng
         </span>
       );
     case 'COMPLETED':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-          <CheckCircle2 className="h-3 w-3" />
+        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+          <CheckCircle2 className="h-3 w-3 shrink-0" />
           Hoàn tất đơn
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-semibold text-stone-700">
+        <span className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-100 px-2.5 py-0.5 text-xs font-semibold text-stone-700">
           {status}
         </span>
       );
@@ -176,6 +186,37 @@ export const LeaderOrdersPage = () => {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Phím tắt Esc đóng Modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (detailModalOpen) setDetailModalOpen(false);
+        if (progressModalOpen) setProgressModalOpen(false);
+        if (inspectionModalOpen) setInspectionModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [detailModalOpen, progressModalOpen, inspectionModalOpen]);
+
+  // Thống kê nhanh 4 chỉ số KPI tổng quan
+  const stats = useMemo(() => {
+    const total = pagination.totalItems || orders.length;
+    const confirmed = orders.filter((o) => o.status === 'CONFIRMED').length;
+    const inProduction = orders.filter((o) => o.status === 'IN_PRODUCTION').length;
+    const underInspection = orders.filter((o) => o.status === 'UNDER_INSPECTION').length;
+    const readyToDeliver = orders.filter((o) => o.status === 'READY_TO_DELIVER').length;
+    const completed = orders.filter((o) => o.status === 'COMPLETED').length;
+    return {
+      total,
+      confirmed,
+      inProduction,
+      underInspection,
+      readyToDeliver,
+      completed,
+    };
+  }, [orders, pagination.totalItems]);
 
   const handleOpenDetail = async (order) => {
     try {
@@ -336,110 +377,214 @@ export const LeaderOrdersPage = () => {
   const rejectedCount = orders.filter((o) => o.status === 'IN_PRODUCTION' && o.rejectReason).length;
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6">
+      {/* ── 1. HEADER & HÀNH ĐỘNG CHÍNH ──────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-5">
+        <div>
+          <div className="flex items-center gap-2">
+            <Hammer className="h-6 w-6 text-amber-900" />
+            <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
+              Quản Lý Sản Xuất Đơn Hàng
+            </h1>
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
+              Tổ Trưởng Xưởng
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Tiếp nhận đơn hàng được Chủ xưởng giao, bám sát bản vẽ kỹ thuật đã chốt, gia công và gửi nghiệm thu.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={fetchOrders}
+            disabled={loading}
+            className={`inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 shadow-xs transition hover:bg-stone-50 active:scale-95 disabled:opacity-50 ${focusRing}`}
+            title="Tải lại danh sách"
+          >
+            <RotateCw className={`h-3.5 w-3.5 text-stone-500 ${loading ? 'animate-spin text-amber-700' : ''}`} />
+            <span>Làm mới</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── 2. THỐNG KÊ TỔNG QUAN (4 CARDS) ───────────────────── */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Tổng số đơn */}
+        <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs transition hover:border-stone-300">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-stone-500">Tổng đơn được giao</span>
+            <div className="rounded-lg bg-stone-100 p-1.5 text-stone-700">
+              <Layers className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-2 text-lg font-bold font-mono text-stone-900 sm:text-2xl">
+            {stats.total}
+            <span className="ml-1.5 text-xs font-sans font-normal text-stone-400">đơn</span>
+          </div>
+          <div className="mt-1 text-[11px] text-stone-500">
+            Toàn bộ đơn hàng tổ trưởng phụ trách
+          </div>
+        </div>
+
+        {/* Chờ tiếp nhận */}
+        <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 shadow-xs transition hover:border-amber-300">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-amber-800">Chờ tiếp nhận</span>
+            <div className="rounded-lg bg-amber-100 p-1.5 text-amber-800">
+              <Clock className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-2 text-lg font-bold font-mono text-amber-900 sm:text-2xl">
+            {stats.confirmed}
+            <span className="ml-1.5 text-xs font-sans font-normal text-amber-700/70">đơn</span>
+          </div>
+          <div className="mt-1 text-[11px] text-amber-700/80">
+            Chờ đưa vào dây chuyền sản xuất
+          </div>
+        </div>
+
+        {/* Đang gia công */}
+        <div className="rounded-xl border border-amber-300 bg-amber-50/50 p-4 shadow-xs transition hover:border-amber-400">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-amber-900">Đang gia công</span>
+            <div className="rounded-lg bg-amber-200/60 p-1.5 text-amber-900">
+              <Hammer className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-2 text-lg font-bold font-mono text-amber-950 sm:text-2xl">
+            {stats.inProduction}
+            <span className="ml-1.5 text-xs font-sans font-normal text-amber-800">trong xưởng</span>
+          </div>
+          <div className="mt-1 text-[11px] text-amber-800">
+            {rejectedCount > 0 ? `${rejectedCount} đơn cần khắc phục làm lại` : 'Đang chế tác tại xưởng mộc'}
+          </div>
+        </div>
+
+        {/* Hoàn thành / Nghiệm thu */}
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 shadow-xs transition hover:border-emerald-300">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-emerald-800">Thành phẩm hoàn tất</span>
+            <div className="rounded-lg bg-emerald-100 p-1.5 text-emerald-800">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-2 text-lg font-bold font-mono text-emerald-900 sm:text-2xl">
+            {stats.completed}
+            <span className="ml-1.5 text-xs font-sans font-normal text-emerald-700/70">thành phẩm</span>
+          </div>
+          <div className="mt-1 text-[11px] text-emerald-700/80">
+            Đã nghiệm thu / hoàn tất
+          </div>
+        </div>
+      </section>
+
       {/* ── Cảnh báo toàn trang nếu có đơn bị reject ── */}
       {rejectedCount > 0 && (
-        <div className="rounded-xl border border-red-300 bg-red-50 p-4 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 shrink-0" />
+        <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-4 flex items-start gap-3 shadow-xs">
+          <AlertTriangle className="h-5 w-5 text-rose-700 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-bold text-red-800">
+            <p className="text-sm font-bold text-rose-900">
               {rejectedCount} đơn hàng nghiệm thu CHƯA ĐẠT — cần khắc phục và gửi lại
             </p>
-            <p className="text-xs text-red-600 mt-0.5">
+            <p className="text-xs text-rose-700 mt-0.5">
               Chủ xưởng đã từ chối nghiệm thu. Vui lòng xem chi tiết lý do, khắc phục và gửi lại yêu cầu nghiệm thu.
             </p>
           </div>
         </div>
       )}
 
-      {/* ── Header ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
-            <Hammer className="h-6 w-6 text-amber-800" />
-            <h1 className="text-xl font-bold text-stone-900">Quản Lý Sản Xuất Đơn Hàng</h1>
-            <span className="rounded-full bg-blue-100 px-3 py-0.5 text-xs font-semibold text-blue-900">
-              Tổ Trưởng Xưởng
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-stone-500">
-            Tiếp nhận đơn hàng được Chủ xưởng giao, bám sát bản vẽ kỹ thuật đã chốt, gia công và gửi nghiệm thu.
-          </p>
-        </div>
-        <button
-          onClick={fetchOrders}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 shadow-sm transition"
-        >
-          <RotateCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Làm mới
-        </button>
+      {/* ── 3. TABS TRẠNG THÁI (PILL TABS CÓ COUNT) ───────────── */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-stone-200 pb-3">
+        {STATUS_TABS.map((tab) => {
+          const isActive = statusFilter === tab.key;
+          let count = stats.total;
+          if (tab.key === 'CONFIRMED') count = stats.confirmed;
+          if (tab.key === 'IN_PRODUCTION') count = stats.inProduction;
+          if (tab.key === 'UNDER_INSPECTION') count = stats.underInspection;
+          if (tab.key === 'READY_TO_DELIVER') count = stats.readyToDeliver;
+          if (tab.key === 'COMPLETED') count = stats.completed;
+
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => {
+                setStatusFilter(tab.key);
+                setPage(1);
+              }}
+              className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-medium transition active:scale-95 ${focusRing} ${isActive
+                  ? 'bg-stone-900 text-white font-semibold shadow-xs'
+                  : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50 hover:text-stone-900'
+                }`}
+            >
+              <span>{tab.label}</span>
+              <span
+                className={`rounded-full px-1.5 py-0.2 text-[10px] font-mono ${isActive
+                    ? 'bg-stone-800 text-stone-200'
+                    : 'bg-stone-100 text-stone-600'
+                  }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Khu vực Tìm kiếm & Bộ lọc ── */}
-      <div className="flex flex-col gap-3.5 rounded-xl border border-stone-200 bg-white p-4 shadow-sm text-xs">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="w-full sm:w-52">
-            <select
-              aria-label="Tiêu chí tìm kiếm"
-              value={searchBy}
-              onChange={(e) => { setSearchBy(e.target.value); setPage(1); }}
-              className="w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-3 pr-8 text-xs font-semibold text-stone-800 focus:border-amber-500 focus:bg-white focus:outline-none"
-            >
-              <option value="ALL">🔍 Tất cả tiêu chí</option>
-              <option value="CUSTOMER_NAME">👤 Tên khách hàng</option>
-              <option value="ORDER_CODE">🏷️ Mã đơn hàng</option>
-              <option value="PHONE">📞 Số điện thoại</option>
-            </select>
-          </div>
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder={
-                searchBy === 'ORDER_CODE' ? 'Nhập mã đơn hàng...' :
-                searchBy === 'CUSTOMER_NAME' ? 'Nhập họ tên khách hàng...' :
-                searchBy === 'PHONE' ? 'Nhập số điện thoại khách...' :
-                'Tìm theo mã đơn, tên khách, số điện thoại...'
-              }
-              className="w-full rounded-lg border border-stone-200 py-2 pl-9 pr-8 text-xs text-stone-900 placeholder-stone-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => { setSearch(''); setPage(1); }}
-                className="absolute right-2.5 top-2.5 rounded p-0.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+      {/* ── 4. THANH TÌM KIẾM & BỘ LỌC ────────────────────────── */}
+      <div className="rounded-xl border border-stone-200 bg-white p-3.5 shadow-xs">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center flex-1">
+            <div className="w-full sm:w-48">
+              <select
+                aria-label="Tiêu chí tìm kiếm"
+                value={searchBy}
+                onChange={(e) => { setSearchBy(e.target.value); setPage(1); }}
+                className={`w-full rounded-lg border border-stone-200 bg-stone-50 py-2 pl-3 pr-8 text-xs font-semibold text-stone-800 transition focus:border-stone-900 focus:bg-white focus:outline-none ${focusRing}`}
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+                <option value="ALL">Tất cả tiêu chí</option>
+                <option value="CUSTOMER_NAME">Tên khách hàng</option>
+                <option value="ORDER_CODE">Mã đơn hàng</option>
+                <option value="PHONE">Số điện thoại</option>
+              </select>
+            </div>
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                placeholder={
+                  searchBy === 'ORDER_CODE' ? 'Nhập mã đơn hàng (ví dụ: ORD-20261114-0001)...' :
+                    searchBy === 'CUSTOMER_NAME' ? 'Nhập họ tên khách hàng...' :
+                      searchBy === 'PHONE' ? 'Nhập số điện thoại khách...' :
+                        'Tìm theo mã đơn hàng, tên khách, số điện thoại...'
+                }
+                className={`w-full rounded-lg border border-stone-200 py-2 pl-9 pr-8 text-xs text-stone-900 placeholder-stone-400 transition focus:border-stone-900 focus:outline-none ${focusRing}`}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); setPage(1); }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-stone-100 pt-3">
-          <div className="flex items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-              className="rounded-lg border border-stone-200 bg-stone-50 py-1.5 px-3 text-xs font-semibold text-stone-700 focus:border-amber-500 focus:bg-white focus:outline-none"
+          {(search || statusFilter !== 'ALL' || searchBy !== 'ALL') && (
+            <button
+              type="button"
+              onClick={() => { setSearch(''); setSearchBy('ALL'); setStatusFilter('ALL'); setPage(1); }}
+              className="inline-flex items-center gap-1 text-xs font-medium text-stone-500 hover:text-rose-600 transition"
             >
-              <option value="ALL">📋 Tất cả trạng thái sản xuất</option>
-              <option value="CONFIRMED">⏳ Chờ tiếp nhận</option>
-              <option value="IN_PRODUCTION">🔨 Đang gia công</option>
-              <option value="UNDER_INSPECTION">🔍 Chờ Owner nghiệm thu</option>
-              <option value="READY_TO_DELIVER">✅ Nghiệm thu đạt (Chờ giao)</option>
-              <option value="COMPLETED">🎉 Hoàn tất đơn</option>
-            </select>
-            {(search || statusFilter !== 'ALL' || searchBy !== 'ALL') && (
-              <button
-                onClick={() => { setSearch(''); setSearchBy('ALL'); setStatusFilter('ALL'); setPage(1); }}
-                className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-100"
-              >
-                Xóa bộ lọc
-              </button>
-            )}
-          </div>
+              <X className="h-3.5 w-3.5" />
+              <span>Xóa bộ lọc</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -505,11 +650,11 @@ export const LeaderOrdersPage = () => {
                     <td className="px-4 py-3 text-center">
                       {o.status === 'IN_PRODUCTION' || o.status === 'UNDER_INSPECTION' ? (
                         o.isProductionCompleted ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
                             <CheckCircle2 className="h-3 w-3" /> Đã hoàn thành
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                             <Clock className="h-3 w-3" /> Đang làm
                           </span>
                         )
@@ -522,7 +667,7 @@ export const LeaderOrdersPage = () => {
                       <div className="flex items-center justify-center gap-1.5 flex-wrap">
                         <button
                           onClick={() => handleOpenDetail(o)}
-                          className="inline-flex items-center gap-1 rounded border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 shadow-sm hover:bg-stone-100 transition"
+                          className={`inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700 shadow-2xs transition hover:bg-stone-50 active:bg-stone-100 ${focusRing}`}
                         >
                           <Eye className="h-3 w-3 text-stone-500" />
                           Xem chi tiết
@@ -533,7 +678,7 @@ export const LeaderOrdersPage = () => {
                           <button
                             onClick={() => handleAcceptOrder(o.orderId)}
                             disabled={actionLoading}
-                            className="inline-flex items-center gap-1 rounded bg-amber-800 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-amber-900 transition"
+                            className={`inline-flex items-center gap-1 rounded-lg bg-amber-900 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition hover:bg-amber-950 active:bg-amber-950 disabled:opacity-50 ${focusRing}`}
                           >
                             <Hammer className="h-3 w-3" />
                             Tiếp nhận
@@ -545,14 +690,14 @@ export const LeaderOrdersPage = () => {
                           <>
                             <button
                               onClick={() => handleOpenProgressModal(o)}
-                              className="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 hover:bg-blue-100 transition"
+                              className={`inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-stone-700 shadow-2xs transition hover:bg-stone-50 active:bg-stone-100 ${focusRing}`}
                             >
-                              {o.isProductionCompleted ? <CheckSquare className="h-3 w-3" /> : <Square className="h-3 w-3" />}
+                              {o.isProductionCompleted ? <CheckSquare className="h-3 w-3 text-emerald-700" /> : <Square className="h-3 w-3 text-stone-400" />}
                               Tiến độ
                             </button>
                             <button
                               onClick={() => handleOpenInspectionModal(o)}
-                              className="inline-flex items-center gap-1 rounded bg-purple-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-purple-800 transition"
+                              className={`inline-flex items-center gap-1 rounded-lg bg-amber-900 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs transition hover:bg-amber-950 active:bg-amber-950 ${focusRing}`}
                             >
                               <Send className="h-3 w-3" />
                               {o.rejectReason ? 'Gửi lại' : 'Nghiệm thu'}
@@ -584,37 +729,50 @@ export const LeaderOrdersPage = () => {
 
       {/* ── MODAL CHI TIẾT ĐƠN HÀNG & THÔNG SỐ KỸ THUẬT ── */}
       {detailModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-stone-200 bg-stone-50 px-6 py-4">
-              <div className="flex items-center gap-2">
-                <Hammer className="h-5 w-5 text-amber-800" />
-                <h3 className="text-base font-bold text-stone-900">
-                  Bản vẽ kỹ thuật & Thông số gia công #{selectedOrder.orderCode}
-                </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl my-8">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-amber-100 p-2 text-amber-900">
+                  <Hammer className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900 sm:text-lg">
+                    Bản vẽ kỹ thuật & Thông số gia công #{selectedOrder.orderCode}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 mt-0.5">
+                    <span>Khách hàng: <strong className="text-stone-700">{selectedOrder.contactName}</strong></span>
+                    {selectedOrder.contractCode && <span>• Hợp đồng: <strong className="font-mono text-amber-900">{selectedOrder.contractCode}</strong></span>}
+                  </div>
+                </div>
               </div>
-              <button onClick={() => setDetailModalOpen(false)} className="rounded-lg p-1 text-stone-400 hover:bg-stone-200 transition">
+              <button
+                type="button"
+                onClick={() => setDetailModalOpen(false)}
+                className={`rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition ${focusRing}`}
+                aria-label="Đóng"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {loadingDetail ? (
               <div className="flex items-center justify-center py-16">
-                <RotateCw className="h-6 w-6 animate-spin text-amber-800" />
+                <RotateCw className="h-6 w-6 animate-spin text-amber-900" />
               </div>
             ) : (
               <div className="overflow-y-auto p-6 text-xs text-stone-800 space-y-4">
                 {/* Banner cảnh báo nghiệm thu thất bại */}
                 {selectedOrder.rejectReason && selectedOrder.status === 'IN_PRODUCTION' && (
-                  <div className="rounded-lg border border-red-300 bg-red-50 p-3 flex items-start gap-2">
-                    <AlertCircle className="h-5 w-5 shrink-0 text-red-700 mt-0.5" />
+                  <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-3.5 flex items-start gap-2.5 shadow-2xs">
+                    <AlertCircle className="h-5 w-5 shrink-0 text-rose-700 mt-0.5" />
                     <div>
-                      <p className="font-bold text-red-800">⚠️ Nghiệm thu KHÔNG ĐẠT — Cần khắc phục và gửi lại</p>
-                      <p className="mt-1 text-red-700">
+                      <p className="font-bold text-rose-900">⚠️ Nghiệm thu KHÔNG ĐẠT — Cần khắc phục và gửi lại</p>
+                      <p className="mt-1 text-rose-800">
                         <span className="font-semibold">Lý do từ Chủ xưởng:</span> {selectedOrder.rejectReason}
                       </p>
-                      <p className="mt-1 text-red-600">
+                      <p className="mt-1 text-rose-700">
                         Vui lòng khắc phục theo yêu cầu, sau đó nhấn "Gửi lại nghiệm thu" để nộp lại cho Chủ xưởng kiểm tra.
                       </p>
                     </div>
@@ -622,8 +780,8 @@ export const LeaderOrdersPage = () => {
                 )}
 
                 {/* Banner bản vẽ đã khóa */}
-                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-center gap-2 text-amber-900">
-                  <FileCheck className="h-5 w-5 shrink-0 text-amber-800" />
+                <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 flex items-center gap-2 text-amber-900 shadow-2xs">
+                  <FileCheck className="h-5 w-5 shrink-0 text-amber-900" />
                   <span>
                     <strong>Bản vẽ đã khóa:</strong> Tổ trưởng và thợ xưởng gia công chính xác theo thông số kích thước và yêu cầu kỹ thuật bên dưới, không tự ý thay đổi.
                   </span>
@@ -657,11 +815,11 @@ export const LeaderOrdersPage = () => {
                     <span className="text-stone-500">Tiến độ nội bộ:</span>
                     <p className="mt-0.5">
                       {selectedOrder.isProductionCompleted ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
                           <CheckCircle2 className="h-3 w-3" /> Đã hoàn thành
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                           <Clock className="h-3 w-3" /> Đang làm
                         </span>
                       )}
@@ -675,10 +833,10 @@ export const LeaderOrdersPage = () => {
 
                 {/* Yêu cầu thiết kế / mô tả nếu có */}
                 {selectedOrder.requestTitle && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3">
-                    <p className="font-semibold text-blue-900">📐 Yêu cầu thiết kế: {selectedOrder.requestTitle}</p>
+                  <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-3">
+                    <p className="font-semibold text-stone-900">📐 Yêu cầu thiết kế: {selectedOrder.requestTitle}</p>
                     {selectedOrder.requestDescription && (
-                      <p className="mt-1 text-blue-800">{selectedOrder.requestDescription}</p>
+                      <p className="mt-1 text-stone-700">{selectedOrder.requestDescription}</p>
                     )}
                   </div>
                 )}
@@ -686,11 +844,11 @@ export const LeaderOrdersPage = () => {
                 {/* Bảng sản phẩm kỹ thuật */}
                 <div>
                   <h4 className="font-bold text-stone-900 mb-2 flex items-center gap-1.5">
-                    <Layers className="h-4 w-4 text-amber-800" /> Chi tiết từng sản phẩm cần gia công
+                    <Layers className="h-4 w-4 text-amber-900" /> Chi tiết từng sản phẩm cần gia công
                   </h4>
-                  <div className="rounded-xl border border-stone-200 overflow-hidden">
+                  <div className="rounded-xl border border-stone-200 overflow-hidden shadow-2xs">
                     <table className="w-full text-left">
-                      <thead className="bg-stone-100 text-stone-700 font-semibold border-b border-stone-200">
+                      <thead className="bg-stone-50 text-stone-700 font-semibold border-b border-stone-200">
                         <tr>
                           <th className="px-3 py-2">Sản phẩm</th>
                           <th className="px-3 py-2">
@@ -729,7 +887,7 @@ export const LeaderOrdersPage = () => {
                                     <span className="ml-1 rounded bg-stone-100 px-1 py-0.5 text-[10px] text-stone-600">{it.categoryName}</span>
                                   )}
                                   {it.roomName && (
-                                    <span className="ml-1 rounded bg-blue-50 px-1 py-0.5 text-[10px] text-blue-700">{it.roomName}</span>
+                                    <span className="ml-1 rounded bg-stone-100 px-1 py-0.5 text-[10px] text-stone-700">{it.roomName}</span>
                                   )}
                                   {/* Ảnh thiết kế / bản vẽ */}
                                   {it.images && it.images.length > 0 && (
@@ -757,7 +915,7 @@ export const LeaderOrdersPage = () => {
                                     </div>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 font-mono text-stone-800 font-bold">
+                                <td className="px-3 py-2 font-mono text-stone-900 font-bold">
                                   {dim ? `${dim} cm` : <span className="text-stone-400 font-normal italic">Theo mẫu chuẩn</span>}
                                 </td>
                                 <td className="px-3 py-2">
@@ -816,11 +974,11 @@ export const LeaderOrdersPage = () => {
             )}
 
             {/* Footer Modal */}
-            <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50 px-6 py-4">
+            <div className="flex items-center justify-between border-t border-stone-200 bg-stone-50/80 px-6 py-4">
               <button
                 type="button"
                 onClick={() => setDetailModalOpen(false)}
-                className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100 transition"
+                className={`rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 shadow-2xs transition hover:bg-stone-50 active:bg-stone-100 ${focusRing}`}
               >
                 Đóng
               </button>
@@ -831,7 +989,7 @@ export const LeaderOrdersPage = () => {
                     type="button"
                     onClick={() => handleAcceptOrder(selectedOrder.orderId)}
                     disabled={actionLoading}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-800 px-5 py-2 font-bold text-white shadow-md hover:bg-amber-900 transition"
+                    className={`inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-5 py-2 font-bold text-white shadow-2xs transition hover:bg-amber-950 active:bg-amber-950 disabled:opacity-50 ${focusRing}`}
                   >
                     <Hammer className="h-4 w-4" />
                     Tiếp nhận sản xuất
@@ -843,14 +1001,14 @@ export const LeaderOrdersPage = () => {
                     <button
                       type="button"
                       onClick={() => { setDetailModalOpen(false); handleOpenProgressModal(selectedOrder); }}
-                      className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 font-semibold text-blue-800 hover:bg-blue-100 transition"
+                      className={`rounded-lg border border-stone-300 bg-white px-4 py-2 font-semibold text-stone-700 shadow-2xs transition hover:bg-stone-50 active:bg-stone-100 ${focusRing}`}
                     >
                       {selectedOrder.isProductionCompleted ? '✅ Cập nhật tiến độ' : '📋 Cập nhật tiến độ'}
                     </button>
                     <button
                       type="button"
                       onClick={() => { setDetailModalOpen(false); handleOpenInspectionModal(selectedOrder); }}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-purple-700 px-5 py-2 font-bold text-white shadow-md hover:bg-purple-800 transition"
+                      className={`inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-5 py-2 font-bold text-white shadow-2xs transition hover:bg-amber-950 active:bg-amber-950 ${focusRing}`}
                     >
                       <Send className="h-4 w-4" />
                       {selectedOrder.rejectReason ? 'Gửi lại nghiệm thu' : 'Gửi Chủ xưởng nghiệm thu'}
@@ -865,17 +1023,27 @@ export const LeaderOrdersPage = () => {
 
       {/* ── MODAL CẬP NHẬT TIẾN ĐỘ ── */}
       {progressModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-stone-100 mb-4">
-              <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-                <RefreshCw className="h-5 w-5 text-blue-700" />
-                Cập nhật tiến độ gia công #{selectedOrder.orderCode}
-              </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-xl bg-amber-100 p-2 text-amber-900">
+                  <RefreshCw className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">
+                    Cập nhật tiến độ gia công #{selectedOrder.orderCode}
+                  </h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Đánh dấu hoàn tất chế tác gỗ hoặc cập nhật ghi chú xưởng
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setProgressModalOpen(false)}
-                className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                className={`rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition ${focusRing}`}
+                aria-label="Đóng"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -891,25 +1059,23 @@ export const LeaderOrdersPage = () => {
                   <button
                     type="button"
                     onClick={() => setProgressIsCompleted(false)}
-                    className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 font-semibold transition ${
-                      !progressIsCompleted
-                        ? 'border-orange-400 bg-orange-50 text-orange-800'
-                        : 'border-stone-200 bg-white text-stone-500 hover:bg-stone-50'
-                    }`}
+                    className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 font-semibold transition ${!progressIsCompleted
+                        ? 'border-amber-800 bg-amber-50 text-amber-900 shadow-2xs'
+                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                      } ${focusRing}`}
                   >
-                    <Square className={`h-4 w-4 ${!progressIsCompleted ? 'text-orange-600' : 'text-stone-400'}`} />
+                    <Square className={`h-4 w-4 ${!progressIsCompleted ? 'text-amber-800' : 'text-stone-400'}`} />
                     Chưa hoàn thành
                   </button>
                   <button
                     type="button"
                     onClick={() => setProgressIsCompleted(true)}
-                    className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 font-semibold transition ${
-                      progressIsCompleted
-                        ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
-                        : 'border-stone-200 bg-white text-stone-500 hover:bg-stone-50'
-                    }`}
+                    className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 font-semibold transition ${progressIsCompleted
+                        ? 'border-emerald-700 bg-emerald-50 text-emerald-900 shadow-2xs'
+                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                      } ${focusRing}`}
                   >
-                    <CheckSquare className={`h-4 w-4 ${progressIsCompleted ? 'text-emerald-600' : 'text-stone-400'}`} />
+                    <CheckSquare className={`h-4 w-4 ${progressIsCompleted ? 'text-emerald-700' : 'text-stone-400'}`} />
                     Hoàn thành
                   </button>
                 </div>
@@ -929,7 +1095,7 @@ export const LeaderOrdersPage = () => {
                       ? 'VD: Đã hoàn thiện sơn PU 3 lớp, lắp phụ kiện đầy đủ.'
                       : 'VD: Đang chà nhám, dự kiến xong sơn lót ngày mai.'
                   }
-                  className="w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={`w-full rounded-lg border border-stone-200 p-2.5 text-xs text-stone-900 placeholder-stone-400 transition focus:border-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-800 ${focusRing}`}
                 />
               </div>
 
@@ -937,18 +1103,17 @@ export const LeaderOrdersPage = () => {
                 <button
                   type="button"
                   onClick={() => setProgressModalOpen(false)}
-                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
+                  className={`rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 shadow-2xs transition hover:bg-stone-50 active:bg-stone-100 ${focusRing}`}
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className={`rounded-lg px-5 py-2 font-bold text-white disabled:opacity-50 transition ${
-                    progressIsCompleted
-                      ? 'bg-emerald-600 hover:bg-emerald-700'
-                      : 'bg-blue-700 hover:bg-blue-800'
-                  }`}
+                  className={`rounded-lg px-5 py-2 font-bold text-white shadow-2xs transition disabled:opacity-50 ${progressIsCompleted
+                      ? 'bg-emerald-800 hover:bg-emerald-900 active:bg-emerald-900'
+                      : 'bg-amber-900 hover:bg-amber-950 active:bg-amber-950'
+                    } ${focusRing}`}
                 >
                   {actionLoading ? 'Đang lưu...' : progressIsCompleted ? '✅ Xác nhận hoàn thành' : '📋 Lưu tiến độ'}
                 </button>
@@ -960,17 +1125,27 @@ export const LeaderOrdersPage = () => {
 
       {/* ── MODAL GỬI NGHIỆM THU KÈM HÌNH ẢNH THÀNH PHẨM LÊN OWNER ── */}
       {inspectionModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl my-8 border border-stone-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl my-8">
             <div className="flex items-center justify-between pb-3 border-b border-stone-100 mb-3">
-              <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-                <Send className="h-5 w-5 text-purple-700" />
-                {selectedOrder.rejectReason ? 'Gửi lại nghiệm thu' : 'Nộp nghiệm thu sản phẩm'} #{selectedOrder.orderCode}
-              </h3>
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-xl bg-amber-100 p-2 text-amber-900">
+                  <Send className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">
+                    {selectedOrder.rejectReason ? 'Gửi lại nghiệm thu' : 'Nộp nghiệm thu sản phẩm'} #{selectedOrder.orderCode}
+                  </h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Đính kèm hình ảnh thành phẩm thực tế để Chủ xưởng nghiệm thu chất lượng
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setInspectionModalOpen(false)}
-                className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                className={`rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition ${focusRing}`}
+                aria-label="Đóng"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -978,12 +1153,12 @@ export const LeaderOrdersPage = () => {
 
             {/* Banner lý do reject nếu có */}
             {selectedOrder.rejectReason && (
-              <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3 flex items-start gap-2 text-xs">
-                <AlertCircle className="h-4 w-4 shrink-0 text-red-700 mt-0.5" />
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/90 p-3.5 flex items-start gap-2.5 text-xs shadow-2xs">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-700 mt-0.5" />
                 <div>
-                  <p className="font-bold text-red-800">Lý do nghiệm thu KHÔNG ĐẠT lần trước:</p>
-                  <p className="text-red-700 mt-0.5">{selectedOrder.rejectReason}</p>
-                  <p className="text-red-600 mt-1 italic">Vui lòng khắc phục và ghi rõ những cải thiện đã thực hiện trong ghi chú bên dưới.</p>
+                  <p className="font-bold text-rose-900">Lý do nghiệm thu KHÔNG ĐẠT lần trước:</p>
+                  <p className="text-rose-800 mt-0.5">{selectedOrder.rejectReason}</p>
+                  <p className="text-rose-700 mt-1 italic">Vui lòng khắc phục và ghi rõ những cải thiện đã thực hiện trong ghi chú bên dưới.</p>
                 </div>
               </div>
             )}
@@ -1008,7 +1183,7 @@ export const LeaderOrdersPage = () => {
                       ? 'VD: Đã sửa lại mối ghép theo yêu cầu, kiểm tra lại toàn bộ phụ kiện.'
                       : 'VD: Đã hoàn thiện sơn PU 3 lớp, các mối ghép khít, phụ kiện Hafele lắp chuẩn, tải trọng đạt yêu cầu.'
                   }
-                  className="w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-purple-700 focus:outline-none"
+                  className={`w-full rounded-lg border border-stone-200 p-2.5 text-xs text-stone-900 placeholder-stone-400 transition focus:border-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-800 ${focusRing}`}
                 />
               </div>
 
@@ -1018,8 +1193,8 @@ export const LeaderOrdersPage = () => {
                   📸 Tải ảnh thành phẩm thực tế để Chủ xưởng thẩm định:
                 </label>
                 <div className="flex items-center gap-2 mb-2">
-                  <label className="inline-flex items-center gap-1.5 cursor-pointer rounded-lg border border-dashed border-purple-400 bg-purple-50 px-4 py-2 font-semibold text-purple-800 hover:bg-purple-100 transition shadow-2xs">
-                    <Package className="h-4 w-4" />
+                  <label className={`inline-flex items-center gap-1.5 cursor-pointer rounded-lg border border-dashed border-stone-300 bg-stone-50 px-4 py-2 font-semibold text-stone-800 transition hover:bg-stone-100 hover:border-amber-800 shadow-2xs ${focusRing}`}>
+                    <Package className="h-4 w-4 text-amber-900" />
                     <span>Chọn ảnh từ máy tính (Có thể chọn nhiều)</span>
                     <input
                       type="file"
@@ -1030,7 +1205,7 @@ export const LeaderOrdersPage = () => {
                     />
                   </label>
                   {uploadingPhotos && (
-                    <span className="flex items-center gap-1 text-purple-700 text-xs">
+                    <span className="flex items-center gap-1 text-amber-900 text-xs">
                       <RotateCw className="h-3.5 w-3.5 animate-spin" /> Đang tải...
                     </span>
                   )}
@@ -1043,12 +1218,12 @@ export const LeaderOrdersPage = () => {
                     value={newPhotoUrl}
                     onChange={(e) => setNewPhotoUrl(e.target.value)}
                     placeholder="Hoặc dán URL ảnh trực tiếp (https://...)"
-                    className="flex-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs focus:border-purple-700 focus:outline-none"
+                    className={`flex-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs text-stone-900 placeholder-stone-400 transition focus:border-amber-800 focus:outline-none focus:ring-1 focus:ring-amber-800 ${focusRing}`}
                   />
                   <button
                     type="button"
                     onClick={handleAddPhotoUrl}
-                    className="rounded-lg bg-stone-100 px-3 py-1.5 font-semibold text-stone-700 hover:bg-stone-200"
+                    className={`rounded-lg border border-stone-200 bg-stone-100 px-3 py-1.5 font-semibold text-stone-700 transition hover:bg-stone-200 active:bg-stone-300 ${focusRing}`}
                   >
                     Thêm link
                   </button>
@@ -1056,9 +1231,9 @@ export const LeaderOrdersPage = () => {
 
                 {/* Danh sách ảnh đã đính kèm */}
                 {inspectionImages.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2 p-2 rounded-lg bg-stone-50 border border-stone-200 max-h-40 overflow-y-auto">
+                  <div className="grid grid-cols-3 gap-2 p-2 rounded-xl bg-stone-50 border border-stone-200 max-h-40 overflow-y-auto">
                     {inspectionImages.map((img, idx) => (
-                      <div key={idx} className="relative group rounded-md overflow-hidden border border-stone-200 aspect-video bg-white">
+                      <div key={idx} className="relative group rounded-lg overflow-hidden border border-stone-200 aspect-video bg-white shadow-2xs">
                         <img
                           src={img}
                           alt={`Thành phẩm ${idx + 1}`}
@@ -1067,7 +1242,7 @@ export const LeaderOrdersPage = () => {
                         <button
                           type="button"
                           onClick={() => handleRemovePhoto(idx)}
-                          className="absolute top-1 right-1 rounded-full bg-rose-600 p-1 text-white shadow-xs opacity-80 hover:opacity-100"
+                          className="absolute top-1 right-1 rounded-full bg-rose-700 p-1 text-white shadow-xs opacity-85 hover:opacity-100 transition"
                           title="Xóa ảnh này"
                         >
                           <X className="h-3 w-3" />
@@ -1076,7 +1251,7 @@ export const LeaderOrdersPage = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-2.5 text-center text-xs text-stone-400">
+                  <div className="rounded-xl border border-stone-200 bg-stone-50 p-2.5 text-center text-xs text-stone-400">
                     Chưa có ảnh nào được đính kèm. Khuyến khích chụp 1-3 góc để Chủ xưởng thẩm định nhanh chóng.
                   </div>
                 )}
@@ -1086,20 +1261,20 @@ export const LeaderOrdersPage = () => {
                 <button
                   type="button"
                   onClick={() => setInspectionModalOpen(false)}
-                  className="rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 hover:bg-stone-100"
+                  className={`rounded-lg border border-stone-200 bg-white px-4 py-2 font-semibold text-stone-700 shadow-2xs transition hover:bg-stone-50 active:bg-stone-100 ${focusRing}`}
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading || uploadingPhotos}
-                  className="rounded-lg bg-purple-700 px-5 py-2 font-bold text-white hover:bg-purple-800 disabled:opacity-50 transition shadow-sm"
+                  className={`rounded-lg bg-amber-900 px-5 py-2 font-bold text-white shadow-2xs transition hover:bg-amber-950 active:bg-amber-950 disabled:opacity-50 ${focusRing}`}
                 >
                   {actionLoading
                     ? 'Đang gửi...'
                     : selectedOrder.rejectReason
-                    ? 'Xác nhận gửi lại nghiệm thu'
-                    : 'Xác nhận nộp nghiệm thu'}
+                      ? 'Xác nhận gửi lại nghiệm thu'
+                      : 'Xác nhận nộp nghiệm thu'}
                 </button>
               </div>
             </form>

@@ -67,7 +67,7 @@ const ProductionOrder = sequelize.define(
     status: {
       type: DataTypes.STRING(20),
       allowNull: false,
-      defaultValue: 'DRAFT',
+      defaultValue: 'ASSIGNED',
     },
     planned_start: {
       type: DataTypes.DATEONLY,
@@ -260,7 +260,11 @@ async function findProductionOrderByCode(code) {
 async function getProductionOrdersForExport(statusFilter = null) {
   const where = {};
   if (statusFilter) {
-    where.status = statusFilter;
+    if (statusFilter === 'DRAFT' || statusFilter === 'ASSIGNED') {
+      where.status = { [Op.in]: ['DRAFT', 'ASSIGNED'] };
+    } else {
+      where.status = statusFilter;
+    }
   } else {
     // Mặc định lấy các lệnh đang hoạt động hoặc chưa hủy
     where.status = { [Op.ne]: 'CANCELLED' };
@@ -289,7 +293,11 @@ async function getAllProductionOrders({ page = 1, limit = 10, status, search } =
   const where = {};
 
   if (status && status !== 'ALL') {
-    where.status = status;
+    if (status === 'DRAFT' || status === 'ASSIGNED') {
+      where.status = { [Op.in]: ['DRAFT', 'ASSIGNED'] };
+    } else {
+      where.status = status;
+    }
   }
 
   if (search && search.trim()) {
@@ -425,7 +433,8 @@ async function generateNextProductionOrderCode() {
 /**
  * Tạo mới lệnh gia công từ đơn hàng khách hàng đã CONFIRMED và là loại CUSTOM
  */
-async function createProductionOrder({ orderId, plannedStart, plannedEnd, createBy }) {
+async function createProductionOrder({ orderId, plannedStart, plannedEnd, assignedTo, assigned_to, createBy }) {
+  const targetAssignedTo = assignedTo || assigned_to || null;
   return sequelize.transaction(async (t) => {
     const CustomerOrder = getCustomerOrder();
 
@@ -434,11 +443,8 @@ async function createProductionOrder({ orderId, plannedStart, plannedEnd, create
     if (!order) {
       throw new Error('Đơn hàng không tồn tại.');
     }
-    if (order.status !== 'IN_PRODUCTION') {
-      throw new Error(`Đơn hàng phải ở trạng thái Đang xử lý (IN_PRODUCTION) để tạo lệnh gia công (trạng thái hiện tại: ${order.status}).`);
-    }
-    if (order.order_type !== 'CUSTOM') {
-      throw new Error(`Chỉ đơn hàng loại CUSTOM mới có thể tạo lệnh gia công (loại hiện tại: ${order.order_type}).`);
+    if (order.status !== 'IN_PRODUCTION' && order.status !== 'CONFIRMED') {
+      throw new Error(`Đơn hàng phải ở trạng thái Đã xác nhận (CONFIRMED) hoặc Đang xử lý (IN_PRODUCTION) để tạo lệnh gia công (trạng thái hiện tại: ${order.status}).`);
     }
 
     // Kiểm tra đã có lệnh gia công đang hoạt động chưa
@@ -458,11 +464,12 @@ async function createProductionOrder({ orderId, plannedStart, plannedEnd, create
     const po = await ProductionOrder.create(
       {
         production_code: code,
-        production_type: 'CUSTOM',
+        production_type: order.order_type || 'CUSTOM',
         order_id: orderId,
-        status: 'DRAFT',
+        status: 'ASSIGNED',
         planned_start: plannedStart || null,
         planned_end: plannedEnd || null,
+        assigned_to: targetAssignedTo || null,
         createby: createBy || 'system',
       },
       { transaction: t }
@@ -493,13 +500,15 @@ async function createProductionOrder({ orderId, plannedStart, plannedEnd, create
       console.warn('Không thể sao chép item sang production_order_item:', errItem.message);
     }
 
-    // Cập nhật trạng thái đơn hàng sang IN_PRODUCTION nếu chưa phải
+    // Cập nhật trạng thái đơn hàng sang IN_PRODUCTION và đồng bộ người phụ trách nếu chưa có
+    const orderUpdatePayload = { modifieby: createBy || 'system' };
     if (order.status !== 'IN_PRODUCTION') {
-      await CustomerOrder.update(
-        { status: 'IN_PRODUCTION', modifieby: createBy || 'system' },
-        { where: { order_id: orderId }, transaction: t }
-      );
+      orderUpdatePayload.status = 'IN_PRODUCTION';
     }
+    if (targetAssignedTo && !order.assigned_to) {
+      orderUpdatePayload.assigned_to = targetAssignedTo;
+    }
+    await CustomerOrder.update(orderUpdatePayload, { where: { order_id: orderId }, transaction: t });
 
     return po;
   });
@@ -521,11 +530,27 @@ async function assignLeaderToOrder(productionId, assignedTo, modifieBy) {
   }
 
   await po.update({ assigned_to: assignedTo, modifieby: modifieBy || 'system' });
+
+  // Tự động đồng bộ phân công sang bảng customer_order nếu có liên kết đơn hàng
+  if (po.order_id) {
+    try {
+      const CustomerOrder = getCustomerOrder();
+      if (isModel(CustomerOrder)) {
+        await CustomerOrder.update(
+          { assigned_to: assignedTo, modifieby: modifieBy || 'system' },
+          { where: { order_id: po.order_id } }
+        );
+      }
+    } catch (ordErr) {
+      console.warn('[assignLeaderToOrder] Không thể đồng bộ sang customer_order:', ordErr.message);
+    }
+  }
+
   return findProductionOrderById(productionId);
 }
 
 /**
- * Hủy lệnh gia công (DRAFT hoặc IN_PROGRESS), hoàn trả đơn hàng về CONFIRMED
+ * Hủy lệnh gia công (ASSIGNED, DRAFT hoặc IN_PROGRESS), hoàn trả đơn hàng về CONFIRMED
  */
 async function cancelProductionOrder(productionId, modifieBy) {
   return sequelize.transaction(async (t) => {
@@ -575,8 +600,7 @@ async function getEligibleCustomerOrders() {
   const usedOrderIds = existingPOs.map((po) => po.order_id).filter(Boolean);
 
   const where = {
-    order_type: 'CUSTOM',
-    status: 'IN_PRODUCTION',
+    status: { [Op.in]: ['CONFIRMED', 'IN_PRODUCTION'] },
   };
 
   if (usedOrderIds.length > 0) {

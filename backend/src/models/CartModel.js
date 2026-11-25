@@ -16,6 +16,14 @@ const Cart = sequelize.define('Cart', {
   indexes: [{ name: 'uk_cart_customer', unique: true, fields: ['customer_account_id'] }],
 });
 
+// Tồn khả dụng = tồn kho - số lượng đang được giữ chỗ
+function getAvailableQuantity(product) {
+  return Math.max(
+    0,
+    Number(product.stock_quantity) - Number(product.hold_quantity || 0)
+  );
+}
+
 async function findOrCreateCart(customerAccountId, actor) {
   const [cart] = await Cart.findOrCreate({
     where: { customer_account_id: customerAccountId },
@@ -34,10 +42,14 @@ async function getCartItems(cartId) {
   });
 
   return Promise.all(
-    items.map(async (item) => ({
-      cartItem: item,
-      product: await findProductById(item.product_id),
-    }))
+    items.map(async (item) => {
+      const product = await findProductById(item.product_id);
+      return {
+        cartItem: item,
+        product,
+        availableQuantity: product ? getAvailableQuantity(product) : 0,
+      };
+    })
   );
 }
 
@@ -52,14 +64,14 @@ async function findAvailableProduct(productId) {
 }
 
 function assertAvailableQuantity(product, quantity) {
-  const stock = Number(product.stock_quantity);
+  const available = getAvailableQuantity(product);
   if (quantity > 99) {
     const error = new Error('Số lượng mỗi sản phẩm không được vượt quá 99.');
     error.statusCode = 400;
     throw error;
   }
-  if (quantity > stock) {
-    const error = new Error(`Sản phẩm chỉ còn ${stock} trong kho.`);
+  if (quantity > available) {
+    const error = new Error(`Sản phẩm chỉ còn ${available} trong kho.`);
     error.statusCode = 400;
     throw error;
   }
@@ -116,6 +128,7 @@ module.exports = {
   Cart,
   findOrCreateCart,
   getCartItems,
+  getAvailableQuantity,
   addProductToCart,
   updateCartItemQuantity,
   removeCartItem,

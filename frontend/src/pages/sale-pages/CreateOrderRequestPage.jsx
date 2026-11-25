@@ -1,16 +1,11 @@
 // =========================================================
 // CreateOrderRequestPage.jsx
-// Màn hình TẠO ĐƠN THEO YÊU CẦU (Order Request)
-// Chuẩn hóa UI/UX 100% theo trang mẫu ManageProductsPage.jsx của Owner
-//
-// Đặc điểm:
-// 1. Giao diện đơn giản, gọn gàng, tone màu stone-900 / stone-200 đồng nhất với ManageProductsPage
-// 2. Chỉ giữ duy nhất 1 tên đơn hàng (bỏ các ghi chú/mô tả trùng lặp, bỏ ô tìm kiếm khách hàng nhanh)
-// 3. Mỗi sản phẩm có danh sách ảnh riêng biệt: thêm/xóa/xem độc lập, tự động ánh xạ khi lưu/sửa
+// Màn hình TẠO YÊU CẦU ĐẶT ĐÓNG NỘI THẤT THEO YÊU CẦU (Role Sale)
+// Tiếp nhận kích thước thực tế, ảnh phác thảo, loại gỗ, màu sơn và gửi Chủ xưởng thẩm định
 // =========================================================
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   FileText,
   User,
@@ -23,7 +18,6 @@ import {
   Trash2,
   Image as ImageIcon,
   CheckCircle2,
-  AlertTriangle,
   RotateCw,
   Layers,
   Upload,
@@ -31,32 +25,67 @@ import {
   Send,
   Maximize2,
   Ruler,
+  DollarSign,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   getProductMetadata,
   createSalesOrderRequest,
-  updateSalesOrderRequest,
-  getRequestById,
   uploadRequestImages,
   createRequestMaterial,
   createRequestColor,
 } from '../../services/saleOrderService';
 import { CreatableCombobox } from '../../components/common/CreatableCombobox';
+import { formatVND, formatDateVN } from '../../utils/formatters';
 
-const formatVND = (amount) => {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(amount || 0);
+// Tính ngày hoàn thiện tối thiểu (cách hôm nay ít nhất 10 ngày)
+const getMinExpectedDate = (days = 10) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d;
 };
+
+const formatDateInputStr = (dateObj) => {
+  const yyyy = dateObj.getFullYear();
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+// Khởi tạo 1 sản phẩm rỗng
+const createEmptyItem = () => ({
+  id: Date.now() + Math.random(),
+  itemName: '',
+  categoryId: '',
+  roomId: '',
+  materialId: '',
+  colorId: '',
+  lengthCm: '',
+  widthCm: '',
+  heightCm: '',
+  quantity: 1,
+  unitPrice: '',
+  technicalNotes: '',
+  images: [], // Danh sách ảnh riêng của món này: [{ id, imageUrl }]
+  uploading: false,
+});
+
+const createEmptyCustomerInfo = () => ({
+  customerAccountId: null,
+  title: '',
+  contactName: '',
+  contactPhone: '',
+  contactEmail: '',
+  deliveryAddress: '',
+  expectedDate: '',
+  orderType: 'CUSTOM',
+});
 
 export const CreateOrderRequestPage = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const editId = searchParams.get('editId');
   const [refreshing, setRefreshing] = useState(false);
+  const minExpectedDate = useMemo(() => getMinExpectedDate(10), []);
+  const minExpectedDateStr = useMemo(() => formatDateInputStr(minExpectedDate), [minExpectedDate]);
 
   // ── 1. Metadata từ API hệ thống (Danh mục, phòng, vật liệu, màu sắc) ──
   const [metadata, setMetadata] = useState({
@@ -67,47 +96,18 @@ export const CreateOrderRequestPage = () => {
   });
   const [loadingMetadata, setLoadingMetadata] = useState(true);
 
-  // ── 2. Thông tin khách hàng & Tên đơn hàng (Duy nhất 1 tên đơn) ──
-  const [customerInfo, setCustomerInfo] = useState({
-    customerAccountId: null,
-    title: '', // Tên đơn hàng duy nhất
-    contactName: '',
-    contactPhone: '',
-    contactEmail: '',
-    deliveryAddress: '',
-    expectedDate: '',
-    orderType: 'CUSTOM',
-  });
+  // ── 2. Thông tin khách hàng & Tên đơn hàng ──
+  const [customerInfo, setCustomerInfo] = useState(createEmptyCustomerInfo);
 
   // ── 3. Danh sách sản phẩm kỹ thuật - Mỗi món có mảng ảnh riêng ──
-  const [items, setItems] = useState([
-    {
-      id: Date.now(),
-      requestItemId: null,
-      itemName: '',
-      categoryId: '',
-      roomId: '',
-      materialId: '',
-      colorId: '',
-      lengthCm: '',
-      widthCm: '',
-      heightCm: '',
-      quantity: 1,
-      unitPrice: '',
-      technicalNotes: '',
-      images: [], // Danh sách ảnh riêng của món này: [{ id, imageUrl }]
-      uploading: false,
-    },
-  ]);
+  const [items, setItems] = useState(() => [createEmptyItem()]);
 
   // Modal xem ảnh phóng to (Lightbox)
-  const [previewModalImg, setPreviewModalImg] = useState(null);
+  const [previewImageModal, setPreviewImageModal] = useState(null);
 
   // Modal tóm tắt thông tin trước khi gửi
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [loadingEditData, setLoadingEditData] = useState(false);
-  const [editRejectReason, setEditRejectReason] = useState(null);
 
   // ── Tải metadata chuẩn từ API ──
   const fetchMetadata = useCallback(async () => {
@@ -156,132 +156,20 @@ export const CreateOrderRequestPage = () => {
     fetchMetadata();
   }, [fetchMetadata]);
 
-  // ── Tải dữ liệu cũ nếu là chế độ chỉnh sửa (editId) ──
-  const loadEditData = useCallback(async () => {
-    if (!editId) return;
-    try {
-      setLoadingEditData(true);
-      const res = await getRequestById(editId);
-      const req = res.data;
-      if (!req) return;
-
-      setEditRejectReason(req.rejectReason || null);
-
-      const contactName = req.contactName || req.customerName || '';
-      setCustomerInfo({
-        customerAccountId: req.customerAccountId || null,
-        title: req.title || '',
-        contactName: contactName,
-        contactPhone: req.contactPhone || req.customerPhone || '',
-        contactEmail: req.contactEmail || req.customerEmail || '',
-        deliveryAddress: req.deliveryAddress || '',
-        expectedDate: req.expectedDate ? req.expectedDate.split('T')[0] : '',
-        orderType: req.orderType || 'CUSTOM',
-      });
-
-      const allImages = req.images || [];
-
-      if (req.items && req.items.length > 0) {
-        setItems(
-          req.items.map((it, idx) => {
-            let itemImgs = [];
-            if (it.images && Array.isArray(it.images) && it.images.length > 0) {
-              itemImgs = it.images;
-            } else if (it.requestItemId) {
-              itemImgs = allImages.filter(
-                (img) => img.requestItemId && Number(img.requestItemId) === Number(it.requestItemId)
-              );
-            }
-
-            // Gán ảnh cũ chưa có ID vào món đầu tiên để đảm bảo không mất ảnh
-            if (idx === 0) {
-              const unassignedImgs = allImages.filter((img) => !img.requestItemId);
-              if (unassignedImgs.length > 0) {
-                itemImgs = [...itemImgs, ...unassignedImgs];
-              }
-            }
-
-            return {
-              id: it.requestItemId || it.request_item_id || Date.now() + idx,
-              requestItemId: it.requestItemId || it.request_item_id || null,
-              itemName: it.itemName || it.item_name || '',
-              categoryId: it.categoryId ?? it.category_id ?? '',
-              roomId: it.roomId ?? it.room_id ?? '',
-              materialId: it.materialId ?? it.material_id ?? '',
-              colorId: it.colorId ?? it.color_id ?? '',
-              lengthCm: it.lengthCm ?? it.length_cm ?? '',
-              widthCm: it.widthCm ?? it.width_cm ?? '',
-              heightCm: it.heightCm ?? it.height_cm ?? '',
-              quantity: it.quantity || 1,
-              unitPrice: it.unitPrice ?? it.unit_price ?? '',
-              technicalNotes: it.technicalNotes || it.description || '',
-              images: itemImgs.map((img, imgIdx) => ({
-                id: img.imageId || img.requestImageId || Date.now() + imgIdx + Math.random(),
-                imageUrl: typeof img === 'string' ? img : img.imageUrl,
-                requestItemId: it.requestItemId || it.request_item_id || null,
-              })),
-              uploading: false,
-            };
-          })
-        );
-      }
-    } catch (err) {
-      console.error('Lỗi tải yêu cầu cũ:', err);
-      toast.error('Không thể tải thông tin yêu cầu cần chỉnh sửa.');
-    } finally {
-      setLoadingEditData(false);
-    }
-  }, [editId]);
-
-  useEffect(() => {
-    loadEditData();
-  }, [loadEditData]);
-
-  // ── Làm mới trực tiếp không cần alert xác nhận ──
+  // ── Làm mới biểu mẫu ──
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
       await fetchMetadata();
-      if (editId) {
-        await loadEditData();
-      } else {
-        setCustomerInfo({
-          customerAccountId: null,
-          title: '',
-          contactName: '',
-          contactPhone: '',
-          contactEmail: '',
-          deliveryAddress: '',
-          expectedDate: '',
-          orderType: 'CUSTOM',
-        });
-        setItems([
-          {
-            id: Date.now(),
-            requestItemId: null,
-            itemName: '',
-            categoryId: '',
-            roomId: '',
-            materialId: '',
-            colorId: '',
-            lengthCm: '',
-            widthCm: '',
-            heightCm: '',
-            quantity: 1,
-            unitPrice: '',
-            technicalNotes: '',
-            images: [],
-            uploading: false,
-          },
-        ]);
-      }
+      setCustomerInfo(createEmptyCustomerInfo());
+      setItems([createEmptyItem()]);
       toast.success('Đã làm mới biểu mẫu.');
     } finally {
       setRefreshing(false);
     }
   };
 
-  // ── Xử lý thêm mới Chất liệu (Loại gỗ) trực tiếp từ Combobox ──
+  // ── Thêm mới Chất liệu (Loại gỗ) từ Combobox ──
   const handleCreateMaterial = async (name, extra = {}) => {
     try {
       const res = await createRequestMaterial({ material_name: name, ...extra });
@@ -307,7 +195,7 @@ export const CreateOrderRequestPage = () => {
     }
   };
 
-  // ── Xử lý thêm mới Màu sắc (Màu sơn) trực tiếp từ Combobox ──
+  // ── Thêm mới Màu sắc (Màu sơn) từ Combobox ──
   const handleCreateColor = async (name, extra = {}) => {
     try {
       const res = await createRequestColor({ color_name: name, ...extra });
@@ -334,28 +222,9 @@ export const CreateOrderRequestPage = () => {
     }
   };
 
-  // ── Xử lý thêm / xóa món sản phẩm ──
+  // ── Thêm / xóa sản phẩm ──
   const handleAddItem = () => {
-    setItems((prev) => [
-      ...prev,
-      {
-        id: Date.now() + Math.random(),
-        requestItemId: null,
-        itemName: '',
-        categoryId: '',
-        roomId: '',
-        materialId: '',
-        colorId: '',
-        lengthCm: '',
-        widthCm: '',
-        heightCm: '',
-        quantity: 1,
-        unitPrice: '',
-        technicalNotes: '',
-        images: [],
-        uploading: false,
-      },
-    ]);
+    setItems((prev) => [...prev, createEmptyItem()]);
   };
 
   const handleRemoveItem = (itemId) => {
@@ -372,7 +241,7 @@ export const CreateOrderRequestPage = () => {
     );
   };
 
-  // ── Xử lý upload ảnh riêng cho từng sản phẩm ──
+  // ── Upload ảnh riêng cho từng sản phẩm ──
   const handleItemFileUpload = async (itemId, fileList) => {
     const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'));
     if (files.length === 0) {
@@ -446,6 +315,25 @@ export const CreateOrderRequestPage = () => {
       toast.error('Vui lòng nhập số điện thoại khách hàng.');
       return;
     }
+
+    if (customerInfo.expectedDate) {
+      const selDate = new Date(customerInfo.expectedDate);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const targetDate = new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate());
+      const diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        toast.error('Ngày mong muốn hoàn thiện không thể ở trong quá khứ.');
+        return;
+      }
+      if (diffDays < 10) {
+        toast.error(
+          `Ngày mong muốn hoàn thiện phải cách thời điểm tạo đơn ít nhất 10 ngày (sớm nhất từ ngày ${formatDateVN(minExpectedDate)}).`
+        );
+        return;
+      }
+    }
+
     if (items.length === 0) {
       toast.error('Vui lòng nhập ít nhất một sản phẩm vào yêu cầu.');
       return;
@@ -473,7 +361,7 @@ export const CreateOrderRequestPage = () => {
 
       const generatedTitle =
         customerInfo.title.trim() ||
-        `${customerInfo.contactName.trim()} - Đơn may đo nội thất`;
+        `${customerInfo.contactName.trim()} - Đơn đặt đóng nội thất theo yêu cầu`;
 
       const payload = {
         customerAccountId: customerInfo.customerAccountId,
@@ -485,7 +373,7 @@ export const CreateOrderRequestPage = () => {
         expectedDate: customerInfo.expectedDate || null,
         orderType: customerInfo.orderType || 'CUSTOM',
         items: items.map((it) => ({
-          requestItemId: it.requestItemId || null,
+          requestItemId: null,
           itemName: it.itemName.trim(),
           categoryId: it.categoryId ? Number(it.categoryId) : null,
           roomId: it.roomId ? Number(it.roomId) : null,
@@ -499,350 +387,311 @@ export const CreateOrderRequestPage = () => {
           technicalNotes: it.technicalNotes?.trim() || null,
           images: (it.images || []).map((img, imgIdx) => ({
             imageUrl: typeof img === 'string' ? img : img.imageUrl,
-            requestItemId: it.requestItemId || null,
+            requestItemId: null,
             sortOrder: imgIdx,
           })),
         })),
         images: items.flatMap((it, itemIdx) =>
           (it.images || []).map((img, imgIdx) => ({
             imageUrl: typeof img === 'string' ? img : img.imageUrl,
-            requestItemId: it.requestItemId || null,
+            requestItemId: null,
             itemIndex: itemIdx,
             sortOrder: imgIdx,
           }))
         ),
       };
 
-      if (editId) {
-        await updateSalesOrderRequest(editId, payload);
-        toast.success('Cập nhật và gửi lại đơn theo yêu cầu thành công!');
-      } else {
-        await createSalesOrderRequest(payload);
-        toast.success('Đã gửi đơn theo yêu cầu cho Chủ xưởng thẩm định!');
-      }
+      await createSalesOrderRequest(payload);
+      toast.success('Đã gửi yêu cầu đặt đóng cho Chủ xưởng thẩm định');
 
       setSummaryModalOpen(false);
       navigate('/sale/requests');
     } catch (err) {
       console.error('Lỗi khi gửi yêu cầu:', err);
-      toast.error(err.response?.data?.message || err.message || 'Lỗi khi gửi đơn theo yêu cầu.');
+      toast.error(err.response?.data?.message || err.message || 'Lỗi khi gửi yêu cầu.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* ── Top Header chuẩn ManageProductsPage ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6 pb-12 text-stone-900">
+      {/* ── 1. TIÊU ĐỀ TRANG ─────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-            {editId ? 'Chỉnh sửa đơn theo yêu cầu' : 'Tạo đơn theo yêu cầu'}
+          <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
+            Tạo yêu cầu đặt đóng nội thất
           </h1>
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Tiếp nhận kích thước đo đạc thực tế, đính kèm ảnh phác thảo và gửi Chủ xưởng duyệt bản vẽ kỹ thuật.
+          </p>
         </div>
 
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={() => navigate('/sale/requests')}
-            className="inline-flex items-center rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-50 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+            title="Tải lại danh mục vật liệu và làm mới biểu mẫu"
           >
-            Danh sách yêu cầu
+            <RotateCw className={`h-3.5 w-3.5 text-stone-500 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>Làm mới</span>
           </button>
 
           <button
             type="button"
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 disabled:opacity-60"
+            onClick={() => navigate('/sale/requests')}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
           >
-            <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Làm mới
+            <FileText className="h-3.5 w-3.5 text-stone-500" />
+            <span>Danh sách yêu cầu</span>
           </button>
         </div>
       </div>
 
-      {/* ── Banner cảnh báo nếu đang sửa theo phản hồi từ Owner ── */}
-      {editRejectReason && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <h4 className="text-sm font-bold text-amber-950">
-              Chủ xưởng yêu cầu chỉnh sửa thiết kế / thông số kỹ thuật:
-            </h4>
-            <div className="rounded-lg bg-white p-3 border border-amber-200 text-xs text-amber-900 font-medium">
-              {editRejectReason}
-            </div>
-            <p className="text-xs text-amber-800 italic">
-              Vui lòng cập nhật lại thông số đo đạc hoặc bổ sung bản vẽ cho sản phẩm trước khi bấm gửi duyệt lại.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {loadingEditData && (
-        <div className="flex items-center justify-center p-12 bg-white rounded-xl border border-stone-200 shadow-sm">
-          <RotateCw className="h-6 w-6 animate-spin text-stone-400" />
-          <span className="ml-3 text-sm font-medium text-stone-600">Đang tải thông tin đơn yêu cầu cần chỉnh sửa...</span>
-        </div>
-      )}
-
       <form onSubmit={handleValidateAndOpenSummary} className="space-y-6">
-        {/* ── KHU VỰC 1: THÔNG TIN KHÁCH HÀNG ── */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 border-b border-stone-200 pb-3">
-            <User className="h-4 w-4 text-amber-700" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-stone-900">
-              1. Thông tin khách hàng
+        {/* ── 2. HỒ SƠ KHÁCH HÀNG & DỰ ÁN ─────────────────────────── */}
+        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-xs space-y-4">
+          <div className="border-b border-stone-100 pb-3">
+            <h2 className="text-xs font-bold text-stone-900">
+              1. Thông tin khách hàng &amp; địa điểm lắp đặt
             </h2>
+            <p className="text-[11px] text-stone-500">Thông tin đại diện đặt làm nội thất và thời gian hẹn hoàn thiện</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Tên đơn hàng duy nhất */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            {/* Tên đơn hàng */}
             <div className="md:col-span-3">
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Tên đơn hàng
+              <label className="block text-xs font-medium text-stone-700 mb-1">
+                Tên đơn hàng / Tên dự án nội thất
               </label>
-              <div className="relative mt-1">
-                <FileText className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                <input
-                  type="text"
-                  value={customerInfo.title}
-                  onChange={(e) => setCustomerInfo((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="VD: May đo nội thất phòng khách & phòng ngủ căn hộ A12"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none font-medium"
-                />
-              </div>
+              <input
+                type="text"
+                value={customerInfo.title}
+                onChange={(e) => setCustomerInfo((p) => ({ ...p, title: e.target.value }))}
+                placeholder="VD: Nội thất phòng khách & phòng ngủ theo thiết kế riêng căn hộ A12 Sunrise City"
+                className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              />
             </div>
 
             {/* Họ tên khách hàng */}
             <div>
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Họ tên khách hàng <span className="text-red-500">*</span>
+              <label className="block text-xs font-medium text-stone-700 mb-1">
+                Họ và tên khách hàng <span className="text-rose-600">*</span>
               </label>
-              <div className="relative mt-1">
-                <User className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                <input
-                  type="text"
-                  required
-                  value={customerInfo.contactName}
-                  onChange={(e) => setCustomerInfo((p) => ({ ...p, contactName: e.target.value }))}
-                  placeholder="VD: Nguyễn Văn A"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
-                />
-              </div>
+              <input
+                type="text"
+                required
+                value={customerInfo.contactName}
+                onChange={(e) => setCustomerInfo((p) => ({ ...p, contactName: e.target.value }))}
+                placeholder="VD: Nguyễn Văn A"
+                className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              />
             </div>
 
             {/* Số điện thoại */}
             <div>
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Số điện thoại <span className="text-red-500">*</span>
+              <label className="block text-xs font-medium text-stone-700 mb-1">
+                Số điện thoại liên hệ <span className="text-rose-600">*</span>
               </label>
-              <div className="relative mt-1">
-                <Phone className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                <input
-                  type="text"
-                  required
-                  value={customerInfo.contactPhone}
-                  onChange={(e) => setCustomerInfo((p) => ({ ...p, contactPhone: e.target.value }))}
-                  placeholder="VD: 0912345678"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none font-mono"
-                />
-              </div>
+              <input
+                type="tel"
+                required
+                value={customerInfo.contactPhone}
+                onChange={(e) => setCustomerInfo((p) => ({ ...p, contactPhone: e.target.value }))}
+                placeholder="0912345678"
+                className="w-full rounded-lg border border-stone-300 py-2 px-3 font-mono text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              />
             </div>
 
-            {/* Email khách hàng */}
+            {/* Email */}
             <div>
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Email
+              <label className="block text-xs font-medium text-stone-700 mb-1">
+                Địa chỉ Email
               </label>
-              <div className="relative mt-1">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                <input
-                  type="email"
-                  value={customerInfo.contactEmail}
-                  onChange={(e) => setCustomerInfo((p) => ({ ...p, contactEmail: e.target.value }))}
-                  placeholder="VD: khachhang@gmail.com"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
-                />
-              </div>
+              <input
+                type="email"
+                value={customerInfo.contactEmail}
+                onChange={(e) => setCustomerInfo((p) => ({ ...p, contactEmail: e.target.value }))}
+                placeholder="khachhang@gmail.com"
+                className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              />
             </div>
 
             {/* Địa chỉ giao hàng */}
             <div className="md:col-span-2">
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Địa chỉ giao hàng
+              <label className="block text-xs font-medium text-stone-700 mb-1">
+                Địa chỉ giao hàng &amp; lắp đặt
               </label>
-              <div className="relative mt-1">
-                <MapPin className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                <input
-                  type="text"
-                  value={customerInfo.deliveryAddress}
-                  onChange={(e) => setCustomerInfo((p) => ({ ...p, deliveryAddress: e.target.value }))}
-                  placeholder="VD: Căn hộ A12-04 Chung cư Sunrise, 123 Nguyễn Hữu Thọ, Q.7, TP.HCM"
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
-                />
-              </div>
+              <input
+                type="text"
+                value={customerInfo.deliveryAddress}
+                onChange={(e) => setCustomerInfo((p) => ({ ...p, deliveryAddress: e.target.value }))}
+                placeholder="VD: Căn hộ A12-04 Chung cư Sunrise, 123 Nguyễn Hữu Thọ, Q.7, TP.HCM"
+                className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              />
             </div>
 
-            {/* Ngày mong muốn hoàn thiện */}
+            {/* Ngày hẹn hoàn thiện */}
             <div>
-              <label className="text-xs font-semibold uppercase text-stone-600 block">
-                Ngày mong muốn hoàn thiện
-              </label>
-              <div className="relative mt-1">
-                <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                <input
-                  type="date"
-                  value={customerInfo.expectedDate}
-                  onChange={(e) => setCustomerInfo((p) => ({ ...p, expectedDate: e.target.value }))}
-                  className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm focus:border-stone-900 focus:outline-none"
-                />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-stone-700">
+                  Ngày hẹn hoàn thiện
+                </label>
+                <span className="text-[10px] text-stone-500">&ge; 10 ngày</span>
               </div>
+              <input
+                type="date"
+                min={minExpectedDateStr}
+                value={customerInfo.expectedDate}
+                onChange={(e) => setCustomerInfo((p) => ({ ...p, expectedDate: e.target.value }))}
+                className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              />
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* ── KHU VỰC 2: CHI TIẾT SẢN PHẨM ── */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-3 gap-3">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-amber-700" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-stone-900">
-                2. Thông số kỹ thuật
-              </h2>
+        {/* ── 3. DANH MỤC SẢN PHẨM ĐẶT ĐÓNG THEO YÊU CẦU ────────────── */}
+        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-stone-100 pb-3 gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs font-bold text-stone-900">
+                  2. Danh mục sản phẩm đặt đóng theo yêu cầu
+                </h2>
+                <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold text-stone-700">
+                  {items.length} món
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-500">Khai báo kích thước đo đạc, chất liệu gỗ và bản vẽ phác thảo từng món</p>
             </div>
 
             <button
               type="button"
               onClick={handleAddItem}
-              className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-xs font-semibold text-white shadow transition hover:bg-stone-800 shrink-0"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 transition"
             >
-              <Plus className="h-4 w-4" />
-              <span>Thêm sản phẩm ({items.length + 1})</span>
+              <Plus className="h-3.5 w-3.5" />
+              <span>Thêm sản phẩm</span>
             </button>
           </div>
 
-          {/* Danh sách sản phẩm */}
-          <div className="space-y-4">
+          <div className="space-y-5">
             {items.map((it, index) => (
               <div
                 key={it.id}
-                className="rounded-xl border border-stone-200 bg-stone-50/80 p-5 space-y-4 transition"
+                className="rounded-lg border border-stone-200 bg-stone-50/50 p-4 space-y-4"
               >
                 {/* Header sản phẩm */}
                 <div className="flex items-center justify-between border-b border-stone-200 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-white text-xs font-bold">
-                      {index + 1}
-                    </span>
-                    <h3 className="text-sm font-bold text-stone-900">
-                      Sản phẩm {index + 1}: {it.itemName || 'Sản phẩm mới'}
-                    </h3>
-                  </div>
+                  <span className="text-xs font-bold text-stone-900">
+                    Sản phẩm #{index + 1}: {it.itemName || 'Chưa đặt tên'}
+                  </span>
 
                   {items.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveItem(it.id)}
-                      className="text-xs text-rose-600 hover:text-rose-700 p-1 rounded hover:bg-rose-50 flex items-center gap-1 font-medium transition"
+                      className="text-xs text-rose-600 hover:text-rose-700 flex items-center gap-1 font-medium transition"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      <span>Xóa</span>
+                      <span>Xóa món</span>
                     </button>
                   )}
                 </div>
 
                 {/* Các trường thông số kỹ thuật */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
                   {/* Tên sản phẩm */}
                   <div className="md:col-span-2">
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Tên sản phẩm <span className="text-red-500">*</span>
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      Tên sản phẩm <span className="text-rose-600">*</span>
                     </label>
-                    <div className="relative mt-1">
-                      <Package className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
-                      <input
-                        type="text"
-                        required
-                        value={it.itemName}
-                        onChange={(e) => handleItemChange(it.id, 'itemName', e.target.value)}
-                        placeholder="VD: Tủ quần áo 4 cánh lùa kịch trần"
-                        className="w-full rounded-lg border border-stone-200 py-2.5 pl-9 pr-3 text-sm font-medium focus:border-stone-900 focus:outline-none bg-white"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={it.itemName}
+                      onChange={(e) => handleItemChange(it.id, 'itemName', e.target.value)}
+                      placeholder="VD: Tủ quần áo 4 cánh lùa kịch trần"
+                      className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 bg-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                    />
                   </div>
 
                   {/* Danh mục */}
                   <div>
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
                       Danh mục
                     </label>
                     <select
                       value={it.categoryId}
                       onChange={(e) => handleItemChange(it.id, 'categoryId', e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none bg-white"
+                      className="w-full rounded-lg border border-stone-300 py-2 px-2.5 text-xs text-stone-900 bg-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                     >
                       <option value="">-- Chọn danh mục --</option>
                       {metadata.categories.map((c, idx) => (
-                        <option key={c.categoryId || c.category_id || idx} value={c.categoryId || c.category_id}>
+                        <option key={c.categoryId || idx} value={c.categoryId}>
                           {c.categoryName}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Phòng / Không gian */}
+                  {/* Phòng */}
                   <div>
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Phòng
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      Không gian phòng
                     </label>
                     <select
                       value={it.roomId}
                       onChange={(e) => handleItemChange(it.id, 'roomId', e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs focus:border-stone-900 focus:outline-none bg-white"
+                      className="w-full rounded-lg border border-stone-300 py-2 px-2.5 text-xs text-stone-900 bg-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                     >
                       <option value="">-- Chọn không gian --</option>
                       {metadata.rooms.map((r, idx) => (
-                        <option key={r.roomId || r.room_id || idx} value={r.roomId || r.room_id}>
+                        <option key={r.roomId || idx} value={r.roomId}>
                           {r.roomName}
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Chất liệu / Loại gỗ (cho phép chọn hoặc thêm mới) */}
-                  <CreatableCombobox
-                    id={`item-material-${it.id}`}
-                    label="Chất liệu"
-                    value={it.materialId}
-                    options={metadata.materials}
-                    valueKey="materialId"
-                    labelKey="materialName"
-                    placeholder="Chọn hoặc gõ để tìm/thêm chất liệu..."
-                    onChange={(val) => handleItemChange(it.id, 'materialId', val)}
-                    onCreate={handleCreateMaterial}
-                  />
+                  {/* Chất liệu gỗ */}
+                  <div className="md:col-span-2">
+                    <CreatableCombobox
+                      id={`item-material-${it.id}`}
+                      label="Chất liệu / Loại gỗ xưởng"
+                      value={it.materialId}
+                      options={metadata.materials}
+                      valueKey="materialId"
+                      labelKey="materialName"
+                      placeholder="Chọn hoặc gõ để thêm loại gỗ mới..."
+                      onChange={(val) => handleItemChange(it.id, 'materialId', val)}
+                      onCreate={handleCreateMaterial}
+                    />
+                  </div>
 
-                  {/* Màu sắc / Màu sơn (cho phép chọn hoặc thêm mới kèm mã màu) */}
-                  <CreatableCombobox
-                    id={`item-color-${it.id}`}
-                    label="Màu sắc"
-                    isColor
-                    value={it.colorId}
-                    options={metadata.colors}
-                    valueKey="colorId"
-                    labelKey="colorName"
-                    colorKey="hexValue"
-                    placeholder="Chọn hoặc gõ để tìm/thêm màu sắc..."
-                    onChange={(val) => handleItemChange(it.id, 'colorId', val)}
-                    onCreate={handleCreateColor}
-                  />
+                  {/* Màu sắc */}
+                  <div>
+                    <CreatableCombobox
+                      id={`item-color-${it.id}`}
+                      label="Màu sắc / Vân sơn"
+                      isColor
+                      value={it.colorId}
+                      options={metadata.colors}
+                      valueKey="colorId"
+                      labelKey="colorName"
+                      colorKey="hexValue"
+                      placeholder="Chọn hoặc gõ thêm màu..."
+                      onChange={(val) => handleItemChange(it.id, 'colorId', val)}
+                      onCreate={handleCreateColor}
+                    />
+                  </div>
 
                   {/* Số lượng */}
                   <div>
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Số lượng <span className="text-red-500">*</span>
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      Số lượng đặt <span className="text-rose-600">*</span>
                     </label>
                     <input
                       type="number"
@@ -850,15 +699,72 @@ export const CreateOrderRequestPage = () => {
                       required
                       value={it.quantity}
                       onChange={(e) => handleItemChange(it.id, 'quantity', e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm font-semibold focus:border-stone-900 focus:outline-none bg-white"
+                      className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs font-semibold text-stone-900 bg-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                     />
                   </div>
 
-                  {/* Đơn giá ước tính */}
-                  <div>
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Đơn giá ước tính (VNĐ)
-                    </label>
+                  {/* Kích thước kỹ thuật đo đạc (cm) */}
+                  <div className="md:col-span-4 rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+                    <div className="flex items-center justify-between border-b border-stone-100 pb-1.5">
+                      <span className="text-xs font-semibold text-stone-800">
+                        Kích thước đo đạc thực tế (cm)
+                      </span>
+                      <span className="font-mono text-xs text-stone-600">
+                        {[it.lengthCm, it.widthCm, it.heightCm].filter(Boolean).length > 0
+                          ? `${it.lengthCm || 0} x ${it.widthCm || 0} x ${it.heightCm || 0} cm`
+                          : 'Dài x Rộng x Cao'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[11px] text-stone-600 block mb-1">Chiều dài (cm)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={it.lengthCm}
+                          onChange={(e) => handleItemChange(it.id, 'lengthCm', e.target.value)}
+                          placeholder="220"
+                          className="w-full rounded-md border border-stone-300 p-2 text-xs font-mono font-medium text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-stone-600 block mb-1">Chiều rộng / sâu (cm)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={it.widthCm}
+                          onChange={(e) => handleItemChange(it.id, 'widthCm', e.target.value)}
+                          placeholder="60"
+                          className="w-full rounded-md border border-stone-300 p-2 text-xs font-mono font-medium text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-stone-600 block mb-1">Chiều cao (cm)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={it.heightCm}
+                          onChange={(e) => handleItemChange(it.id, 'heightCm', e.target.value)}
+                          placeholder="260"
+                          className="w-full rounded-md border border-stone-300 p-2 text-xs font-mono font-medium text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Đơn giá tạm tính */}
+                  <div className="md:col-span-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-stone-700">
+                        Đơn giá tạm tính (VND) - Chủ xưởng sẽ báo giá chính thức khi duyệt bản vẽ
+                      </label>
+                      {it.unitPrice > 0 && (
+                        <span className="text-xs font-semibold font-mono text-stone-900">
+                          Thành tiền: {formatVND((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1))}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="number"
                       min="0"
@@ -866,110 +772,48 @@ export const CreateOrderRequestPage = () => {
                       value={it.unitPrice}
                       onChange={(e) => handleItemChange(it.id, 'unitPrice', e.target.value)}
                       placeholder="VD: 15000000"
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none bg-white"
+                      className="w-full rounded-lg border border-stone-300 py-2 px-3 font-mono text-xs text-stone-900 bg-white placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                     />
-                    {it.unitPrice > 0 && (
-                      <span className="block text-[11px] text-stone-500 font-medium mt-0.5">
-                        ≈ {formatVND(it.unitPrice)}
-                      </span>
-                    )}
                   </div>
 
-                  {/* KÍCH THƯỚC KỸ THUẬT ĐO ĐẠC (CM) */}
-                  <div className="md:col-span-4 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
-                    <div className="flex items-center gap-1.5 mb-2.5">
-                      <Ruler className="h-4 w-4 text-stone-600" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-stone-800">
-                        Kích thước (cm)
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-stone-600 block">
-                          Chiều dài (cm)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={it.lengthCm}
-                          onChange={(e) => handleItemChange(it.id, 'lengthCm', e.target.value)}
-                          placeholder="VD: 220"
-                          className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm font-mono focus:border-stone-900 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-stone-600 block">
-                          Chiều rộng (cm)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={it.widthCm}
-                          onChange={(e) => handleItemChange(it.id, 'widthCm', e.target.value)}
-                          placeholder="VD: 60"
-                          className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm font-mono focus:border-stone-900 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold uppercase text-stone-600 block">
-                          Chiều cao (cm)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={it.heightCm}
-                          onChange={(e) => handleItemChange(it.id, 'heightCm', e.target.value)}
-                          placeholder="VD: 260"
-                          className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-sm font-mono focus:border-stone-900 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Mô tả chi tiết & Yêu cầu kỹ thuật */}
+                  {/* Mô tả chi tiết & yêu cầu kỹ thuật */}
                   <div className="md:col-span-4">
-                    <label className="text-xs font-semibold uppercase text-stone-600 block">
-                      Mô tả chi tiết
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      Mô tả chi tiết &amp; yêu cầu phụ kiện xưởng
                     </label>
                     <textarea
                       rows={2}
                       value={it.technicalNotes}
                       onChange={(e) => handleItemChange(it.id, 'technicalNotes', e.target.value)}
-                      placeholder="VD: Cánh kính viền nhôm đen, bản lề giảm chấn Hafele, đèn LED cảm ứng thanh nhôm âm tủ..."
-                      className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-sm focus:border-stone-900 focus:outline-none bg-white"
+                      placeholder="VD: Cánh kính viền nhôm đen, bản lề giảm chấn Hafele, đèn LED cảm ứng âm tủ..."
+                      className="w-full rounded-lg border border-stone-300 p-2.5 text-xs text-stone-900 bg-white placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                     />
                   </div>
 
-                  {/* ── MỤC ẢNH THIẾT KẾ & BẢN VẼ RIÊNG CỦA MÓN NÀY ── */}
-                  <div className="md:col-span-4 rounded-xl border border-stone-200 bg-white p-4 space-y-3 shadow-xs">
-                    <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
-                      <div className="flex items-center gap-1.5">
-                        <ImageIcon className="h-4 w-4 text-stone-700" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-stone-800">
-                          3. Hình ảnh thiết kế 
-                        </span>
-                        <span className="rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px] font-bold text-stone-700 ml-1">
-                          {it.images.length} ảnh
-                        </span>
-                      </div>
-                      <span className="text-xs text-stone-400">
-                        Sản phẩm {index + 1}
+                  {/* Ảnh phác thảo & bản vẽ của món này */}
+                  <div className="md:col-span-4 rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+                    <div className="flex items-center justify-between border-b border-stone-100 pb-1.5">
+                      <span className="text-xs font-semibold text-stone-800">
+                        Ảnh thiết kế &amp; bản vẽ phác thảo ({it.images.length})
                       </span>
+                      <span className="text-[11px] text-stone-500">Món #{index + 1}</span>
                     </div>
 
-                    {/* Dropzone tải ảnh chuẩn ManageProductsPage */}
-                    <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 p-5 text-center hover:bg-stone-50 transition">
+                    <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 p-4 text-center hover:border-stone-400 hover:bg-stone-50 transition">
                       {it.uploading ? (
-                        <>
-                          <RotateCw className="h-7 w-7 animate-spin text-stone-400" />
-                          <span className="mt-1.5 text-xs font-medium text-stone-700">Đang tải ảnh lên...</span>
-                        </>
+                        <div className="flex items-center gap-2 text-xs text-stone-600">
+                          <RotateCw className="h-4 w-4 animate-spin text-stone-500" />
+                          <span>Đang tải ảnh lên...</span>
+                        </div>
                       ) : (
-                        <>
-                          <Upload className="h-7 w-7 text-stone-400" />
-                          <span className="mt-1.5 text-xs font-medium text-stone-700">Tải ảnh lên</span>
-                          <span className="text-[11px] text-stone-400">JPG, PNG, WEBP (Tối đa 5MB)</span>
-                        </>
+                        <div>
+                          <p className="text-xs font-medium text-stone-800">
+                            Nhấn để chọn ảnh hoặc kéo thả vào đây
+                          </p>
+                          <p className="text-[11px] text-stone-500 mt-0.5">
+                            Định dạng JPG, PNG, WEBP tối đa 10MB
+                          </p>
+                        </div>
                       )}
                       <input
                         type="file"
@@ -986,47 +830,39 @@ export const CreateOrderRequestPage = () => {
                       />
                     </label>
 
-                    {/* Danh sách ảnh thu nhỏ của riêng món này */}
-                    {it.images.length > 0 ? (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5 pt-1">
-                        {it.images.map((img) => (
+                    {it.images.length > 0 && (
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1">
+                        {it.images.map((img, imgIdx) => (
                           <div
                             key={img.id}
-                            className="group relative rounded-lg border border-stone-200 bg-stone-50 overflow-hidden shadow-2xs"
+                            className="group relative aspect-square rounded-md border border-stone-200 bg-stone-100 overflow-hidden"
                           >
                             <img
                               src={img.imageUrl}
-                              alt="Bản vẽ"
-                              className="h-20 w-full object-cover cursor-pointer transition group-hover:scale-105"
-                              onClick={() => setPreviewModalImg(img.imageUrl)}
+                              alt={`Bản vẽ ${imgIdx + 1}`}
+                              className="h-full w-full object-cover"
                             />
-
-                            {/* Nút phóng to */}
-                            <button
-                              type="button"
-                              onClick={() => setPreviewModalImg(img.imageUrl)}
-                              className="absolute top-1 left-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80 transition shadow"
-                              title="Phóng to"
-                            >
-                              <Maximize2 className="h-3 w-3" />
-                            </button>
-
-                            {/* Nút xóa ảnh */}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItemImage(it.id, img.id)}
-                              className="absolute top-1 right-1 rounded-full bg-rose-600 p-1 text-white hover:bg-rose-700 transition shadow"
-                              title="Xóa ảnh"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewImageModal(img.imageUrl)}
+                                className="p-1 rounded bg-white text-stone-800 hover:text-stone-900"
+                                title="Xem lớn"
+                              >
+                                <Maximize2 className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItemImage(it.id, img.id)}
+                                className="p-1 rounded bg-rose-600 text-white hover:bg-rose-700"
+                                title="Xóa"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-[11px] text-stone-400 italic">
-                        Chưa có ảnh cho sản phẩm này.
-                      </p>
                     )}
                   </div>
                 </div>
@@ -1034,179 +870,175 @@ export const CreateOrderRequestPage = () => {
             ))}
           </div>
 
-          {/* Tổng tiền dự kiến */}
-          <div className="flex flex-col sm:flex-row items-center justify-between rounded-xl bg-stone-50 p-4 border border-stone-200">
-            <span className="text-xs text-stone-700">
-              Tổng số lượng: <strong className="text-stone-900 font-bold">{items.reduce((s, i) => s + (Number(i.quantity) || 0), 0)} sản phẩm</strong>
-            </span>
-            <div className="flex items-center gap-2 mt-2 sm:mt-0">
-              <span className="text-xs text-stone-600">Tổng kinh phí dự kiến:</span>
-              <span className="text-lg font-bold text-stone-900 font-mono">
-                {formatVND(totalEstimatedAmount)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── NÚT HÀNH ĐỘNG CUỐI TRANG ── */}
-        <div className="flex items-center justify-end gap-3 pt-2">
           <button
             type="button"
-            onClick={() => navigate('/sale/requests')}
-            className="inline-flex items-center rounded-lg border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+            onClick={handleAddItem}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-stone-300 py-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition"
           >
-            Hủy bỏ
+            <Plus className="h-4 w-4" />
+            <span>Thêm sản phẩm đặt đóng tiếp theo</span>
           </button>
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-stone-800"
-          >
-            <Send className="h-4 w-4" />
-            <span>{editId ? 'Cập nhật & Gửi lại cho Chủ xưởng' : 'Kiểm Tra & Gửi Chủ Xưởng Thẩm Định'}</span>
-          </button>
+        </section>
+
+        {/* ── 4. TỔNG KẾT & GỬI ───────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-stone-200 bg-white p-4 shadow-xs">
+          <div>
+            <span className="text-xs text-stone-500 block">Tổng kinh phí dự kiến ({items.length} món):</span>
+            <span className="font-mono text-xl font-bold text-stone-900">
+              {formatVND(totalEstimatedAmount)}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => navigate('/sale/requests')}
+              className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 transition"
+            >
+              Hủy bỏ
+            </button>
+
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-5 py-2 text-xs font-semibold text-white hover:bg-amber-950 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+            >
+              <Send className="h-4 w-4" />
+              <span>Kiểm tra &amp; Gửi yêu cầu thiết kế</span>
+            </button>
+          </div>
         </div>
       </form>
 
-      {/* ── MODAL PHÓNG TO HÌNH ẢNH ── */}
-      {previewModalImg && (
+      {/* ── MODAL PHÓNG TO ẢNH ─────────────────────────────────── */}
+      {previewImageModal && (
         <div
           className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setPreviewModalImg(null)}
+          onClick={() => setPreviewImageModal(null)}
         >
-          <div className="relative max-h-[90vh] max-w-[90vw]">
-            <img src={previewModalImg} alt="Phóng to bản vẽ" className="max-h-[85vh] rounded-xl shadow-2xl object-contain" />
-            <button
-              onClick={() => setPreviewModalImg(null)}
-              className="absolute -top-3 -right-3 rounded-full bg-white p-1 text-stone-800 shadow-xl hover:bg-stone-100"
-            >
-              <X className="h-5 w-5" />
-            </button>
+          <div
+            className="relative max-h-[90vh] max-w-4xl overflow-hidden rounded-xl bg-stone-900 p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-800 px-3 py-2 text-white">
+              <span className="text-xs font-medium">Bản vẽ phác thảo</span>
+              <button
+                type="button"
+                onClick={() => setPreviewImageModal(null)}
+                className="rounded p-1 text-stone-400 hover:bg-stone-800 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex max-h-[80vh] items-center justify-center p-2">
+              <img
+                src={previewImageModal}
+                alt="Chi tiết bản vẽ"
+                className="max-h-[75vh] w-auto max-w-full rounded-lg object-contain"
+              />
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── MODAL TÓM TẮT THÔNG TIN TRƯỚC KHI GỬI CHÍNH THỨC ── */}
+      {/* ── MODAL TÓM TẮT HỒ SƠ ─────────────────────────────────── */}
       {summaryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
-            {/* Header Modal */}
-            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
-              <div className="flex items-center gap-2.5">
-                <h3 className="text-lg font-bold text-stone-900">
-                  Xác nhận thông tin yêu cầu trước khi gửi Chủ xưởng
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+          <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl border border-stone-200 my-8">
+            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 bg-stone-50">
+              <div>
+                <h3 className="text-base font-bold text-stone-900">
+                  Kiểm tra hồ sơ yêu cầu đặt đóng nội thất
                 </h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Đối chiếu thông số đo đạc và bản vẽ trước khi chuyển tiếp Chủ xưởng thẩm định
+                </p>
               </div>
               <button
+                type="button"
                 onClick={() => setSummaryModalOpen(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Nội dung tóm tắt */}
-            <div className="p-6 text-xs text-stone-800 space-y-4">
-              {/* Thông tin khách hàng */}
-              <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-4">
-                <div className="flex items-center justify-between mb-3 border-b border-stone-200/60 pb-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-stone-600">
-                    Thông tin khách hàng
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5">
-                  <div className="col-span-2">
-                    <span className="text-xs font-semibold uppercase text-stone-500">Tên đơn hàng</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm">
-                      {customerInfo.title.trim() || `${customerInfo.contactName} - Đơn may đo nội thất`}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold uppercase text-stone-500">Ngày mong muốn</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm">{customerInfo.expectedDate || 'Thỏa thuận'}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold uppercase text-stone-500">Khách hàng</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm">{customerInfo.contactName}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold uppercase text-stone-500">Số điện thoại</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm font-mono">{customerInfo.contactPhone}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold uppercase text-stone-500">Loại đơn</span>
-                    <p className="mt-1 font-semibold text-stone-900 text-sm">
-                      {customerInfo.orderType === 'CUSTOM' ? 'Đơn hàng theo yêu cầu' : 'Theo mẫu sẵn'}
-                    </p>
-                  </div>
-                  <div className="col-span-3 border-t border-stone-200/60 pt-2">
-                    <span className="text-xs font-semibold uppercase text-stone-500">Địa chỉ giao hàng</span>
-                    <p className="mt-1 font-semibold text-stone-900">{customerInfo.deliveryAddress || 'Chưa cung cấp'}</p>
-                  </div>
+            <div className="overflow-y-auto p-6 text-xs text-stone-700 space-y-4">
+              {/* Khách hàng */}
+              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3.5 space-y-2">
+                <span className="font-semibold text-stone-800 block border-b border-stone-200 pb-1">
+                  Thông tin khách hàng &amp; tiến độ
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <p><span className="text-stone-500">Tên đơn hàng: </span><strong className="text-stone-900">{customerInfo.title || 'Đặt đóng nội thất theo yêu cầu'}</strong></p>
+                  <p><span className="text-stone-500">Khách hàng: </span><strong className="text-stone-900">{customerInfo.contactName}</strong></p>
+                  <p><span className="text-stone-500">Số điện thoại: </span><strong className="font-mono text-stone-900">{customerInfo.contactPhone}</strong></p>
+                  <p><span className="text-stone-500">Email: </span><span>{customerInfo.contactEmail || '---'}</span></p>
+                  <p className="sm:col-span-2"><span className="text-stone-500">Địa chỉ: </span><span>{customerInfo.deliveryAddress || '---'}</span></p>
+                  <p><span className="text-stone-500">Hẹn ngày hoàn thiện: </span><strong className="font-mono text-stone-900">{customerInfo.expectedDate ? formatDateVN(new Date(customerInfo.expectedDate)) : 'Theo tiến độ xưởng'}</strong></p>
                 </div>
               </div>
 
-              {/* Bảng sản phẩm & Ảnh riêng từng món */}
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-stone-600 block">
-                  Danh sách sản phẩm ({items.length} sản phẩm)
+              {/* Bảng sản phẩm */}
+              <div>
+                <span className="font-semibold text-stone-800 block mb-2">
+                  Danh mục sản phẩm đặt đóng ({items.length} món)
                 </span>
-                <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs">
+                <div className="rounded-lg border border-stone-200 overflow-hidden bg-white">
                   <table className="w-full text-left text-xs">
-                    <thead className="border-b border-stone-200 bg-stone-50/75 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                    <thead className="bg-stone-50 text-stone-700 border-b border-stone-200 font-semibold">
                       <tr>
-                        <th className="px-3.5 py-2.5 text-center w-10">STT</th>
-                        <th className="px-3.5 py-2.5">Sản phẩm & Ảnh</th>
-                        <th className="px-3.5 py-2.5">Kích thước (D × R × C)</th>
-                        <th className="px-3.5 py-2.5 text-center">SL</th>
-                        <th className="px-3.5 py-2.5 text-right">Đơn giá ước tính</th>
-                        <th className="px-3.5 py-2.5 text-right">Thành tiền</th>
+                        <th className="p-2.5 text-center w-8">#</th>
+                        <th className="p-2.5">Tên món &amp; Bản vẽ</th>
+                        <th className="p-2.5">Kích thước (cm)</th>
+                        <th className="p-2.5 text-center">SL</th>
+                        <th className="p-2.5 text-right">Đơn giá</th>
+                        <th className="p-2.5 text-right">Thành tiền</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-stone-200">
+                    <tbody className="divide-y divide-stone-100">
                       {items.map((it, idx) => {
                         const dim = [it.lengthCm, it.widthCm, it.heightCm].filter(Boolean).join(' x ');
                         const unitPrice = Number(it.unitPrice) || 0;
                         const qty = Number(it.quantity) || 1;
                         return (
-                          <tr key={it.id} className="hover:bg-stone-50/60">
-                            <td className="px-3.5 py-2.5 text-center text-stone-400 font-mono align-top">{idx + 1}</td>
-                            <td className="px-3.5 py-2.5 align-top">
-                              <p className="font-semibold text-stone-900 text-sm">{it.itemName}</p>
+                          <tr key={it.id} className="hover:bg-stone-50">
+                            <td className="p-2.5 text-center text-stone-400 font-mono align-top">{idx + 1}</td>
+                            <td className="p-2.5 align-top">
+                              <p className="font-medium text-stone-900">{it.itemName}</p>
                               {it.technicalNotes && (
                                 <p className="text-[11px] text-stone-500 italic mt-0.5 max-w-xs truncate">
                                   {it.technicalNotes}
                                 </p>
                               )}
-                              {/* Hiển thị ảnh của riêng món này */}
                               {it.images && it.images.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {it.images.map((img) => (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  {it.images.map((img, iIdx) => (
                                     <img
-                                      key={img.id}
+                                      key={img.id || iIdx}
                                       src={img.imageUrl}
-                                      alt="Ảnh sản phẩm"
-                                      className="h-10 w-10 object-cover rounded border border-stone-200 shadow-2xs"
+                                      alt="Bản vẽ"
+                                      className="h-9 w-9 object-cover rounded border border-stone-200"
                                     />
                                   ))}
                                 </div>
                               )}
                             </td>
-                            <td className="px-3.5 py-2.5 text-stone-700 font-mono align-top font-bold text-amber-900">
-                              {dim ? `${dim} cm` : 'Theo thực tế'}
+                            <td className="p-2.5 font-mono align-top text-stone-700">
+                              {dim ? `${dim} cm` : '---'}
                             </td>
-                            <td className="px-3.5 py-2.5 text-center font-bold align-top">{qty}</td>
-                            <td className="px-3.5 py-2.5 text-right align-top">{formatVND(unitPrice)}</td>
-                            <td className="px-3.5 py-2.5 text-right font-bold text-stone-900 align-top">
+                            <td className="p-2.5 text-center align-top">{qty}</td>
+                            <td className="p-2.5 text-right align-top font-mono text-stone-600">{formatVND(unitPrice)}</td>
+                            <td className="p-2.5 text-right font-semibold font-mono text-stone-900 align-top">
                               {formatVND(unitPrice * qty)}
                             </td>
                           </tr>
                         );
                       })}
                     </tbody>
-                    <tfoot className="border-t border-stone-200 bg-stone-50/70 font-semibold">
+                    <tfoot className="border-t border-stone-200 bg-stone-50 font-semibold">
                       <tr>
-                        <td colSpan="5" className="px-3.5 py-2.5 text-right text-stone-600">Tổng kinh phí ước tính:</td>
-                        <td className="px-3.5 py-2.5 text-right text-stone-900 text-sm font-bold font-mono">
+                        <td colSpan="5" className="p-2.5 text-right text-stone-600">Tổng kinh phí dự kiến:</td>
+                        <td className="p-2.5 text-right font-bold text-stone-900 font-mono">
                           {formatVND(totalEstimatedAmount)}
                         </td>
                       </tr>
@@ -1216,12 +1048,11 @@ export const CreateOrderRequestPage = () => {
               </div>
             </div>
 
-            {/* Footer Modal */}
-            <div className="flex items-center justify-end gap-3 border-t border-stone-200 bg-stone-50 px-6 py-4">
+            <div className="flex items-center justify-end gap-2.5 border-t border-stone-200 bg-stone-50 px-6 py-3.5">
               <button
                 type="button"
                 onClick={() => setSummaryModalOpen(false)}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 font-medium text-stone-700 hover:bg-stone-50 text-sm"
+                className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 hover:bg-stone-100 transition"
               >
                 Chỉnh sửa lại
               </button>
@@ -1229,20 +1060,19 @@ export const CreateOrderRequestPage = () => {
                 type="button"
                 onClick={handleConfirmSubmit}
                 disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-5 py-2 font-semibold text-white shadow hover:bg-stone-800 disabled:opacity-50 text-sm"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-950 disabled:opacity-50 transition"
               >
-                <span hidden={!submitting} className={submitting ? 'inline-flex' : 'hidden'} aria-hidden="true">
-                  <RotateCw className="h-4 w-4 animate-spin" />
-                </span>
-                <span hidden={submitting} className={submitting ? 'hidden' : 'inline-flex'} aria-hidden="true">
-                  <Send className="h-4 w-4" />
-                </span>
-                <span hidden={!submitting} className={submitting ? 'inline' : 'hidden'}>
-                  Đang gửi...
-                </span>
-                <span hidden={submitting} className={submitting ? 'hidden' : 'inline'}>
-                  Xác nhận gửi Chủ xưởng
-                </span>
+                {submitting ? (
+                  <>
+                    <RotateCw className="h-4 w-4 animate-spin" />
+                    <span>Đang gửi...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    <span>Xác nhận gửi Chủ xưởng</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

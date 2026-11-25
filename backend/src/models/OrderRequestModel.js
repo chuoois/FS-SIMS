@@ -97,6 +97,7 @@ async function createReadyOrderRequestFromCart({
     const productsById = new Map(
       products.map((product) => [String(product.product_id), product])
     );
+    const requestedQuantityByProduct = new Map();
 
     const requestItems = cartItems.map((cartItem) => {
       const product = productsById.get(String(cartItem.product_id));
@@ -104,12 +105,18 @@ async function createReadyOrderRequestFromCart({
       if (!product || product.status !== 'ACTIVE') {
         throw createRequestError('Một sản phẩm trong giỏ hàng không còn được kinh doanh.', 409);
       }
-      if (!Number.isInteger(quantity) || quantity <= 0 || quantity > Number(product.stock_quantity)) {
+      if (!Number.isInteger(quantity) || quantity <= 0) {
         throw createRequestError(
           `Số lượng sản phẩm "${product.product_name}" hiện không đủ trong kho.`,
           409
         );
       }
+
+      const productId = String(product.product_id);
+      requestedQuantityByProduct.set(
+        productId,
+        (requestedQuantityByProduct.get(productId) || 0) + quantity
+      );
 
       return {
         product_id: product.product_id,
@@ -127,6 +134,18 @@ async function createReadyOrderRequestFromCart({
         createby: createBy,
       };
     });
+
+    for (const [productId, requestedQuantity] of requestedQuantityByProduct) {
+      const product = productsById.get(productId);
+      const availableQuantity =
+        Number(product.stock_quantity) - Number(product.hold_quantity || 0);
+      if (requestedQuantity > availableQuantity) {
+        throw createRequestError(
+          `Số lượng sản phẩm "${product.product_name}" hiện không đủ trong kho.`,
+          409
+        );
+      }
+    }
 
     const orderRequest = await OrderRequest.create({
       request_code: createRequestCode(),
@@ -147,10 +166,14 @@ async function createReadyOrderRequestFromCart({
       requestItems.map((item) => ({ ...item, request_id: orderRequest.request_id })),
       { transaction }
     );
-    await CartItem.destroy({
-      where: { cart_id: cart.cart_id },
-      transaction,
-    });
+    await Promise.all(
+      Array.from(requestedQuantityByProduct, ([productId, quantity]) =>
+        productsById.get(productId).increment('hold_quantity', { by: quantity, transaction })
+      )
+    );
+
+    // Xóa giỏ hàng trong cùng transaction: request tạo thành công thì giỏ rỗng.
+    await CartItem.destroy({ where: { cart_id: cart.cart_id }, transaction });
 
     await transaction.commit();
     return {

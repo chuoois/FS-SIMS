@@ -181,17 +181,40 @@ async function createOrderFromContract(contractId, { assignedTo, createBy } = {}
     // Kiểm tra & trừ tồn kho với sản phẩm hàng sẵn (READY)
     for (const item of contract.items) {
       if (item.product_id) {
-        const prod = await Product.findByPk(item.product_id, { transaction });
+        const prod = await Product.findByPk(item.product_id, {
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
         if (!prod) {
           throw new Error(`Sản phẩm "${item.item_name}" không tìm thấy trong cơ sở dữ liệu.`);
         }
-        if (prod.stock_quantity < item.quantity) {
+
+        const currentStock = Number(prod.stock_quantity) || 0;
+        const currentHold = Number(prod.hold_quantity) || 0;
+
+        // Nếu sản phẩm đã được giữ chỗ trong hợp đồng/yêu cầu thì số lượng khả dụng kiểm tra là currentStock.
+        // Nếu chưa được giữ chỗ thì số lượng khả dụng = currentStock - currentHold.
+        const isAlreadyHeld = Boolean(contract.request_id || currentHold >= item.quantity);
+        const availableStock = isAlreadyHeld ? currentStock : Math.max(0, currentStock - currentHold);
+
+        if (availableStock < item.quantity) {
           throw new Error(
-            `Sản phẩm "${item.item_name}" trong kho hiện chỉ còn ${prod.stock_quantity}, không đủ để xuất ${item.quantity}.`
+            `Sản phẩm "${item.item_name}" trong kho hiện chỉ còn ${availableStock}, không đủ để xuất ${item.quantity}.`
           );
         }
 
-        await prod.decrement('stock_quantity', { by: item.quantity, transaction });
+        // Cập nhật đồng thời tồn kho thực tế và số lượng giữ chỗ trong 1 câu lệnh để không vi phạm chk_product_hold (hold_quantity <= stock_quantity)
+        const holdToDeduct = Math.min(currentHold, item.quantity);
+        const newStock = Math.max(0, currentStock - item.quantity);
+        const newHold = Math.max(0, currentHold - holdToDeduct);
+
+        await prod.update(
+          {
+            stock_quantity: newStock,
+            hold_quantity: newHold,
+          },
+          { transaction }
+        );
       }
     }
 
@@ -629,16 +652,32 @@ async function findCustomerOrderRequestById(requestId, customerAccountId) {
 // Các hàm bổ sung cho Manage Order (Owner / Sales)
 // ============================================================
 
-const VALID_STATUSES = ['NEW', 'CONFIRMED', 'IN_PRODUCTION', 'PROCESSING', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'DELIVERING', 'COMPLETED', 'CANCELLED'];
+const VALID_STATUSES = [
+  'NEW',
+  'CONFIRMED',
+  'ASSIGNED',
+  'IN_PRODUCTION',
+  'IN_PROGRESS',
+  'PROCESSING',
+  'UNDER_INSPECTION',
+  'PENDING_APPROVAL',
+  'READY_TO_DELIVER',
+  'DELIVERING',
+  'COMPLETED',
+  'CANCELLED'
+];
 
 const ALLOWED_NEXT_STATUSES = {
-  NEW: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['IN_PRODUCTION', 'CANCELLED'],
-  IN_PRODUCTION: ['COMPLETED', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'CANCELLED'],
-  PROCESSING: ['COMPLETED', 'UNDER_INSPECTION', 'READY_TO_DELIVER', 'CANCELLED'],
-  UNDER_INSPECTION: ['READY_TO_DELIVER', 'IN_PRODUCTION', 'CANCELLED'],
-  READY_TO_DELIVER: ['DELIVERING', 'COMPLETED', 'CANCELLED'],
-  DELIVERING: ['COMPLETED', 'CANCELLED'],
+  NEW: ['CONFIRMED', 'ASSIGNED', 'CANCELLED'],
+  CONFIRMED: ['IN_PRODUCTION', 'IN_PROGRESS', 'CANCELLED'],
+  ASSIGNED: ['IN_PRODUCTION', 'IN_PROGRESS', 'CANCELLED'],
+  IN_PRODUCTION: ['UNDER_INSPECTION', 'PENDING_APPROVAL', 'CANCELLED'],
+  IN_PROGRESS: ['UNDER_INSPECTION', 'PENDING_APPROVAL', 'CANCELLED'],
+  PROCESSING: ['UNDER_INSPECTION', 'CANCELLED'],
+  UNDER_INSPECTION: ['READY_TO_DELIVER', 'IN_PRODUCTION', 'IN_PROGRESS', 'CANCELLED'],
+  PENDING_APPROVAL: ['READY_TO_DELIVER', 'IN_PRODUCTION', 'IN_PROGRESS', 'CANCELLED'],
+  READY_TO_DELIVER: ['COMPLETED', 'DELIVERING', 'CANCELLED'],
+  DELIVERING: ['COMPLETED', 'READY_TO_DELIVER', 'CANCELLED'],
 };
 
 const NEXT_ORDER_STATUS = {
@@ -647,7 +686,7 @@ const NEXT_ORDER_STATUS = {
   IN_PRODUCTION: 'UNDER_INSPECTION',
   PROCESSING: 'UNDER_INSPECTION',
   UNDER_INSPECTION: 'READY_TO_DELIVER',
-  READY_TO_DELIVER: 'DELIVERING',
+  READY_TO_DELIVER: 'COMPLETED',
   DELIVERING: 'COMPLETED',
 };
 
@@ -671,6 +710,23 @@ async function cancelOrder(orderId, { cancelledBy } = {}) {
     status: 'CANCELLED',
     modifieby: cancelledBy || null,
   });
+
+  // Hoàn lại tồn kho thực tế cho sản phẩm hàng sẵn (READY) nếu đơn bị hủy
+  if (order.contract_id) {
+    const contract = await Contract.findByPk(order.contract_id, {
+      include: [{ model: ContractItem, as: 'items' }],
+    });
+    if (contract?.items) {
+      for (const item of contract.items) {
+        if (item.product_id && item.quantity > 0) {
+          const prod = await Product.findByPk(item.product_id);
+          if (prod) {
+            await prod.increment('stock_quantity', { by: item.quantity });
+          }
+        }
+      }
+    }
+  }
 
   return findOrderById(orderId);
 }
@@ -769,6 +825,30 @@ async function assignLeaderToCustomerOrder(orderId, leaderId, { assignedBy, staf
 }
 
 /**
+ * Helper kiểm tra quyền của Tổ trưởng đối với đơn hàng:
+ * Hợp lệ nếu order.assigned_to === leaderId HOẶC order đó có lệnh gia công phân công cho leaderId
+ */
+async function verifyLeaderOrderPermission(order, leaderId) {
+  if (!order) return false;
+  if (order.assigned_to && String(order.assigned_to) === String(leaderId)) {
+    return true;
+  }
+  try {
+    const [poRows] = await sequelize.query(
+      'SELECT production_id FROM production_order WHERE order_id = :orderId AND assigned_to = :leaderId LIMIT 1',
+      { replacements: { orderId: order.order_id, leaderId } }
+    );
+    if (Array.isArray(poRows) && poRows.length > 0) {
+      await order.update({ assigned_to: leaderId });
+      return true;
+    }
+  } catch {
+    // fallback
+  }
+  return false;
+}
+
+/**
  * Leader tiếp nhận đơn hàng vào sản xuất
  */
 async function leaderAcceptOrder(orderId, leaderId) {
@@ -776,7 +856,8 @@ async function leaderAcceptOrder(orderId, leaderId) {
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
-  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+  const isAllowed = await verifyLeaderOrderPermission(order, leaderId);
+  if (!isAllowed) {
     throw new Error('Bạn không được phân công phụ trách đơn hàng này.');
   }
   if (order.status !== 'CONFIRMED') {
@@ -800,7 +881,8 @@ async function leaderUpdateProgress(orderId, leaderId, { note, isCompleted } = {
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
-  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+  const isAllowed = await verifyLeaderOrderPermission(order, leaderId);
+  if (!isAllowed) {
     throw new Error('Bạn không có quyền cập nhật tiến độ cho đơn hàng này.');
   }
   if (order.status !== 'IN_PRODUCTION') {
@@ -836,7 +918,8 @@ async function leaderSubmitInspection(orderId, leaderId, { note, images } = {}) 
   if (!order) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
-  if (order.assigned_to && String(order.assigned_to) !== String(leaderId)) {
+  const isAllowed = await verifyLeaderOrderPermission(order, leaderId);
+  if (!isAllowed) {
     throw new Error('Bạn không có quyền gửi nghiệm thu đơn hàng này.');
   }
   if (order.status !== 'IN_PRODUCTION') {
@@ -962,7 +1045,7 @@ async function completeDelivery(orderId, { updatedBy } = {}) {
     throw new Error('Không tìm thấy đơn hàng.');
   }
   if (order.status !== 'DELIVERING' && order.status !== 'READY_TO_DELIVER') {
-    throw new Error('Chỉ có thể hoàn tất khi đơn hàng đang trong quá trình giao hàng.');
+    throw new Error('Chỉ có thể hoàn tất khi đơn hàng đã sẵn sàng giao (READY_TO_DELIVER) hoặc đang giao hàng.');
   }
 
   await order.update({
@@ -982,16 +1065,45 @@ async function getOrdersForLeader(leaderId, { search, status, page = 1, limit = 
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (pageNum - 1) * limitNum;
 
-  const whereClause = { assigned_to: leaderId };
+  // 1. Tìm thêm các đơn hàng được gán cho Leader thông qua bảng production_order
+  let leaderOrderIds = [];
+  try {
+    const [poRows] = await sequelize.query(
+      'SELECT DISTINCT order_id FROM production_order WHERE assigned_to = :leaderId AND order_id IS NOT NULL',
+      { replacements: { leaderId } }
+    );
+    leaderOrderIds = (poRows || []).map((r) => r.order_id).filter(Boolean);
+  } catch (poErr) {
+    console.warn('[getOrdersForLeader] Không thể truy vấn production_order:', poErr.message);
+  }
+
+  // 2. Điều kiện: hoặc customer_order.assigned_to = leaderId hoặc order_id được gán trong production_order
+  const assignedCondition = leaderOrderIds.length > 0
+    ? {
+        [Op.or]: [
+          { assigned_to: leaderId },
+          { order_id: { [Op.in]: leaderOrderIds } },
+        ],
+      }
+    : { assigned_to: leaderId };
+
+  const whereClause = {
+    ...assignedCondition,
+  };
+
   if (status && status !== 'ALL') {
     whereClause.status = status;
   }
   if (search && search.trim()) {
     const trimmed = search.trim();
-    whereClause[Op.or] = [
-      { order_code: { [Op.like]: `%${trimmed}%` } },
-      { contact_name: { [Op.like]: `%${trimmed}%` } },
-      { contact_phone: { [Op.like]: `%${trimmed}%` } },
+    whereClause[Op.and] = [
+      {
+        [Op.or]: [
+          { order_code: { [Op.like]: `%${trimmed}%` } },
+          { contact_name: { [Op.like]: `%${trimmed}%` } },
+          { contact_phone: { [Op.like]: `%${trimmed}%` } },
+        ],
+      },
     ];
   }
 

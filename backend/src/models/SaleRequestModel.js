@@ -185,7 +185,7 @@ async function findRequestById(requestId) {
  * Chuyển đổi request thành hợp đồng (DRAFT).
  * - Cho phép sale điền/sửa thông tin khách hàng (tên, SĐT, địa chỉ giao hàng)
  * - Cho phép sale chỉnh sửa giỏ hàng (số lượng, đơn giá)
- * - Tạo contract mới với source = 'ONLINE', contract_type = order_type của request
+ * - Tạo contract mới với contract_type = order_type của request
  * - Tạo ContractItem từ các OrderRequestItem / items cập nhật
  * - Cập nhật request: bổ sung địa chỉ, tên, SĐT và status → 'CONVERTED'
  * - Gắn request_id vào contract
@@ -274,7 +274,6 @@ async function convertRequestToContract({
     // Tạo contract
     const contract = await Contract.create({
       contract_code: contractCode,
-      source: 'ONLINE',
       contract_type: request.order_type || 'READY',
       request_id: requestId,
       customer_account_id: request.customer_account_id || null,
@@ -303,7 +302,7 @@ async function convertRequestToContract({
         const riId = ri.request_item_id || ri.requestItemId;
         const riPid = ri.product_id || ri.productId;
         return (reqItemId && String(riId) === String(reqItemId)) ||
-               (productId && String(riPid) === String(productId));
+          (productId && String(riPid) === String(productId));
       });
 
       const len = item.length_cm ?? item.lengthCm ?? orig?.length_cm ?? orig?.lengthCm ?? null;
@@ -331,8 +330,48 @@ async function convertRequestToContract({
 
     await ContractItem.bulkCreate(contractItemsData, { transaction });
 
+    // Điều chỉnh hold_quantity nếu danh sách sản phẩm hoặc số lượng thay đổi so với yêu cầu ban đầu
+    const origQtyMap = new Map();
+    for (const ri of (request.items || [])) {
+      if (ri.product_id) {
+        origQtyMap.set(Number(ri.product_id), (origQtyMap.get(Number(ri.product_id)) || 0) + Number(ri.quantity || 0));
+      }
+    }
+
+    const newQtyMap = new Map();
+    for (const ci of itemsToProcess) {
+      const pid = ci.product_id || ci.productId;
+      if (pid) {
+        newQtyMap.set(Number(pid), (newQtyMap.get(Number(pid)) || 0) + Number(ci.quantity || 0));
+      }
+    }
+
+    const allPids = new Set([...origQtyMap.keys(), ...newQtyMap.keys()]);
+    for (const pid of allPids) {
+      const oldQty = origQtyMap.get(pid) || 0;
+      const newQty = newQtyMap.get(pid) || 0;
+      const diff = newQty - oldQty;
+
+      if (diff > 0) {
+        const prod = await Product.findByPk(pid, { transaction, lock: transaction.LOCK.UPDATE });
+        if (prod) {
+          const avail = Math.max(0, Number(prod.stock_quantity) - Number(prod.hold_quantity || 0));
+          if (avail < diff) {
+            throw new Error(`Sản phẩm "${prod.product_name}" không đủ tồn kho khả dụng để tăng thêm ${diff} (khả dụng còn ${avail}).`);
+          }
+          await prod.increment('hold_quantity', { by: diff, transaction });
+        }
+      } else if (diff < 0) {
+        const prod = await Product.findByPk(pid, { transaction, lock: transaction.LOCK.UPDATE });
+        if (prod && prod.hold_quantity > 0) {
+          const releaseQty = Math.min(Number(prod.hold_quantity), Math.abs(diff));
+          await prod.decrement('hold_quantity', { by: releaseQty, transaction });
+        }
+      }
+    }
+
     // Cập nhật trạng thái và thông tin bổ sung cho request
-    request.status = 'CONVERTED';
+    request.status = 'DRAFT';
     request.approved_at = new Date();
     request.modifieby = createBy;
     if (finalCustomerAddress) request.delivery_address = finalCustomerAddress;
@@ -455,7 +494,7 @@ async function createSalesOrderRequest({
       budget_min: budgetMin || null,
       budget_max: budgetMax || null,
       expected_date: expectedDate || null,
-      status: 'PENDING',
+      status: 'DESIGNING',
       createby: createdBy || 'Sales',
     }, { transaction });
 
@@ -704,7 +743,7 @@ async function reviewOrderRequest(requestId, action, { reason, note, reviewedBy 
     throw new Error('Không tìm thấy yêu cầu thiết kế.');
   }
 
-  const validActions = ['REQUEST_CHANGE', 'REJECT', 'APPROVE', 'FINALIZE_DESIGN'];
+  const validActions = ['REQUEST_CHANGE', 'REJECT', 'APPROVE', 'CONFIRM', 'FINALIZE_DESIGN'];
   if (!validActions.includes(action)) {
     throw new Error(`Hành động "${action}" không hợp lệ. Các hành động hợp lệ: ${validActions.join(', ')}.`);
   }
@@ -724,11 +763,28 @@ async function reviewOrderRequest(requestId, action, { reason, note, reviewedBy 
     }
     updateData.status = 'REJECTED';
     updateData.reject_reason = String(reason).trim();
-  } else if (action === 'APPROVE') {
-    updateData.status = 'APPROVED';
+
+    // Nhả lại số lượng giữ chỗ (hold_quantity) cho các sản phẩm khi yêu cầu bị từ chối
+    if (request.status !== 'REJECTED' && request.status !== 'CONVERTED') {
+      const reqWithItems = await OrderRequest.findByPk(requestId, {
+        include: [{ model: OrderRequestItem, as: 'items' }],
+      });
+      for (const item of (reqWithItems?.items || [])) {
+        if (item.product_id && item.quantity > 0) {
+          const prod = await Product.findByPk(item.product_id);
+          if (prod && prod.hold_quantity > 0) {
+            const releaseQty = Math.min(Number(prod.hold_quantity), Number(item.quantity));
+            await prod.decrement('hold_quantity', { by: releaseQty });
+          }
+        }
+      }
+    }
+  } else if (action === 'APPROVE' || action === 'CONFIRM') {
+    updateData.status = 'CONFIRMED';
+    updateData.approved_at = new Date();
     if (note) updateData.staff_note = note;
   } else if (action === 'FINALIZE_DESIGN') {
-    updateData.status = 'DESIGN_FINALIZED';
+    updateData.status = 'DESIGNED';
     updateData.approved_at = new Date();
     if (note) updateData.staff_note = note;
   }
@@ -760,7 +816,8 @@ module.exports = {
  *   + Ghi chú/mô tả lưu vào trường description của order_request
  * Chỉ OWNER mới được gọi hàm này
  */
-async function updateDesignFile(requestId, { requestItemId, description, imageUrl, updatedBy }) {
+async function updateDesignFile(requestId, { requestItemId, description, imageUrl, fileUrl, updatedBy, designedBy }) {
+  const finalImageUrl = imageUrl || fileUrl;
   const request = await OrderRequest.findByPk(requestId);
   if (!request) {
     const err = new Error('Không tìm thấy yêu cầu.');
@@ -795,7 +852,7 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
     await targetItem.save();
 
     // 2. Lưu ảnh thiết kế gắn trực tiếp với sản phẩm này
-    if (imageUrl) {
+    if (finalImageUrl) {
       const maxSort = (await OrderRequestImage.max('sort_order', {
         where: {
           request_id: requestId,
@@ -805,7 +862,8 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
       await OrderRequestImage.create({
         request_id: requestId,
         request_item_id: requestItemId,
-        image_url: imageUrl,
+        image_url: finalImageUrl,
+        image_type: 'DESIGN',
         sort_order: (maxSort || 0) + 1,
         createby: updatedBy || null,
       });
@@ -816,7 +874,7 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
       request.description = description.trim();
     }
 
-    if (imageUrl) {
+    if (finalImageUrl) {
       const maxSort = (await OrderRequestImage.max('sort_order', {
         where: {
           request_id: requestId,
@@ -826,13 +884,23 @@ async function updateDesignFile(requestId, { requestItemId, description, imageUr
       await OrderRequestImage.create({
         request_id: requestId,
         request_item_id: null,
-        image_url: imageUrl,
+        image_url: finalImageUrl,
+        image_type: 'DESIGN',
         sort_order: (maxSort || 0) + 1,
         createby: updatedBy || null,
       });
     }
   }
 
+  // Tự động chuyển trạng thái yêu cầu sang DESIGNED (Chủ đã hoàn tất bản vẽ gửi sang Sale)
+  // và ghi nhận thông tin Chủ thiết kế cùng thời điểm
+  if (request.status !== 'CONVERTED' && request.status !== 'REJECTED') {
+    request.status = 'DESIGNED';
+  }
+  if (designedBy) {
+    request.designed_by = designedBy;
+  }
+  request.designed_at = new Date();
   request.modifieby = updatedBy || null;
   await request.save();
 

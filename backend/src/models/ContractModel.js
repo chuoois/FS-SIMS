@@ -7,7 +7,6 @@ const { UserAccount } = require('./userAccount.model');
 const Contract = sequelize.define('Contract', {
   contract_id: { type: DataTypes.BIGINT, allowNull: false, primaryKey: true, autoIncrement: true },
   contract_code: { type: DataTypes.STRING(30), allowNull: false },
-  source: { type: DataTypes.STRING(20), allowNull: false },
   contract_type: { type: DataTypes.STRING(20), allowNull: false },
   request_id: { type: DataTypes.BIGINT, allowNull: true, references: { model: 'order_request', key: 'request_id' } },
   customer_account_id: { type: DataTypes.BIGINT, allowNull: true, references: { model: 'user_account', key: 'user_account_id' } },
@@ -84,6 +83,7 @@ async function generateNextContractCode() {
  * Tạo hợp đồng bán hàng trực tiếp tại quầy (OFFLINE)
  */
 async function createOfflineContract({
+  customerAccountId = null,
   customerName,
   customerPhone,
   customerAddress,
@@ -118,9 +118,13 @@ async function createOfflineContract({
       if (prod.status !== 'ACTIVE') {
         throw new Error(`Sản phẩm "${prod.product_name}" hiện không còn kinh doanh.`);
       }
-      if (prod.stock_quantity < item.quantity) {
+      const currentStock = Number(prod.stock_quantity) || 0;
+      const currentHold = Number(prod.hold_quantity) || 0;
+      const availableStock = Math.max(0, currentStock - currentHold);
+
+      if (availableStock < item.quantity) {
         throw new Error(
-          `Sản phẩm "${prod.product_name}" trong kho chỉ còn ${prod.stock_quantity} (bạn chọn ${item.quantity}).`
+          `Sản phẩm "${prod.product_name}" trong kho chỉ còn ${availableStock} (bạn chọn ${item.quantity}).`
         );
       }
 
@@ -149,10 +153,9 @@ async function createOfflineContract({
     const contract = await Contract.create(
       {
         contract_code: contractCode,
-        source: 'OFFLINE',
         contract_type: 'READY',
         request_id: null,
-        customer_account_id: null,
+        customer_account_id: customerAccountId || null,
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_address: customerAddress || null,
@@ -176,6 +179,14 @@ async function createOfflineContract({
     }));
 
     await ContractItem.bulkCreate(itemsToCreate, { transaction });
+
+    // Giữ chỗ (hold_quantity) sản phẩm trong kho khi tạo hợp đồng tại quầy
+    for (const item of items) {
+      const prod = productMap.get(item.product_id);
+      if (prod) {
+        await prod.increment('hold_quantity', { by: item.quantity, transaction });
+      }
+    }
 
     await transaction.commit();
 
@@ -210,6 +221,16 @@ async function signContract(contractId, { signedPlace, signedBy, modifieBy, cont
   if (contractFileUrl) contract.contract_file_url = contractFileUrl;
 
   await contract.save();
+
+  // Đồng thời cập nhật trạng thái của order_request thành CONVERTED nếu hợp đồng gắn với yêu cầu đặt hàng
+  if (contract.request_id) {
+    const { OrderRequest } = require('./OrderRequestModel');
+    await OrderRequest.update(
+      { status: 'CONVERTED', modifieby: modifieBy || 'STAFF' },
+      { where: { request_id: contract.request_id } }
+    );
+  }
+
   return findContractById(contractId);
 }
 
@@ -226,7 +247,7 @@ async function findContractById(contractId) {
           {
             model: Product,
             as: 'product',
-            attributes: ['product_id', 'product_code', 'product_name', 'price', 'stock_quantity', 'image_url'],
+            attributes: ['product_id', 'product_code', 'product_name', 'price', 'stock_quantity', 'hold_quantity', 'image_url'],
           },
         ],
       },
@@ -254,7 +275,7 @@ async function findContractByCode(contractCode) {
           {
             model: Product,
             as: 'product',
-            attributes: ['product_id', 'product_code', 'product_name', 'price', 'stock_quantity', 'image_url'],
+            attributes: ['product_id', 'product_code', 'product_name', 'price', 'stock_quantity', 'hold_quantity', 'image_url'],
           },
         ],
       },

@@ -29,6 +29,17 @@ const genders = [
   { value: 'OTHER', label: 'Khác' },
 ];
 const MAX_AVATAR_MB = 2;
+const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/png'];
+
+export const validateAvatarFile = (file) => {
+  if (!ALLOWED_AVATAR_TYPES.includes(file?.type)) {
+    return 'Chỉ hỗ trợ định dạng JPG hoặc PNG.';
+  }
+  if ((file?.size || 0) > MAX_AVATAR_MB * 1024 * 1024) {
+    return `Ảnh tối đa ${MAX_AVATAR_MB}MB.`;
+  }
+  return '';
+};
 
 const tabs = [
   { id: 'info', label: 'Thông tin cá nhân', icon: UserRound },
@@ -87,8 +98,12 @@ const AvatarPicker = ({ name, url, onChange }) => {
   const onFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) return setError('Vui lòng chọn một tệp ảnh.');
-    if (file.size > MAX_AVATAR_MB * 1024 * 1024) return setError(`Ảnh tối đa ${MAX_AVATAR_MB}MB.`);
+    const validationError = validateAvatarFile(file);
+    if (validationError) {
+      setError(validationError);
+      e.target.value = '';
+      return;
+    }
     setError('');
     onChange(file);
   };
@@ -109,7 +124,7 @@ const AvatarPicker = ({ name, url, onChange }) => {
         >
           Đổi ảnh
         </label>
-        <input id={inputId} type="file" accept="image/*" onChange={onFile} className="sr-only" />
+        <input id={inputId} type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" onChange={onFile} className="sr-only" />
         {url && (
           <button type="button" onClick={() => onChange(null)} className="ml-3 text-xs font-medium text-stone-500 hover:text-red-600">
             Xóa ảnh

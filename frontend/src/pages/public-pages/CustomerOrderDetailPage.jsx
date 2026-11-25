@@ -12,6 +12,8 @@ import {
   UserRound,
 } from 'lucide-react';
 import { getMyOrderById, getMyOrderRequestById } from '../../services/customerOrderService';
+import { CustomerOrderStatusBadge, OrderRequestStatusBadge } from '../../components/common/StatusBadge';
+import { formatVND, formatDateVN } from '../../utils/formatters';
 import {
   formatDate,
   formatVnd,
@@ -19,7 +21,7 @@ import {
   statusClasses,
   statusHints,
   statusNames,
-} from './orderStatus';
+} from '../../constants/orderStatus';
 
 const focusRing =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900';
@@ -174,7 +176,7 @@ export const CustomerOrderDetailPage = () => {
             ? requestId
               ? 'Không tìm thấy yêu cầu hoặc bạn không có quyền xem yêu cầu này.'
               : 'Không tìm thấy đơn hàng hoặc bạn không có quyền xem đơn này.'
-            : requestError.response?.data?.message || 'Không thể tải chi tiết đơn hàng.'
+            : requestError.response?.data?.detail || 'Không thể tải chi tiết đơn hàng.'
         );
       })
       .finally(() => {
@@ -209,13 +211,11 @@ export const CustomerOrderDetailPage = () => {
           </h1>
           {order && (
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <span
-                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                  statusClasses[order.status] || 'bg-stone-700 text-white'
-                }`}
-              >
-                {statusNames[order.status] || order.status}
-              </span>
+              {isRequest ? (
+                <OrderRequestStatusBadge status={order.status} size="lg" />
+              ) : (
+                <CustomerOrderStatusBadge status={order.status} size="lg" />
+              )}
               <span className="text-xs text-stone-300">
                 {isRequest ? 'Gửi ngày' : 'Đặt ngày'} {formatDate(order.createdAt)}
               </span>

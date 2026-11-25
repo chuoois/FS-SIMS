@@ -11,6 +11,19 @@ export function isOwnerDesignImage(img) {
   );
 }
 
+export function normalizeImage(img) {
+  if (!img) return { imageUrl: '' };
+  if (typeof img === 'string') return { imageUrl: img };
+  return {
+    ...img,
+    imageUrl: img.imageUrl || img.url || '',
+  };
+}
+
+export const normalizeImg = normalizeImage;
+export const isOwnerDesignImg = isOwnerDesignImage;
+export const isPdfUrl = isPdfDesignUrl;
+
 export function isPdfDesignUrl(url = '') {
   return (
     typeof url === 'string' &&

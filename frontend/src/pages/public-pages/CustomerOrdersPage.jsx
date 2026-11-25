@@ -10,13 +10,15 @@ import {
   X,
 } from 'lucide-react';
 import { getMyOrders } from '../../services/customerOrderService';
+import { CustomerOrderStatusBadge } from '../../components/common/StatusBadge';
+import { formatVND, formatDateVN } from '../../utils/formatters';
 import {
   STATUS_TABS,
   formatDate,
   formatVnd,
   statusClasses,
   statusNames,
-} from './orderStatus';
+} from '../../constants/orderStatus';
 
 /* =====================================================================
  * Cấu hình
@@ -36,16 +38,7 @@ const getPages = (current, total) => {
 };
 
 /* ---------- Thành phần nhỏ ---------- */
-const StatusBadge = ({ status }) => (
-  <span
-    className={`inline-flex shrink-0 px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
-      statusClasses[status] || 'bg-stone-100 text-stone-700'
-    }`}
-  >
-    {statusNames[status] || status}
-  </span>
-);
-
+const StatusBadge = ({ status }) => <CustomerOrderStatusBadge status={status} size="sm" />;
 const Thumb = ({ src, alt }) =>
   src ? (
     <img src={src} alt={alt} className="size-16 shrink-0 bg-stone-100 object-cover sm:size-20" />
@@ -263,12 +256,19 @@ export const CustomerOrdersPage = () => {
       .then((response) => {
         if (cancelled) return;
         setOrders(Array.isArray(response.data) ? response.data : []);
-        if (response.pagination) setPagination(response.pagination);
+        if (response.meta) {
+          setPagination({
+            totalItems: response.meta.total,
+            totalPages: response.meta.totalPages,
+            currentPage: response.meta.page,
+            itemsPerPage: response.meta.limit,
+          });
+        }
       })
       .catch((requestError) => {
         if (cancelled) return;
         console.error('[CustomerOrdersPage] Không thể tải đơn hàng:', requestError);
-        setError(requestError.response?.data?.message || 'Không thể tải đơn hàng. Vui lòng thử lại.');
+        setError(requestError.response?.data?.detail || 'Không thể tải đơn hàng. Vui lòng thử lại.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

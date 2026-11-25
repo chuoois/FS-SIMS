@@ -38,7 +38,7 @@ async function buildCartResponse(cart) {
   const data = items
     .filter(({ product }) => product)
     .map(({ cartItem, product }) => {
-      const productData = toProductDTO(product);
+      const productData = toProductDTO(product, { showAvailableStock: true });
       return {
         cartItemId: cartItem.cart_item_id,
         quantity: Number(cartItem.quantity),

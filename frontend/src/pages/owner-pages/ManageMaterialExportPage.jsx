@@ -2,6 +2,7 @@
 // ManageMaterialExportPage.jsx
 // Quản lý Phiếu Xuất Kho Nguyên Vật Liệu (Manage Material Export Slips) dành cho Chủ xưởng (Owner)
 // Bao gồm: Danh sách, Tạo mới, Xem chi tiết, Chỉnh sửa, Xác nhận xuất kho, Xóa & In phiếu xuất
+// Chuẩn hóa 100% theo FSSIMS Design System (Xưởng sản xuất đồ gỗ nội thất Góc Nhà)
 // =========================================================
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -21,6 +22,8 @@ import {
   Clock,
   Hammer,
   Package,
+  AlertCircle,
+  Calendar,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -37,50 +40,35 @@ import {
 } from '../../services/materialExportService';
 import { getRawMaterials } from '../../services/rawMaterialService';
 import { TablePagination } from '../../components/common/TablePagination';
-
-// Format ngày tháng Việt Nam
-const formatDate = (dateString) => {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch {
-    return dateString;
-  }
-};
+import { formatDateVN as formatDate } from '../../utils/formatters';
 
 // Huy hiệu trạng thái phiếu xuất
 const StatusBadge = ({ status }) => {
   switch (status) {
     case 'CONFIRMED':
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">
           <CheckCircle2 className="h-3.5 w-3.5" />
           Đã xuất kho
         </span>
       );
     case 'DRAFT':
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
           <Clock className="h-3.5 w-3.5" />
           Phiếu nháp
         </span>
       );
     case 'CANCELLED':
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-800 border border-rose-200">
           <XCircle className="h-3.5 w-3.5" />
           Đã hủy
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700">
+        <span className="inline-flex items-center rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-700">
           {status}
         </span>
       );
@@ -190,7 +178,7 @@ export const ManageMaterialExportPage = () => {
         to_date: toDate || undefined,
       };
 
-      const res = await getMaterialExport(params);
+      const res = await getMaterialExports(params);
       setIssues(res?.data || []);
       if (res?.pagination) {
         setPagination(res.pagination);
@@ -202,9 +190,6 @@ export const ManageMaterialExportPage = () => {
       setLoading(false);
     }
   }, [currentPage, pageSize, searchTerm, statusFilter, productionFilter, fromDate, toDate]);
-
-  // Alias helper for getMaterialExports
-  const getMaterialExport = getMaterialExports;
 
   useEffect(() => {
     fetchIssues();
@@ -486,36 +471,33 @@ export const ManageMaterialExportPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* ── Tiêu đề & Nút thao tác ───────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* ── 1. HEADER & ACTION BUTTONS ───────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-                Quản Lý Phiếu Xuất Kho
-              </h1>
-              <p className="text-sm text-stone-500">
-                Xuất nguyên vật liệu gỗ từ kho xưởng phục vụ cho các lệnh gia công sản xuất.
-              </p>
-            </div>
-          </div>
+          <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
+            Quản Lý Phiếu Xuất Kho
+          </h1>
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Xuất nguyên vật liệu gỗ từ kho xưởng phục vụ cho các lệnh gia công sản xuất đồ nội thất Góc Nhà.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 shadow-xs transition hover:bg-stone-50 active:scale-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             title="Tải lại danh sách"
           >
-            <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin text-amber-700' : ''}`} />
+            <RotateCw className={`h-3.5 w-3.5 text-stone-500 ${refreshing ? 'animate-spin text-amber-700' : ''}`} />
             <span>Làm mới</span>
           </button>
 
           <button
+            type="button"
             onClick={handleOpenCreateModal}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-800 active:scale-95"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-amber-950 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
           >
             <Plus className="h-4 w-4" />
             <span>Lập phiếu xuất mới</span>
@@ -523,68 +505,109 @@ export const ManageMaterialExportPage = () => {
         </div>
       </div>
 
-      {/* ── Thống kê tổng quan (Cards) ─────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ── 2. THỐNG KÊ TỔNG QUAN (CARDS) ────────────────────── */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Tổng phiếu xuất */}
-        <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs transition hover:border-stone-300">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-stone-500">Tổng số phiếu xuất</span>
-            <div className="rounded-lg bg-stone-100 p-2 text-stone-700">
-              <FileText className="h-5 w-5" />
+            <span className="text-xs font-medium text-stone-500">Tổng số phiếu xuất</span>
+            <div className="rounded-lg bg-stone-100 p-1.5 text-stone-700">
+              <FileText className="h-4 w-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-stone-900">{summary.totalIssues}</span>
-            <span className="text-xs text-stone-400">phiếu</span>
+          <div className="mt-2 text-lg font-bold font-mono text-stone-900 sm:text-2xl">
+            {summary.totalIssues}
+            <span className="ml-1.5 text-xs font-sans font-normal text-stone-400">phiếu</span>
           </div>
+          <div className="mt-1 text-[11px] text-stone-500">Toàn bộ phiếu xuất phát sinh</div>
         </div>
 
         {/* Phiếu nháp */}
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/30 p-4 shadow-xs transition hover:border-amber-300">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-amber-800">Phiếu nháp chờ xuất</span>
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-700">
-              <Clock className="h-5 w-5" />
+            <span className="text-xs font-semibold text-amber-800">Phiếu nháp chờ xuất</span>
+            <div className="rounded-lg bg-amber-100 p-1.5 text-amber-800">
+              <Clock className="h-4 w-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-900">{summary.draftCount}</span>
-            <span className="text-xs text-amber-600">chưa trừ kho</span>
+          <div className="mt-2 text-lg font-bold font-mono text-amber-900 sm:text-2xl">
+            {summary.draftCount}
+            <span className="ml-1.5 text-xs font-sans font-normal text-amber-700">phiếu</span>
           </div>
+          <div className="mt-1 text-[11px] text-amber-700">Chưa trừ số lượng tồn kho</div>
         </div>
 
         {/* Đã xuất kho */}
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 shadow-xs transition hover:border-emerald-300">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-emerald-800">Đã xuất kho</span>
-            <div className="rounded-lg bg-emerald-100 p-2 text-emerald-700">
-              <CheckCircle2 className="h-5 w-5" />
+            <span className="text-xs font-semibold text-emerald-800">Đã xuất kho</span>
+            <div className="rounded-lg bg-emerald-100 p-1.5 text-emerald-800">
+              <CheckCircle2 className="h-4 w-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-900">{summary.confirmedCount}</span>
-            <span className="text-xs text-emerald-600">đã trừ kho</span>
+          <div className="mt-2 text-lg font-bold font-mono text-emerald-900 sm:text-2xl">
+            {summary.confirmedCount}
+            <span className="ml-1.5 text-xs font-sans font-normal text-emerald-700">phiếu</span>
           </div>
+          <div className="mt-1 text-[11px] text-emerald-700">Đã trừ tồn kho xưởng thực tế</div>
         </div>
 
         {/* Tổng số lượng đã xuất */}
-        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-5 shadow-sm transition hover:shadow">
+        <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs transition hover:border-stone-300">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-blue-800">Tổng SL gỗ đã xuất</span>
-            <div className="rounded-lg bg-blue-100 p-2 text-blue-700">
-              <Layers className="h-5 w-5" />
+            <span className="text-xs font-medium text-stone-500">Tổng SL gỗ đã xuất</span>
+            <div className="rounded-lg bg-stone-100 p-1.5 text-stone-700">
+              <Layers className="h-4 w-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-blue-900">{summary.totalQuantityIssued}</span>
-            <span className="text-xs text-blue-600">tấm/thanh</span>
+          <div className="mt-2 text-lg font-bold font-mono text-stone-900 sm:text-2xl">
+            {summary.totalQuantityIssued}
+            <span className="ml-1.5 text-xs font-sans font-normal text-stone-400">tấm/thanh</span>
           </div>
+          <div className="mt-1 text-[11px] text-stone-500">Cung ứng cho tổ thợ mộc</div>
         </div>
-      </div>
+      </section>
 
-      {/* ── Bộ lọc & Tìm kiếm ─────────────────────────────── */}
-      <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      {/* ── 3. BỘ LỌC & TÌM KIẾM ─────────────────────────────── */}
+      <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs space-y-4">
+        {/* Tabs trạng thái phiếu xuất */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 pb-3">
+          {[
+            { key: 'ALL', label: 'Tất cả phiếu', count: summary.totalIssues || 0 },
+            { key: 'DRAFT', label: 'Phiếu nháp', count: summary.draftCount || 0 },
+            { key: 'CONFIRMED', label: 'Đã xuất kho', count: summary.confirmedCount || 0 },
+            { key: 'CANCELLED', label: 'Đã hủy', count: summary.cancelledCount || 0 },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(tab.key);
+                  setCurrentPage(1);
+                }}
+                className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 ${
+                  isActive
+                    ? 'bg-stone-900 text-white font-semibold'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:text-stone-900'
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-mono font-medium ${
+                    isActive ? 'bg-stone-700 text-white' : 'bg-stone-200 text-stone-700'
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Thanh tìm kiếm & bộ lọc phụ */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           {/* Ô tìm kiếm */}
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
@@ -596,35 +619,33 @@ export const ManageMaterialExportPage = () => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+              className="w-full rounded-lg border border-stone-300 py-2 pl-9 pr-9 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setCurrentPage(1);
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-600 focus-visible:outline-none"
+                title="Xóa từ khóa"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Lọc Trạng thái & Lệnh gia công */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Lọc Trạng thái */}
+          {/* Lọc Lệnh gia công */}
+          <div className="w-full lg:w-60 shrink-0">
             <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="DRAFT">Phiếu nháp</option>
-              <option value="CONFIRMED">Đã xuất kho</option>
-              <option value="CANCELLED">Đã hủy</option>
-            </select>
-
-            {/* Lọc Lệnh gia công */}
-            <select
+              aria-label="Lọc theo lệnh gia công"
               value={productionFilter}
               onChange={(e) => {
                 setProductionFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 max-w-xs"
+              className="w-full rounded-lg border border-stone-300 bg-white py-2 px-3 text-xs text-stone-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             >
               <option value="ALL">Tất cả lệnh gia công</option>
               {productionOrders.map((ord) => (
@@ -633,72 +654,78 @@ export const ManageMaterialExportPage = () => {
                 </option>
               ))}
             </select>
-
-            {/* Nút Đặt lại bộ lọc */}
-            {(searchTerm || statusFilter !== 'ALL' || productionFilter !== 'ALL' || fromDate || toDate) && (
-              <button
-                onClick={handleResetFilters}
-                className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-medium text-stone-600 transition hover:bg-stone-50"
-              >
-                Xóa bộ lọc
-              </button>
-            )}
           </div>
+
+          {/* Nút Đặt lại bộ lọc */}
+          {(searchTerm || statusFilter !== 'ALL' || productionFilter !== 'ALL' || fromDate || toDate) && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="shrink-0 rounded-lg border border-stone-300 px-3 py-2 text-xs font-medium text-stone-600 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+            >
+              Xóa bộ lọc
+            </button>
+          )}
         </div>
 
-        {/* Lọc theo ngày */}
-        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-stone-100 text-xs text-stone-600">
-          <span className="font-semibold text-stone-700">Ngày xuất kho:</span>
+        {/* Lọc theo ngày xuất kho */}
+        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-stone-100 text-xs text-stone-600">
+          <span className="font-medium text-stone-700 flex items-center gap-1.5">
+            <Calendar className="h-3.5 w-3.5 text-stone-400" />
+            <span>Ngày xuất kho:</span>
+          </span>
           <div className="flex items-center gap-1.5">
             <span>Từ:</span>
             <input
               type="date"
+              aria-label="Từ ngày xuất kho"
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-md border border-stone-300 px-2.5 py-1 text-xs text-stone-900 focus:border-amber-600 focus:outline-none"
+              className="rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             />
           </div>
           <div className="flex items-center gap-1.5">
             <span>Đến:</span>
             <input
               type="date"
+              aria-label="Đến ngày xuất kho"
               value={toDate}
               onChange={(e) => {
                 setToDate(e.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-md border border-stone-300 px-2.5 py-1 text-xs text-stone-900 focus:border-amber-600 focus:outline-none"
+              className="rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
             />
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── Bảng dữ liệu phiếu xuất kho ───────────────────── */}
-      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+      {/* ── 4. BẢNG DỮ LIỆU PHIẾU XUẤT KHO ───────────────────── */}
+      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xs">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
+          <table className="min-w-full divide-y divide-stone-200 text-left text-xs">
             <thead className="bg-stone-50 font-semibold text-stone-700">
               <tr>
-                <th className="py-3.5 pl-4 pr-3 sm:pl-6">Mã phiếu</th>
-                <th className="px-3 py-3.5">Ngày xuất</th>
-                <th className="px-3 py-3.5">Lệnh gia công</th>
-                <th className="px-3 py-3.5">Người xuất kho</th>
-                <th className="px-3 py-3.5 text-center">Số mặt hàng</th>
-                <th className="px-3 py-3.5 text-center">Tổng SL xuất</th>
-                <th className="px-3 py-3.5 text-center">Trạng thái</th>
-                <th className="py-3.5 pl-3 pr-4 text-center sm:pr-6">Thao tác</th>
+                <th className="py-3 pl-4 pr-3 sm:pl-6">Mã phiếu</th>
+                <th className="px-3 py-3">Ngày xuất</th>
+                <th className="px-3 py-3">Lệnh gia công</th>
+                <th className="px-3 py-3">Người xuất kho</th>
+                <th className="px-3 py-3 text-center">Số mặt hàng</th>
+                <th className="px-3 py-3 text-center">Tổng SL xuất</th>
+                <th className="px-3 py-3 text-center">Trạng thái</th>
+                <th className="py-3 pl-3 pr-4 text-center sm:pr-6">Thao tác</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-stone-200 bg-white">
+            <tbody className="divide-y divide-stone-100 bg-white">
               {loading ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-stone-500">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <RotateCw className="h-6 w-6 animate-spin text-amber-700" />
+                      <RotateCw className="h-5 w-5 animate-spin text-amber-700" />
                       <span>Đang tải danh sách phiếu xuất kho...</span>
                     </div>
                   </td>
@@ -707,8 +734,8 @@ export const ManageMaterialExportPage = () => {
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-stone-500">
                     <div className="flex flex-col items-center justify-center gap-2">
-                      <FileText className="h-10 w-10 text-stone-300" />
-                      <p className="font-medium text-stone-700">Không tìm thấy phiếu xuất kho nào</p>
+                      <FileText className="h-9 w-9 text-stone-300" />
+                      <p className="font-semibold text-stone-700 text-sm">Không tìm thấy phiếu xuất kho nào</p>
                       <p className="text-xs text-stone-400">
                         Thử điều chỉnh lại bộ lọc hoặc bấm &quot;Lập phiếu xuất mới&quot; để tạo phiếu.
                       </p>
@@ -717,64 +744,66 @@ export const ManageMaterialExportPage = () => {
                 </tr>
               ) : (
                 issues.map((issue) => (
-                  <tr key={issue.issue_id} className="transition hover:bg-stone-50/80">
+                  <tr key={issue.issue_id} className="transition hover:bg-stone-50/70">
                     {/* Mã phiếu */}
-                    <td className="whitespace-nowrap py-3.5 pl-4 pr-3 sm:pl-6">
+                    <td className="whitespace-nowrap py-3 pl-4 pr-3 sm:pl-6">
                       <button
+                        type="button"
                         onClick={() => handleOpenDetailModal(issue.issue_id)}
-                        className="font-semibold text-amber-800 hover:underline hover:text-amber-900"
+                        className="font-semibold font-mono text-amber-900 hover:underline hover:text-amber-950 focus-visible:outline-none"
                       >
                         {issue.issue_code}
                       </button>
                       {issue.note && (
-                        <p className="mt-0.5 line-clamp-1 max-w-xs text-xs text-stone-400">
+                        <p className="mt-0.5 line-clamp-1 max-w-xs text-[11px] text-stone-400">
                           {issue.note}
                         </p>
                       )}
                     </td>
 
                     {/* Ngày xuất */}
-                    <td className="whitespace-nowrap px-3 py-3.5 text-stone-600">
+                    <td className="whitespace-nowrap px-3 py-3 text-stone-600">
                       {formatDate(issue.issue_date)}
                     </td>
 
                     {/* Lệnh gia công */}
-                    <td className="px-3 py-3.5">
+                    <td className="px-3 py-3">
                       <div className="font-medium text-stone-800">{issue.production_code || '—'}</div>
                       {issue.production_type && (
-                        <div className="text-xs text-stone-400">Loại: {issue.production_type}</div>
+                        <div className="text-[11px] text-stone-400">Loại: {issue.production_type}</div>
                       )}
                     </td>
 
                     {/* Người xuất */}
-                    <td className="whitespace-nowrap px-3 py-3.5 text-stone-600">
+                    <td className="whitespace-nowrap px-3 py-3 text-stone-600">
                       {issue.issuer_name || '—'}
                     </td>
 
                     {/* Số mặt hàng */}
-                    <td className="whitespace-nowrap px-3 py-3.5 text-center text-stone-700">
-                      <span className="inline-block rounded-md bg-stone-100 px-2 py-0.5 text-xs font-semibold">
+                    <td className="whitespace-nowrap px-3 py-3 text-center text-stone-700">
+                      <span className="inline-block rounded bg-stone-100 px-2 py-0.5 text-[11px] font-medium font-mono">
                         {issue.items_count} loại
                       </span>
                     </td>
 
                     {/* Tổng số lượng xuất */}
-                    <td className="whitespace-nowrap px-3 py-3.5 text-center font-bold text-stone-900">
+                    <td className="whitespace-nowrap px-3 py-3 text-center font-bold font-mono text-stone-900">
                       {issue.total_quantity}
                     </td>
 
                     {/* Trạng thái */}
-                    <td className="whitespace-nowrap px-3 py-3.5 text-center">
+                    <td className="whitespace-nowrap px-3 py-3 text-center">
                       <StatusBadge status={issue.status} />
                     </td>
 
                     {/* Thao tác */}
-                    <td className="whitespace-nowrap py-3.5 pl-3 pr-4 text-center sm:pr-6">
+                    <td className="whitespace-nowrap py-3 pl-3 pr-4 text-center sm:pr-6">
                       <div className="inline-flex items-center gap-1.5">
                         {/* Xem chi tiết */}
                         <button
+                          type="button"
                           onClick={() => handleOpenDetailModal(issue.issue_id)}
-                          className="rounded p-1.5 text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                          className="rounded-lg p-1.5 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                           title="Xem chi tiết"
                         >
                           <Eye className="h-4 w-4" />
@@ -782,8 +811,9 @@ export const ManageMaterialExportPage = () => {
 
                         {/* In phiếu */}
                         <button
+                          type="button"
                           onClick={() => handleOpenPrintModal(issue.issue_id, issue)}
-                          className="rounded p-1.5 text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                          className="rounded-lg p-1.5 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                           title="In phiếu xuất kho"
                           aria-label="In phiếu xuất kho"
                         >
@@ -793,8 +823,9 @@ export const ManageMaterialExportPage = () => {
                         {/* Chỉnh sửa (chỉ khi là DRAFT) */}
                         {issue.status === 'DRAFT' && (
                           <button
+                            type="button"
                             onClick={() => handleOpenEditModal(issue)}
-                            className="rounded p-1.5 text-amber-600 hover:bg-amber-50 hover:text-amber-800"
+                            className="rounded-lg p-1.5 text-amber-700 hover:bg-amber-50 hover:text-amber-900 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             title="Chỉnh sửa phiếu nháp"
                           >
                             <Pencil className="h-4 w-4" />
@@ -804,8 +835,9 @@ export const ManageMaterialExportPage = () => {
                         {/* Xác nhận xuất kho (chỉ khi là DRAFT) */}
                         {issue.status === 'DRAFT' && (
                           <button
+                            type="button"
                             onClick={() => handleConfirmDirect(issue)}
-                            className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                            className="rounded-lg p-1.5 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             title="Xác nhận xuất kho (trừ tồn kho)"
                           >
                             <CheckCircle2 className="h-4 w-4" />
@@ -815,8 +847,9 @@ export const ManageMaterialExportPage = () => {
                         {/* Xóa phiếu nháp (chỉ khi DRAFT hoặc CANCELLED) */}
                         {issue.status !== 'CONFIRMED' && (
                           <button
+                            type="button"
                             onClick={() => handleOpenDeleteModal(issue)}
-                            className="rounded p-1.5 text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                            className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-800 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                             title="Xóa phiếu nháp"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -849,16 +882,16 @@ export const ManageMaterialExportPage = () => {
       {/* MODAL 1: TẠO MỚI / CHỈNH SỬA PHIẾU XUẤT KHO           */}
       {/* ═════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-900/60 p-4 backdrop-blur-xs">
           <div className="relative my-8 w-full max-w-4xl rounded-2xl bg-white shadow-2xl">
             {/* Header modal */}
             <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-lg bg-amber-100 p-2 text-amber-900">
                   <FileText className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-stone-900">
+                  <h3 className="text-base font-bold text-stone-900 sm:text-lg">
                     {formMode === 'EDIT'
                       ? `Chỉnh Sửa Phiếu Xuất Kho (${form.issue_code || 'Nháp'})`
                       : 'Lập Phiếu Xuất Kho Nguyên Vật Liệu Mới'}
@@ -871,30 +904,32 @@ export const ManageMaterialExportPage = () => {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus-visible:outline-none"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Nội dung Form */}
-            <div className="max-h-[75vh] overflow-y-auto p-6 space-y-6">
+            <div className="max-h-[75vh] overflow-y-auto p-6 space-y-5">
               {/* Thông tin chung */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {/* Mã phiếu xuất */}
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700">
+                  <label htmlFor="form-issue-code" className="block text-xs font-semibold text-stone-700">
                     Mã phiếu xuất kho <span className="text-rose-500">*</span>
                   </label>
                   <input
+                    id="form-issue-code"
                     type="text"
                     disabled={formMode === 'EDIT'}
                     value={form.issue_code}
                     onChange={(e) => setForm({ ...form, issue_code: e.target.value })}
                     placeholder="Tự động sinh hoặc nhập mã..."
-                    className={`mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm uppercase text-stone-900 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600 ${
-                      formMode === 'EDIT' ? 'bg-stone-100 text-stone-500 cursor-not-allowed' : ''
+                    className={`mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-xs uppercase font-mono text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900 ${
+                      formMode === 'EDIT' ? 'bg-stone-100 text-stone-500 cursor-not-allowed' : 'bg-white'
                     }`}
                   />
                   <p className="mt-1 text-[11px] text-stone-400">Ví dụ: EXP-20261027-0001</p>
@@ -902,27 +937,29 @@ export const ManageMaterialExportPage = () => {
 
                 {/* Ngày xuất kho */}
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700">
+                  <label htmlFor="form-issue-date" className="block text-xs font-semibold text-stone-700">
                     Ngày xuất kho <span className="text-rose-500">*</span>
                   </label>
                   <input
+                    id="form-issue-date"
                     type="date"
                     value={form.issue_date}
                     onChange={(e) => setForm({ ...form, issue_date: e.target.value })}
-                    className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                    className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                   />
                 </div>
               </div>
 
               {/* Ghi chú */}
               <div>
-                <label className="block text-xs font-semibold text-stone-700">Ghi chú phiếu xuất</label>
+                <label htmlFor="form-note" className="block text-xs font-semibold text-stone-700">Ghi chú phiếu xuất</label>
                 <textarea
+                  id="form-note"
                   rows={2}
                   value={form.note}
                   onChange={(e) => setForm({ ...form, note: e.target.value })}
                   placeholder="Ghi chú về thợ nhận, khu vực thi công, lô gỗ xuất..."
-                  className="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-900 focus:border-amber-600 focus:outline-none focus:ring-1 focus:ring-amber-600"
+                  className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                 />
               </div>
 
@@ -930,7 +967,7 @@ export const ManageMaterialExportPage = () => {
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h4 className="text-sm font-bold text-stone-900">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-800">
                       Chi tiết nguyên vật liệu xuất kho <span className="text-rose-500">*</span>
                     </h4>
                     <p className="text-[11px] text-stone-500">
@@ -940,7 +977,7 @@ export const ManageMaterialExportPage = () => {
                   <button
                     type="button"
                     onClick={handleAddItemRow}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Thêm mặt hàng
@@ -959,7 +996,7 @@ export const ManageMaterialExportPage = () => {
                         <th className="py-2.5 pl-2 pr-3 text-center w-12">Xóa</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-stone-200 bg-white">
+                    <tbody className="divide-y divide-stone-100 bg-white">
                       {form.items.map((row, idx) => {
                         const selectedRaw = rawMaterials.find(
                           (r) => (r.raw_material_id || r.rawMaterialId) === Number(row.raw_material_id)
@@ -977,11 +1014,12 @@ export const ManageMaterialExportPage = () => {
                             {/* Nguyên vật liệu */}
                             <td className="px-2 py-2">
                               <select
+                                aria-label={`Chọn nguyên vật liệu dòng ${idx + 1}`}
                                 value={row.raw_material_id}
                                 onChange={(e) =>
                                   handleItemChange(idx, 'raw_material_id', e.target.value)
                                 }
-                                className="w-full rounded-md border border-stone-300 py-1.5 px-2 text-xs text-stone-900 focus:border-amber-600 focus:outline-none"
+                                className="w-full rounded-lg border border-stone-300 py-1.5 px-2 text-xs text-stone-900 bg-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               >
                                 <option value="">-- Chọn nguyên vật liệu --</option>
                                 {rawMaterials.map((raw) => {
@@ -1002,7 +1040,7 @@ export const ManageMaterialExportPage = () => {
                             {/* Tồn kho hiện có */}
                             <td className="px-2 py-2 text-center font-semibold">
                               <span
-                                className={`rounded px-2 py-0.5 text-xs ${
+                                className={`rounded px-2 py-0.5 text-xs font-mono ${
                                   stock <= 0
                                     ? 'bg-rose-100 text-rose-700'
                                     : 'bg-stone-100 text-stone-700'
@@ -1015,14 +1053,15 @@ export const ManageMaterialExportPage = () => {
                             {/* Số lượng xuất */}
                             <td className="px-2 py-2">
                               <input
+                                aria-label={`Số lượng xuất dòng ${idx + 1}`}
                                 type="number"
                                 min="1"
                                 value={row.quantity}
                                 onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                                className={`w-full rounded-md border py-1.5 px-2 text-center text-xs font-semibold focus:outline-none ${
+                                className={`w-full rounded-lg border py-1.5 px-2 text-center text-xs font-semibold font-mono focus-visible:outline-none focus-visible:ring-1 ${
                                   isOverStock && selectedRaw
-                                    ? 'border-rose-500 bg-rose-50 text-rose-700'
-                                    : 'border-stone-300 text-stone-900 focus:border-amber-600'
+                                    ? 'border-rose-500 bg-rose-50 text-rose-700 focus-visible:ring-rose-600'
+                                    : 'border-stone-300 text-stone-900 focus-visible:ring-stone-900'
                                 }`}
                               />
                               {isOverStock && selectedRaw && (
@@ -1033,11 +1072,12 @@ export const ManageMaterialExportPage = () => {
                             {/* Ghi chú */}
                             <td className="px-2 py-2">
                               <input
+                                aria-label={`Ghi chú quy cách dòng ${idx + 1}`}
                                 type="text"
                                 placeholder="Ghi chú cắt xẻ, độ dày..."
                                 value={row.note || ''}
                                 onChange={(e) => handleItemChange(idx, 'note', e.target.value)}
-                                className="w-full rounded-md border border-stone-300 py-1.5 px-2 text-xs text-stone-900 focus:border-amber-600 focus:outline-none"
+                                className="w-full rounded-lg border border-stone-300 py-1.5 px-2 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
                               />
                             </td>
 
@@ -1046,7 +1086,7 @@ export const ManageMaterialExportPage = () => {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItemRow(idx)}
-                                className="rounded p-1 text-rose-500 hover:bg-rose-50 hover:text-rose-700"
+                                className="rounded p-1 text-rose-500 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none"
                                 title="Xóa dòng này"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -1060,11 +1100,11 @@ export const ManageMaterialExportPage = () => {
                 </div>
 
                 {/* Hộp tổng kết */}
-                <div className="flex items-center justify-between rounded-xl bg-amber-50 p-4 border border-amber-200">
-                  <span className="text-sm font-semibold text-amber-900">
+                <div className="flex items-center justify-between rounded-xl bg-amber-50/70 p-4 border border-amber-200">
+                  <span className="text-xs font-semibold text-amber-900">
                     Tổng số lượng vật tư xuất ({form.items.length} loại vật liệu):
                   </span>
-                  <span className="text-xl font-bold text-amber-900">
+                  <span className="text-lg font-bold font-mono text-amber-900">
                     {formTotalQuantity} đơn vị
                   </span>
                 </div>
@@ -1076,17 +1116,17 @@ export const ManageMaterialExportPage = () => {
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-50"
+                className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
               >
                 Hủy bỏ
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <button
                   type="button"
                   disabled={submitting}
                   onClick={() => handleSubmitForm('DRAFT')}
-                  className="rounded-lg border border-amber-700 bg-white px-4 py-2 text-sm font-medium text-amber-800 transition hover:bg-amber-50 disabled:opacity-50"
+                  className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-semibold text-stone-700 shadow-xs transition hover:bg-stone-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
                   {submitting
                     ? 'Đang lưu...'
@@ -1099,7 +1139,7 @@ export const ManageMaterialExportPage = () => {
                   type="button"
                   disabled={submitting}
                   onClick={() => handleSubmitForm('CONFIRMED')}
-                  className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-800 disabled:opacity-50"
+                  className="rounded-lg bg-amber-900 px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-amber-950 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
                   {submitting ? 'Đang lưu...' : 'Lưu & Xuất kho ngay'}
                 </button>
@@ -1113,17 +1153,17 @@ export const ManageMaterialExportPage = () => {
       {/* MODAL 2: XEM CHI TIẾT PHIẾU XUẤT KHO                  */}
       {/* ═════════════════════════════════════════════════════ */}
       {isDetailOpen && selectedIssue && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-900/60 p-4 backdrop-blur-xs">
           <div className="relative my-8 w-full max-w-4xl rounded-2xl bg-white shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
-                  <FileText className="h-6 w-6" />
+                <div className="rounded-lg bg-amber-100 p-2 text-amber-900">
+                  <FileText className="h-5 w-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-stone-900">
+                    <h3 className="text-lg font-bold font-mono text-stone-900">
                       {selectedIssue.issue_code}
                     </h3>
                     <StatusBadge status={selectedIssue.status} />
@@ -1135,33 +1175,34 @@ export const ManageMaterialExportPage = () => {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsDetailOpen(false)}
-                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus-visible:outline-none"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Body */}
-            <div className="max-h-[75vh] overflow-y-auto p-6 space-y-6">
+            <div className="max-h-[75vh] overflow-y-auto p-6 space-y-5">
               {/* Thẻ thông tin Lệnh gia công & Người xuất */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {/* Lệnh gia công */}
                 <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-4">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-stone-500">
-                    <Hammer className="h-4 w-4 text-amber-800" />
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
+                    <Hammer className="h-4 w-4 text-amber-900" />
                     <span>Lệnh Gia Công Sản Xuất</span>
                   </div>
                   <div className="mt-2.5 space-y-1 text-xs text-stone-700">
                     {selectedIssue.production_order ? (
                       <>
-                        <h4 className="text-base font-bold text-stone-900">
+                        <h4 className="text-sm font-bold font-mono text-stone-900">
                           {selectedIssue.production_order.production_code || '—'}
                         </h4>
                         <p>
                           <span className="font-semibold text-stone-600">Loại gia công:</span>{' '}
                           {selectedIssue.production_order.production_type === 'CUSTOM'
-                            ? 'Gia công theo đơn hàng riêng (CUSTOM)'
+                            ? 'Gia công theo đơn riêng (CUSTOM)'
                             : 'Sản xuất hàng lưu kho (STOCK)'}
                         </p>
                         <p>
@@ -1184,8 +1225,8 @@ export const ManageMaterialExportPage = () => {
 
                 {/* Thông tin xuất kho */}
                 <div className="rounded-xl border border-stone-200 bg-stone-50/50 p-4">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-stone-500">
-                    <Package className="h-4 w-4 text-amber-800" />
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
+                    <Package className="h-4 w-4 text-amber-900" />
                     <span>Thông Tin Xuất Kho</span>
                   </div>
                   <div className="mt-2.5 space-y-1 text-xs text-stone-700">
@@ -1212,13 +1253,13 @@ export const ManageMaterialExportPage = () => {
 
               {/* Bảng chi tiết mặt hàng */}
               <div className="space-y-3">
-                <h4 className="text-sm font-bold text-stone-900">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-stone-800">
                   Danh sách nguyên vật liệu xuất ({selectedIssue.items?.length || 0} loại vật liệu)
                 </h4>
 
                 <div className="overflow-x-auto rounded-xl border border-stone-200">
-                  <table className="min-w-full divide-y divide-stone-200 text-left text-sm">
-                    <thead className="bg-stone-50 font-semibold text-stone-700 text-xs">
+                  <table className="min-w-full divide-y divide-stone-200 text-left text-xs">
+                    <thead className="bg-stone-50 font-semibold text-stone-700">
                       <tr>
                         <th className="py-2.5 pl-3 pr-2 w-10 text-center">STT</th>
                         <th className="px-3 py-2.5">Mã NVL</th>
@@ -1228,25 +1269,25 @@ export const ManageMaterialExportPage = () => {
                         <th className="py-2.5 pl-3 pr-4">Ghi chú quy cách</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-stone-200 bg-white text-xs">
+                    <tbody className="divide-y divide-stone-100 bg-white">
                       {(selectedIssue.items || []).map((item, idx) => (
                         <tr key={idx} className="hover:bg-stone-50/60">
-                          <td className="py-3 pl-3 pr-2 text-center text-stone-500 font-medium">
+                          <td className="py-2.5 pl-3 pr-2 text-center text-stone-500 font-medium">
                             {idx + 1}
                           </td>
-                          <td className="px-3 py-3 font-semibold text-amber-900">
+                          <td className="px-3 py-2.5 font-semibold font-mono text-amber-900">
                             {item.raw_code}
                           </td>
-                          <td className="px-3 py-3 font-medium text-stone-900">
+                          <td className="px-3 py-2.5 font-medium text-stone-900">
                             {item.raw_name}
                           </td>
-                          <td className="px-3 py-3 text-center text-stone-600 font-semibold">
+                          <td className="px-3 py-2.5 text-center text-stone-600 font-medium">
                             {item.unit}
                           </td>
-                          <td className="px-3 py-3 text-center font-bold text-amber-900 text-sm">
+                          <td className="px-3 py-2.5 text-center font-bold font-mono text-stone-900 text-sm">
                             {item.quantity}
                           </td>
-                          <td className="py-3 pl-3 pr-4 text-stone-500">
+                          <td className="py-2.5 pl-3 pr-4 text-stone-500">
                             {item.note || '—'}
                           </td>
                         </tr>
@@ -1257,10 +1298,10 @@ export const ManageMaterialExportPage = () => {
 
                 {/* Banner Tổng kết */}
                 <div className="flex items-center justify-between rounded-xl bg-amber-50/80 p-4 border border-amber-200">
-                  <div className="text-sm font-semibold text-amber-900">
+                  <div className="text-xs font-semibold text-amber-900">
                     Tổng số lượng vật tư xuất xưởng:
                   </div>
-                  <div className="text-2xl font-bold text-amber-900">
+                  <div className="text-xl font-bold font-mono text-amber-900">
                     {selectedIssue.total_quantity} đơn vị
                   </div>
                 </div>
@@ -1271,23 +1312,25 @@ export const ManageMaterialExportPage = () => {
             <div className="flex flex-wrap items-center justify-between border-t border-stone-200 bg-stone-50 px-6 py-4 rounded-b-2xl">
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     setIsDetailOpen(false);
                     handleOpenPrintModal(selectedIssue.issue_id, selectedIssue);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 shadow-xs transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
-                  <Printer className="h-4 w-4" />
-                  In phiếu xuất
+                  <Printer className="h-3.5 w-3.5" />
+                  <span>In phiếu xuất</span>
                 </button>
 
                 {selectedIssue.status === 'DRAFT' && (
                   <button
+                    type="button"
                     onClick={() => handleOpenEditModal(selectedIssue)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-600 bg-amber-50 px-3.5 py-2 text-sm font-medium text-amber-800 shadow-sm transition hover:bg-amber-100"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-900 shadow-xs transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                   >
-                    <Pencil className="h-4 w-4" />
-                    Chỉnh sửa phiếu nháp
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span>Chỉnh sửa phiếu nháp</span>
                   </button>
                 )}
               </div>
@@ -1295,30 +1338,33 @@ export const ManageMaterialExportPage = () => {
               <div className="flex items-center gap-2">
                 {selectedIssue.status === 'DRAFT' && (
                   <button
+                    type="button"
                     onClick={() => handleConfirmDirect(selectedIssue)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                   >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Xác nhận xuất kho
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Xác nhận xuất kho</span>
                   </button>
                 )}
 
                 {selectedIssue.status === 'DRAFT' && (
                   <button
+                    type="button"
                     onClick={() => {
                       setIsDetailOpen(false);
                       handleOpenDeleteModal(selectedIssue);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3.5 py-2 text-sm font-medium text-rose-600 shadow-sm transition hover:bg-rose-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3.5 py-2 text-xs font-medium text-rose-700 shadow-xs transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                   >
-                    <Trash2 className="h-4 w-4" />
-                    Xóa phiếu nháp
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Xóa phiếu nháp</span>
                   </button>
                 )}
 
                 <button
+                  type="button"
                   onClick={() => setIsDetailOpen(false)}
-                  className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                  className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
                   Đóng
                 </button>
@@ -1332,25 +1378,27 @@ export const ManageMaterialExportPage = () => {
       {/* MODAL 3: IN PHIẾU XUẤT KHO (PRINT VOUCHER)            */}
       {/* ═════════════════════════════════════════════════════ */}
       {isPrintOpen && selectedIssue && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm print:p-0 print:bg-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-900/60 p-4 backdrop-blur-xs print:p-0 print:bg-white">
           <div className="relative my-8 w-full max-w-3xl rounded-2xl bg-white shadow-2xl print:my-0 print:max-w-none print:shadow-none print:rounded-none">
             {/* Header thanh công cụ (ẩn khi in) */}
             <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 print:hidden">
               <div className="flex items-center gap-2">
-                <Printer className="h-5 w-5 text-amber-800" />
-                <h3 className="font-bold text-stone-900">Xem & In Phiếu Xuất Kho</h3>
+                <Printer className="h-5 w-5 text-amber-900" />
+                <h3 className="font-bold text-stone-900 text-sm">Xem & In Phiếu Xuất Kho</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => window.print()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-amber-800"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                 >
-                  <Printer className="h-4 w-4" />
-                  In phiếu ngay
+                  <Printer className="h-3.5 w-3.5" />
+                  <span>In phiếu ngay</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsPrintOpen(false)}
-                  className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                  className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus-visible:outline-none"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -1372,7 +1420,7 @@ export const ManageMaterialExportPage = () => {
                 <div className="text-right">
                   <div className="text-xs font-semibold uppercase text-stone-500">Mẫu số: 02-VT</div>
                   <div className="text-xs text-stone-500">Ban hành theo TT 200/2014/TT-BTC</div>
-                  <div className="mt-1 font-bold text-sm text-amber-900">
+                  <div className="mt-1 font-bold font-mono text-sm text-amber-900">
                     Số: {selectedIssue.issue_code}
                   </div>
                 </div>
@@ -1394,7 +1442,7 @@ export const ManageMaterialExportPage = () => {
               <div className="grid grid-cols-2 gap-y-2 text-xs text-stone-800 mb-6">
                 <div>
                   <span className="font-semibold text-stone-700">Lệnh gia công:</span>{' '}
-                  <span className="font-bold">{selectedIssue.production_order?.production_code || '—'}</span>
+                  <span className="font-bold font-mono">{selectedIssue.production_order?.production_code || '—'}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-stone-700">Loại sản xuất:</span>{' '}
@@ -1445,7 +1493,7 @@ export const ManageMaterialExportPage = () => {
                         <td className="border border-stone-800 px-2 py-2 text-center font-semibold">
                           {item.unit}
                         </td>
-                        <td className="border border-stone-800 px-2 py-2 text-center font-bold text-sm">
+                        <td className="border border-stone-800 px-2 py-2 text-center font-bold font-mono text-sm">
                           {item.quantity}
                         </td>
                         <td className="border border-stone-800 px-3 py-2 text-stone-600">
@@ -1458,7 +1506,7 @@ export const ManageMaterialExportPage = () => {
                       <td colSpan={4} className="border border-stone-800 px-3 py-2.5 text-right uppercase">
                         Tổng cộng số lượng vật tư xuất kho:
                       </td>
-                      <td className="border border-stone-800 px-2 py-2.5 text-center font-bold text-sm text-amber-900">
+                      <td className="border border-stone-800 px-2 py-2.5 text-center font-bold font-mono text-sm text-amber-900">
                         {selectedIssue.total_quantity}
                       </td>
                       <td className="border border-stone-800"></td>
@@ -1500,8 +1548,9 @@ export const ManageMaterialExportPage = () => {
             {/* Footer modal print */}
             <div className="flex items-center justify-end border-t border-stone-200 bg-stone-50 px-6 py-4 rounded-b-2xl print:hidden">
               <button
+                type="button"
                 onClick={() => setIsPrintOpen(false)}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
               >
                 Đóng
               </button>
@@ -1514,15 +1563,15 @@ export const ManageMaterialExportPage = () => {
       {/* MODAL 4: XÓA PHIẾU XUẤT KHO                           */}
       {/* ═════════════════════════════════════════════════════ */}
       {isDeleteOpen && selectedIssue && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-center gap-3">
-              <div className="rounded-full bg-rose-100 p-3 text-rose-600">
-                <Trash2 className="h-6 w-6" />
+              <div className="rounded-full bg-rose-100 p-2.5 text-rose-600">
+                <Trash2 className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-stone-900">Xác nhận xóa phiếu xuất?</h3>
-                <p className="text-xs text-stone-500">Mã phiếu: {selectedIssue.issue_code}</p>
+                <h3 className="text-base font-bold text-stone-900">Xác nhận xóa phiếu xuất?</h3>
+                <p className="text-xs font-mono text-stone-500">Mã phiếu: {selectedIssue.issue_code}</p>
               </div>
             </div>
 
@@ -1533,15 +1582,17 @@ export const ManageMaterialExportPage = () => {
 
             <div className="mt-6 flex items-center justify-end gap-2.5">
               <button
+                type="button"
                 onClick={() => setIsDeleteOpen(false)}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
               >
                 Hủy bỏ
               </button>
               <button
+                type="button"
                 disabled={submitting}
                 onClick={handleConfirmDelete}
-                className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50"
+                className="rounded-lg bg-rose-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-rose-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-600"
               >
                 {submitting ? 'Đang xóa...' : 'Xóa vĩnh viễn'}
               </button>
@@ -1552,3 +1603,5 @@ export const ManageMaterialExportPage = () => {
     </div>
   );
 };
+
+export default ManageMaterialExportPage;

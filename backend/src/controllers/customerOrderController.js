@@ -4,6 +4,16 @@ const {
   findCustomerOrderRequestById,
 } = require('../models/CustomerOrderModel');
 const { toOrderDTO } = require('../utils/saleOrderValidator');
+const { ApiError } = require('../utils/ApiError');
+const { buildSuccessResponse } = require('../utils/successResponse');
+
+function getErrorForNext(error, detail) {
+  if (error instanceof ApiError) return error;
+
+  const apiError = new ApiError(500, detail);
+  apiError.cause = error;
+  return apiError;
+}
 
 function toCustomerOrderRequestDTO(raw) {
   const request = raw.toJSON ? raw.toJSON() : raw;
@@ -35,11 +45,11 @@ function toCustomerOrderRequestDTO(raw) {
   };
 }
 
-async function getMyOrders(req, res) {
+async function getMyOrders(req, res, next) {
   try {
     const customerAccountId = Number(req.user?.sub);
     if (!Number.isInteger(customerAccountId) || customerAccountId <= 0) {
-      return res.status(401).json({ message: 'Tài khoản khách hàng không hợp lệ.' });
+      throw new ApiError(401, 'Tài khoản khách hàng không hợp lệ.');
     }
 
     const result = await getCustomerOrdersWithPagination(customerAccountId, {
@@ -47,73 +57,76 @@ async function getMyOrders(req, res) {
       limit: req.query.limit,
     });
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Lấy danh sách đơn hàng của bạn thành công',
       data: (result.orders || []).map(({ recordType, record }) =>
         recordType === 'REQUEST' ? toCustomerOrderRequestDTO(record) : toOrderDTO(record)
       ),
-      pagination: {
-        totalItems: result.totalItems,
+      meta: {
+        page: result.currentPage,
+        limit: result.itemsPerPage,
+        total: result.totalItems,
         totalPages: result.totalPages,
-        currentPage: result.currentPage,
-        itemsPerPage: result.itemsPerPage,
       },
-    });
+      req,
+    }));
   } catch (error) {
-    console.error('[customerOrderController.getMyOrders]', error);
-    return res.status(500).json({ message: 'Lỗi máy chủ khi lấy đơn hàng của bạn.' });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy đơn hàng của bạn.'));
   }
 }
 
-async function getMyOrderRequestById(req, res) {
+async function getMyOrderRequestById(req, res, next) {
   try {
     const customerAccountId = Number(req.user?.sub);
     const requestId = Number(req.params.id);
     if (!Number.isInteger(customerAccountId) || customerAccountId <= 0) {
-      return res.status(401).json({ message: 'Tài khoản khách hàng không hợp lệ.' });
+      throw new ApiError(401, 'Tài khoản khách hàng không hợp lệ.');
     }
     if (!Number.isInteger(requestId) || requestId <= 0) {
-      return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
+      throw new ApiError(400, 'Mã yêu cầu không hợp lệ.');
     }
 
     const request = await findCustomerOrderRequestById(requestId, customerAccountId);
     if (!request) {
-      return res.status(404).json({ message: 'Không tìm thấy yêu cầu.' });
+      throw new ApiError(404, 'Không tìm thấy yêu cầu.');
     }
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Lấy chi tiết yêu cầu thành công',
       data: toCustomerOrderRequestDTO(request),
-    });
+      req,
+    }));
   } catch (error) {
-    console.error('[customerOrderController.getMyOrderRequestById]', error);
-    return res.status(500).json({ message: 'Lỗi máy chủ khi lấy chi tiết yêu cầu.' });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy chi tiết yêu cầu.'));
   }
 }
 
-async function getMyOrderById(req, res) {
+async function getMyOrderById(req, res, next) {
   try {
     const customerAccountId = Number(req.user?.sub);
     const orderId = Number(req.params.id);
     if (!Number.isInteger(customerAccountId) || customerAccountId <= 0) {
-      return res.status(401).json({ message: 'Tài khoản khách hàng không hợp lệ.' });
+      throw new ApiError(401, 'Tài khoản khách hàng không hợp lệ.');
     }
     if (!Number.isInteger(orderId) || orderId <= 0) {
-      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
+      throw new ApiError(400, 'Mã đơn hàng không hợp lệ.');
     }
 
     const order = await findCustomerOrderById(orderId, customerAccountId);
     if (!order) {
-      return res.status(404).json({ message: 'Không tìm thấy đơn hàng.' });
+      throw new ApiError(404, 'Không tìm thấy đơn hàng.');
     }
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Lấy chi tiết đơn hàng thành công',
       data: toOrderDTO(order),
-    });
+      req,
+    }));
   } catch (error) {
-    console.error('[customerOrderController.getMyOrderById]', error);
-    return res.status(500).json({ message: 'Lỗi máy chủ khi lấy chi tiết đơn hàng.' });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy chi tiết đơn hàng.'));
   }
 }
 

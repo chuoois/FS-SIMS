@@ -1,32 +1,41 @@
 // =========================================================
 // saleOrderRoutes.js
-// Định tuyến API Riêng biệt cho Bán hàng & Tạo đơn hàng (Sale Role POS)
+// Định tuyến API Riêng biệt cho Bán hàng & Tạo đơn hàng (Sale Role)
 // Tách biệt hoàn toàn, không gộp vào các route có sẵn
 // =========================================================
 
 const express = require('express');
+
+// Controllers tách biệt theo từng nghiệp vụ (Customer, Contract, Order)
 const {
-  getWarehouseProducts,
-  getProductDetail,
-  getProductMetadata,
+  getSaleCustomers,
+  getSaleCustomerById,
+  createSaleCustomer,
+} = require('../controllers/saleCustomerController');
+
+const {
   createOfflineContract,
   signContract,
   getContracts,
   getContractById,
-  createOrderFromContract,
-  getOrders,
-  getOrderById,
   getRequests,
   getRequestById,
   convertRequestToContract,
   createSalesRequest,
   updateSalesRequest,
-  deliverOrder,
-  completeOrder,
   updateDesignFile,
   deleteDesignImage,
-  getSaleCustomers,
-  getSaleCustomerById,
+} = require('../controllers/saleContractController');
+
+const {
+  getWarehouseProducts,
+  getProductDetail,
+  getProductMetadata,
+  createOrderFromContract,
+  getOrders,
+  getOrderById,
+  deliverOrder,
+  completeOrder,
 } = require('../controllers/saleOrderController');
 const { createProductMaterial, createProductColor } = require('../controllers/productManagerController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
@@ -54,7 +63,7 @@ router.post('/upload-images', (req, res) => {
   });
 });
 
-// ── Kho sản phẩm dành cho POS ─────────────────────────────
+// ── Kho sản phẩm dành cho bán hàng tại quầy ─────────────────────
 router.get('/products', getWarehouseProducts);
 router.get('/products/:id', getProductDetail);
 router.get('/metadata', getProductMetadata);
@@ -63,11 +72,24 @@ router.post('/colors', createProductColor);
 
 // ── Quản lý & tra cứu Khách hàng (Customers) ──────────────
 router.get('/customers', getSaleCustomers);
+router.post('/customers', createSaleCustomer);
 router.get('/customers/:id', getSaleCustomerById);
 
 // ── Luồng Hợp đồng (Contract) ──────────────────────────────
 router.post('/contracts', createOfflineContract);
-router.post('/contracts/:id/sign', signContract);
+router.post(
+  '/contracts/:id/sign',
+  (req, res, next) => {
+    upload.single('contract_file')(req, res, (err) => {
+      if (err) {
+        console.error('[saleOrderRoutes.signContract upload]', err);
+        return res.status(400).json({ message: err.message || 'Lỗi khi tải ảnh hợp đồng lên máy chủ.' });
+      }
+      return next();
+    });
+  },
+  signContract
+);
 router.get('/contracts', getContracts);
 router.get('/contracts/:id', getContractById);
 
