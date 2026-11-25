@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronDown, PackageCheck, Ruler, Truck } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Minus, PackageCheck, Plus, Ruler, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -11,6 +11,22 @@ const formatVnd = (value) => {
   return value === null || value === undefined || Number.isNaN(price)
     ? 'Liên hệ'
     : `${price.toLocaleString('vi-VN')} ₫`;
+};
+
+const getProductAvailability = (product, cartItems) => {
+  const stockQuantity = Math.max(0, Number(product.stockQuantity) || 0);
+  const cartQuantity = Math.max(
+    0,
+    Number(
+      cartItems.find((item) => Number(item.product?.productId) === Number(product.productId))?.quantity
+    ) || 0
+  );
+
+  return {
+    stockQuantity,
+    cartQuantity,
+    availableQuantity: Math.max(0, stockQuantity - cartQuantity),
+  };
 };
 
 const ProductImage = ({ src, alt }) => {
@@ -201,18 +217,20 @@ const SetContents = ({ items }) => {
 export const ProductDetailPage = () => {
   const { id } = useParams();
   const { isAuthenticated } = useAuth();
-  const { addItem, loading: cartLoading } = useCart();
+  const { addItem, items: cartItems = [], loading: cartLoading } = useCart();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError('');
     setProduct(null);
+    setQuantity(1);
 
     getProductById(id)
       .then((response) => {
@@ -235,6 +253,13 @@ export const ProductDetailPage = () => {
       cancelled = true;
     };
   }, [id, reloadKey]);
+
+  useEffect(() => {
+    if (!product) return;
+
+    const { availableQuantity } = getProductAvailability(product, cartItems);
+    setQuantity((current) => (availableQuantity > 0 ? Math.min(current, availableQuantity) : 1));
+  }, [cartItems, product]);
 
   if (loading) return <ProductSkeleton />;
 
@@ -264,7 +289,10 @@ export const ProductDetailPage = () => {
     );
   }
 
-  const inStock = Number(product.stockQuantity) > 0;
+  const { stockQuantity, cartQuantity, availableQuantity: maxQuantity } =
+    getProductAvailability(product, cartItems);
+  const selectedQuantity = maxQuantity > 0 ? Math.min(quantity, maxQuantity) : 0;
+  const inStock = stockQuantity > 0;
   const specifications = [
     { icon: PackageCheck, text: inStock ? `Còn ${product.stockQuantity} sản phẩm` : 'Tạm hết hàng' },
     { icon: Truck, text: 'Hỗ trợ giao hàng và lắp đặt' },
@@ -276,10 +304,15 @@ export const ProductDetailPage = () => {
   const handleAddToCart = async () => {
     setAddingToCart(true);
     try {
-      await addItem(product.productId, 1);
-      toast.success('Đã thêm sản phẩm vào giỏ hàng.');
+      await addItem(product.productId, selectedQuantity);
+      setQuantity(1);
+      toast.success(`Đã thêm ${selectedQuantity} sản phẩm vào giỏ hàng.`);
     } catch (requestError) {
-      toast.error(requestError.response?.data?.message || 'Không thể thêm sản phẩm vào giỏ hàng.');
+      toast.error(
+        requestError.response?.data?.detail
+          || requestError.response?.data?.message
+          || 'Không thể thêm sản phẩm vào giỏ hàng.'
+      );
     } finally {
       setAddingToCart(false);
     }
@@ -322,12 +355,60 @@ export const ProductDetailPage = () => {
           <ProductFacts product={product} />
           <SetContents items={product.setItems} />
 
+          {isAuthenticated && (
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <div>
+                <p className="text-[13px] font-semibold text-stone-800">Số lượng</p>
+                <p className="mt-1 text-[11px] text-stone-500">
+                  Trong giỏ: {cartQuantity} / {stockQuantity}
+                </p>
+                <p className="text-[11px] text-stone-500">
+                  {maxQuantity > 0
+                    ? `Có thể thêm tối đa ${maxQuantity} sản phẩm`
+                    : 'Đã đạt giới hạn tồn kho'}
+                </p>
+              </div>
+              {maxQuantity > 0 && (
+                <div
+                  className="inline-flex items-center border border-stone-300 bg-white"
+                  role="group"
+                  aria-label={`Số lượng ${product.productName}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+                    disabled={selectedQuantity <= 1}
+                    aria-label={`Giảm số lượng ${product.productName}`}
+                    className="grid size-10 place-items-center text-stone-800 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:text-stone-300 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+                  >
+                    <Minus className="size-4" aria-hidden="true" />
+                  </button>
+                  <span
+                    className="grid h-10 min-w-12 place-items-center text-sm font-bold text-stone-900"
+                    aria-live="polite"
+                  >
+                    {selectedQuantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((current) => Math.min(maxQuantity, current + 1))}
+                    disabled={selectedQuantity >= maxQuantity}
+                    aria-label={`Tăng số lượng ${product.productName}`}
+                    className="grid size-10 place-items-center text-stone-800 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:text-stone-300 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-900"
+                  >
+                    <Plus className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mt-8 flex flex-col gap-3 border-t border-stone-200 pt-6 sm:flex-row">
             {isAuthenticated ? (
               <button
                 type="button"
                 onClick={handleAddToCart}
-                disabled={!inStock || addingToCart || cartLoading}
+                disabled={!inStock || maxQuantity === 0 || addingToCart || cartLoading}
                 className="inline-flex h-12 flex-1 items-center justify-center bg-stone-900 px-6 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:bg-stone-400 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-900"
               >
                 {addingToCart
@@ -335,7 +416,9 @@ export const ProductDetailPage = () => {
                   : cartLoading
                     ? 'Đang tải giỏ hàng...'
                     : inStock
-                      ? 'Thêm vào giỏ hàng'
+                      ? maxQuantity > 0
+                        ? `Thêm ${selectedQuantity} vào giỏ hàng`
+                        : 'Đã đạt giới hạn tồn kho'
                       : 'Tạm hết hàng'}
               </button>
             ) : (
@@ -344,6 +427,14 @@ export const ProductDetailPage = () => {
                 className="inline-flex h-12 flex-1 items-center justify-center bg-stone-900 px-6 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-900"
               >
                 Đăng nhập để mua hàng
+              </Link>
+            )}
+            {isAuthenticated && inStock && maxQuantity === 0 && (
+              <Link
+                to="/my-cart"
+                className="inline-flex h-12 items-center justify-center border border-stone-300 px-6 text-xs font-bold uppercase tracking-widest text-stone-800 transition-colors hover:border-stone-900 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-900"
+              >
+                Xem giỏ hàng
               </Link>
             )}
             <Link
