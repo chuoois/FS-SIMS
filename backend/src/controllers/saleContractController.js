@@ -191,8 +191,12 @@ async function createOfflineContract(req, res) {
     return res.status(201).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.createOfflineContract]', error);
-    const isInventoryShortage = error.message && error.message.includes('chỉ còn');
-    return res.status(isInventoryShortage ? 400 : 500).json({
+    const isClientError = error.message && (
+      error.message.includes('chỉ còn') ||
+      error.message.includes('không tồn tại') ||
+      error.message.includes('không còn kinh doanh')
+    );
+    return res.status(isClientError ? 400 : 500).json({
       message: error.message || 'Lỗi hệ thống khi tạo hợp đồng',
       error: error.message,
     });

@@ -173,11 +173,22 @@ export const LeaderOrdersPage = () => {
         }
       }
       const res = await getLeaderOrders(params);
-      setOrders(res.data || res.orders || (Array.isArray(res) ? res : []));
-      if (res.pagination) setPagination(res.pagination);
+      const list = Array.isArray(res?.data) ? res.data : (res?.orders ?? []);
+      setOrders(list);
+
+      if (res?.meta) {
+        setPagination({
+          totalItems: res.meta.total ?? list.length,
+          totalPages: res.meta.totalPages ?? 1,
+          currentPage: res.meta.page ?? page,
+          itemsPerPage: res.meta.limit ?? limit,
+        });
+      } else if (res?.pagination) {
+        setPagination(res.pagination);
+      }
     } catch (err) {
       console.error('Lỗi khi tải đơn hàng của Tổ trưởng:', err);
-      toast.error('Không thể tải danh sách đơn hàng được phân công.');
+      toast.error(err.response?.data?.detail || err.response?.data?.message || 'Không thể tải danh sách đơn hàng được phân công.');
     } finally {
       setLoading(false);
     }
@@ -224,10 +235,11 @@ export const LeaderOrdersPage = () => {
       setDetailModalOpen(true);
       setLoadingDetail(true);
       const res = await getLeaderOrderDetail(order.orderId);
-      if (res && res.order) setSelectedOrder(res.order);
-      else if (res && res.data) setSelectedOrder(res.data);
+      const detail = res?.data ?? res?.order ?? null;
+      if (detail) setSelectedOrder(detail);
     } catch (err) {
       console.error('Lỗi khi lấy chi tiết đơn:', err);
+      toast.error(err.response?.data?.detail || err.response?.data?.message || 'Không thể tải chi tiết đơn hàng.');
     } finally {
       setLoadingDetail(false);
     }
@@ -238,15 +250,16 @@ export const LeaderOrdersPage = () => {
     if (!window.confirm('Xác nhận tiếp nhận đơn hàng này vào dây chuyền sản xuất của xưởng?')) return;
     try {
       setActionLoading(true);
-      await leaderAcceptOrder(orderId);
-      toast.success('Đã tiếp nhận sản xuất! Đơn chuyển sang trạng thái Đang gia công.');
+      const res = await leaderAcceptOrder(orderId);
+      toast.success(res?.message || 'Đã tiếp nhận sản xuất! Đơn chuyển sang trạng thái Đang gia công.');
       fetchOrders();
       if (selectedOrder && selectedOrder.orderId === orderId) {
-        setSelectedOrder((prev) => ({ ...prev, status: 'IN_PRODUCTION' }));
+        const updatedOrder = res?.data ?? res?.order;
+        setSelectedOrder((prev) => updatedOrder || { ...prev, status: 'IN_PRODUCTION' });
       }
     } catch (err) {
       console.error('Lỗi khi tiếp nhận đơn:', err);
-      toast.error(err.response?.data?.message || 'Không thể tiếp nhận đơn hàng.');
+      toast.error(err.response?.data?.detail || err.response?.data?.message || 'Không thể tiếp nhận đơn hàng.');
     } finally {
       setActionLoading(false);
     }
@@ -266,7 +279,7 @@ export const LeaderOrdersPage = () => {
     if (!selectedOrder) return;
     try {
       setActionLoading(true);
-      await leaderUpdateProgress(selectedOrder.orderId, {
+      const res = await leaderUpdateProgress(selectedOrder.orderId, {
         isCompleted: progressIsCompleted,
         progressNote: progressNote.trim(),
       });
@@ -280,11 +293,12 @@ export const LeaderOrdersPage = () => {
       setProgressIsCompleted(false);
       fetchOrders();
       if (selectedOrder) {
-        setSelectedOrder((prev) => ({ ...prev, isProductionCompleted: progressIsCompleted }));
+        const updatedOrder = res?.data ?? res?.order;
+        setSelectedOrder((prev) => updatedOrder || { ...prev, isProductionCompleted: progressIsCompleted });
       }
     } catch (err) {
       console.error('Lỗi cập nhật tiến độ:', err);
-      toast.error(err.response?.data?.message || 'Không thể cập nhật tiến độ.');
+      toast.error(err.response?.data?.detail || err.response?.data?.message || 'Không thể cập nhật tiến độ.');
     } finally {
       setActionLoading(false);
     }
@@ -298,7 +312,9 @@ export const LeaderOrdersPage = () => {
       setUploadingPhotos(true);
       try {
         const uploadRes = await uploadInspectionImages(files);
-        const urls = uploadRes.urls || uploadRes.images || [];
+        const urls = Array.isArray(uploadRes?.data)
+          ? uploadRes.data
+          : (uploadRes?.data?.urls || uploadRes?.data?.images || uploadRes?.urls || uploadRes?.images || []);
         if (urls.length > 0) {
           setInspectionImages((prev) => [...prev, ...urls]);
           toast.success(`Đã tải lên ${urls.length} ảnh thành phẩm.`);
@@ -353,7 +369,7 @@ export const LeaderOrdersPage = () => {
     if (!selectedOrder) return;
     try {
       setActionLoading(true);
-      await leaderSubmitInspection(selectedOrder.orderId, {
+      const res = await leaderSubmitInspection(selectedOrder.orderId, {
         note: inspectionNote.trim(),
         images: inspectionImages,
       });
@@ -363,11 +379,12 @@ export const LeaderOrdersPage = () => {
       setInspectionImages([]);
       fetchOrders();
       if (selectedOrder) {
-        setSelectedOrder((prev) => ({ ...prev, status: 'UNDER_INSPECTION' }));
+        const updatedOrder = res?.data ?? res?.order;
+        setSelectedOrder((prev) => updatedOrder || { ...prev, status: 'UNDER_INSPECTION' });
       }
     } catch (err) {
       console.error('Lỗi khi gửi nghiệm thu:', err);
-      toast.error(err.response?.data?.message || 'Không thể gửi yêu cầu nghiệm thu.');
+      toast.error(err.response?.data?.detail || err.response?.data?.message || 'Không thể gửi yêu cầu nghiệm thu.');
     } finally {
       setActionLoading(false);
     }

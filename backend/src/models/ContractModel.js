@@ -148,6 +148,13 @@ async function createOfflineContract({
       });
     }
 
+    if (customerAccountId) {
+      const customerExists = await UserAccount.findByPk(customerAccountId, { transaction });
+      if (!customerExists) {
+        throw new Error(`Tài khoản khách hàng (ID ${customerAccountId}) không tồn tại trong hệ thống.`);
+      }
+    }
+
     const contractCode = await generateNextContractCode();
 
     const contract = await Contract.create(
