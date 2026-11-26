@@ -1,7 +1,7 @@
 // ==============================================================================
 // leaderStaffController.test.js
 // Automated Unit Tests for Leader Staff Production Order Management
-// - Mock CustomerOrderModel completely (no real DB/Sequelize calls)
+// - Mock CustomerOrderModel & userRole.model completely (no real DB/Sequelize calls)
 // - Verify standardized response format (buildSuccessResponse) & ApiError via next
 // ==============================================================================
 
@@ -52,6 +52,7 @@ function createRequest(overrides = {}) {
     user: {
       user_account_id: 12,
       sub: 12,
+      role: 3,
       email: 'leader@fssims.local',
       full_name: 'Tổ trưởng A',
     },
@@ -101,9 +102,17 @@ describe('leaderStaffController', () => {
   });
 
   describe('getLeaderOrders', () => {
-    test('UTCID01 - Returns paginated orders in standardized success format', async () => {
+    test('UTCID01 - Returns paginated orders in standardized success format with filters', async () => {
       const req = createRequest({
-        query: { search: 'ORD', status: 'CONFIRMED', page: '2', limit: '5' },
+        query: {
+          search: 'ORD',
+          search_by: 'PHONE',
+          order_code: 'ORD-2026',
+          customer_name: 'Khách',
+          status: 'CONFIRMED',
+          page: '2',
+          limit: '5',
+        },
       });
       const res = createResponse();
       const mockOrder = createMockOrder();
@@ -119,6 +128,9 @@ describe('leaderStaffController', () => {
 
       expect(getOrdersForLeader).toHaveBeenCalledWith(12, {
         search: 'ORD',
+        search_by: 'PHONE',
+        order_code: 'ORD-2026',
+        customer_name: 'Khách',
         status: 'CONFIRMED',
         page: '2',
         limit: '5',
@@ -166,6 +178,9 @@ describe('leaderStaffController', () => {
 
       expect(getOrdersForLeader).toHaveBeenCalledWith(99, {
         search: undefined,
+        search_by: undefined,
+        order_code: undefined,
+        customer_name: undefined,
         status: undefined,
         page: 1,
         limit: 10,
@@ -197,7 +212,7 @@ describe('leaderStaffController', () => {
   });
 
   describe('getLeaderOrderDetail', () => {
-    test('UTCID01 - Forwards 400 ApiError when order ID is invalid', async () => {
+    test('UTCID04 - Forwards 400 ApiError when order ID is invalid', async () => {
       const req = createRequest({ params: { id: 'abc' } });
       const res = createResponse();
 
@@ -207,7 +222,7 @@ describe('leaderStaffController', () => {
       expect(findOrderById).not.toHaveBeenCalled();
     });
 
-    test('UTCID02 - Forwards 404 ApiError when order does not exist', async () => {
+    test('UTCID05 - Forwards 404 ApiError when order does not exist', async () => {
       const req = createRequest({ params: { id: '999' } });
       const res = createResponse();
       findOrderById.mockResolvedValue(null);
@@ -218,7 +233,7 @@ describe('leaderStaffController', () => {
       expectApiError(next, 404, 'Không tìm thấy đơn hàng.');
     });
 
-    test('UTCID03 - Returns 200 with standardized data payload when found', async () => {
+    test('UTCID06 - Returns 200 with standardized data payload when found', async () => {
       const req = createRequest({
         params: { id: '101' },
         originalUrl: '/api/leader-staff/orders/101',
@@ -246,7 +261,7 @@ describe('leaderStaffController', () => {
       );
     });
 
-    test('UTCID04 - Forwards 500 ApiError when findOrderById throws an unexpected error', async () => {
+    test('UTCID09 - Forwards 500 ApiError when findOrderById throws an unexpected error', async () => {
       const req = createRequest({ params: { id: '101' } });
       const res = createResponse();
       findOrderById.mockRejectedValue(new Error('Query timeout'));
@@ -258,7 +273,7 @@ describe('leaderStaffController', () => {
   });
 
   describe('leaderAccept', () => {
-    test('UTCID01 - Forwards 400 ApiError when order ID is non-positive', async () => {
+    test('UTCID10 - Forwards 400 ApiError when order ID is non-positive', async () => {
       const req = createRequest({ params: { id: '0' } });
       const res = createResponse();
 
@@ -268,7 +283,7 @@ describe('leaderStaffController', () => {
       expect(leaderAcceptOrder).not.toHaveBeenCalled();
     });
 
-    test('UTCID02 - Leader accepts order into production successfully (IN_PRODUCTION)', async () => {
+    test('UTCID11 - Leader accepts order into production successfully (IN_PRODUCTION)', async () => {
       const req = createRequest({
         params: { id: '101' },
         originalUrl: '/api/leader-staff/orders/101/accept',
@@ -293,7 +308,29 @@ describe('leaderStaffController', () => {
       );
     });
 
-    test('UTCID03 - Forwards 400 ApiError when leaderAcceptOrder rejects', async () => {
+    test('UTCID12 - Forwards 403 ApiError when leader is not assigned', async () => {
+      const req = createRequest({ params: { id: '101' } });
+      const res = createResponse();
+      leaderAcceptOrder.mockRejectedValue(
+        new Error('Bạn không được phân công phụ trách đơn hàng này.')
+      );
+
+      await leaderAccept(req, res, next);
+
+      expectApiError(next, 403, 'Bạn không được phân công phụ trách đơn hàng này.');
+    });
+
+    test('UTCID13 - Forwards 404 ApiError when order does not exist', async () => {
+      const req = createRequest({ params: { id: '999' } });
+      const res = createResponse();
+      leaderAcceptOrder.mockRejectedValue(new Error('Không tìm thấy đơn hàng.'));
+
+      await leaderAccept(req, res, next);
+
+      expectApiError(next, 404, 'Không tìm thấy đơn hàng.');
+    });
+
+    test('UTCID14 - Forwards 400 ApiError when order status is not CONFIRMED', async () => {
       const req = createRequest({ params: { id: '101' } });
       const res = createResponse();
       leaderAcceptOrder.mockRejectedValue(
@@ -311,7 +348,7 @@ describe('leaderStaffController', () => {
   });
 
   describe('leaderProgress', () => {
-    test('UTCID01 - Forwards 400 ApiError when order ID is invalid', async () => {
+    test('UTCID15 - Forwards 400 ApiError when order ID is invalid', async () => {
       const req = createRequest({ params: { id: '-3' } });
       const res = createResponse();
 
@@ -321,7 +358,7 @@ describe('leaderStaffController', () => {
       expect(leaderUpdateProgress).not.toHaveBeenCalled();
     });
 
-    test('UTCID02 - Updates production progress using note and isCompleted', async () => {
+    test('UTCID16 - Updates production progress using note and isCompleted', async () => {
       const req = createRequest({
         params: { id: '101' },
         body: { note: 'Đã hoàn thiện phần mộc', isCompleted: true },
@@ -354,7 +391,7 @@ describe('leaderStaffController', () => {
       );
     });
 
-    test('UTCID03 - Falls back to progressNote and leaves isCompleted undefined when omitted', async () => {
+    test('UTCID17 - Falls back to progressNote and leaves isCompleted undefined when omitted', async () => {
       const req = createRequest({
         params: { id: '101' },
         body: { progressNote: 'Đang sơn PU lớp 1' },
@@ -371,7 +408,7 @@ describe('leaderStaffController', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
-    test('UTCID04 - Forwards 400 ApiError when leaderUpdateProgress throws an error', async () => {
+    test('UTCID18 - Forwards 403 ApiError when leader lacks permission', async () => {
       const req = createRequest({
         params: { id: '101' },
         body: { note: 'Test' },
@@ -381,12 +418,12 @@ describe('leaderStaffController', () => {
 
       await leaderProgress(req, res, next);
 
-      expectApiError(next, 400, 'Bạn không có quyền cập nhật tiến độ cho đơn hàng này.');
+      expectApiError(next, 403, 'Bạn không có quyền cập nhật tiến độ cho đơn hàng này.');
     });
   });
 
   describe('leaderSubmit', () => {
-    test('UTCID01 - Forwards 400 ApiError when order ID is invalid', async () => {
+    test('UTCID19 - Forwards 400 ApiError when order ID is invalid', async () => {
       const req = createRequest({ params: { id: 'invalid' } });
       const res = createResponse();
 
@@ -396,7 +433,7 @@ describe('leaderStaffController', () => {
       expect(leaderSubmitInspection).not.toHaveBeenCalled();
     });
 
-    test('UTCID02 - Submits inspection request with images and note successfully (UNDER_INSPECTION)', async () => {
+    test('UTCID20 - Submits inspection request with images and note successfully (UNDER_INSPECTION)', async () => {
       const images = ['https://res.cloudinary.com/demo/image/upload/v1/product1.jpg'];
       const req = createRequest({
         params: { id: '101' },
@@ -432,7 +469,7 @@ describe('leaderStaffController', () => {
       );
     });
 
-    test('UTCID03 - Forwards 400 ApiError when leaderSubmitInspection throws an error', async () => {
+    test('UTCID21 - Forwards 400 ApiError when order is not IN_PRODUCTION', async () => {
       const req = createRequest({
         params: { id: '101' },
         body: { note: 'Gửi duyệt', images: [] },
@@ -453,7 +490,7 @@ describe('leaderStaffController', () => {
   });
 
   describe('uploadInspectionImage', () => {
-    test('UTCID01 - Returns standardized array of uploaded image URLs', () => {
+    test('UTCID22 - Returns standardized array of uploaded image URLs', () => {
       const req = createRequest({
         originalUrl: '/api/leader-staff/upload-inspection-image',
         files: [
