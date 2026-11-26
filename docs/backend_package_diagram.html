@@ -6,106 +6,92 @@
   <title>Backend Package Diagram · FS-SIMS</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 28px; background: #fff; color: #252525; font: 14px Arial, sans-serif; }
-    main { max-width: 1120px; margin: auto; }
-    h1 { margin: 0 0 24px; text-align: center; font-size: 22px; }
-    .frame { overflow-x: auto; }
-    svg { display: block; width: 100%; min-width: 900px; height: auto; }
-    .area { fill: #ffdfb5; stroke: #dfa254; stroke-width: 1.7; }
-    .subarea { fill: #fff; stroke: #777; stroke-width: 1.3; stroke-dasharray: 7 5; }
-    .pkg { fill: #fff; stroke: #777; stroke-width: 1.4; }
-    .node { fill: #fff0c7; stroke: #ddb84b; stroke-width: 1.4; }
-    .db { fill: #dbe8fa; stroke: #7c9dcc; stroke-width: 1.6; }
-    .external { fill: #fff; stroke: #777; stroke-width: 1.3; stroke-dasharray: 6 4; }
-    .label { font: 700 17px Arial, sans-serif; fill: #252525; }
-    .text { font: 700 14px Arial, sans-serif; fill: #252525; }
-    .small { font: 12px Arial, sans-serif; fill: #444; }
-    .arrow { fill: none; stroke: #555; stroke-width: 1.7; marker-end: url(#arrow); }
-    .dashed { fill: none; stroke: #777; stroke-width: 1.5; stroke-dasharray: 6 5; marker-end: url(#arrow); }
-    @media print { body { padding: 8px; } svg { min-width: 0; } }
+    body { margin: 0; padding: 24px; background: #fff; color: #222; font: 14px Arial, sans-serif; }
+    main { max-width: 1040px; margin: 0 auto; }
+    h1 { margin: 0 0 20px; text-align: center; font-size: 21px; }
+    .diagram { display: block; width: 100%; height: auto; }
+    .package, .tab, .item { fill: #fff; stroke: #333; stroke-width: 1.2; }
+    .title { font-size: 15px; font-weight: 700; fill: #222; }
+    .label { font-size: 12px; font-weight: 600; fill: #222; }
+    .small { font-size: 10.5px; fill: #333; }
+    .link { fill: none; stroke: #555; stroke-width: 1.2; marker-end: url(#arrow); }
+    @media (max-width: 700px) { body { padding: 12px 6px; } h1 { font-size: 17px; } }
+    @media print { body { padding: 8px; } }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Backend Package Diagram · FS-SIMS</h1>
-    <div class="frame">
-      <svg viewBox="0 0 1080 690" role="img" aria-labelledby="diagram-title" xmlns="http://www.w3.org/2000/svg">
-        <title id="diagram-title">Node.js Express MVC backend package diagram</title>
-        <defs>
-          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#555"/></marker>
-        </defs>
+<main>
+  <h1>Backend Package Diagram · FS-SIMS</h1>
+  <svg class="diagram" viewBox="0 0 1000 650" role="img" aria-labelledby="diagram-title diagram-desc" xmlns="http://www.w3.org/2000/svg">
+    <title id="diagram-title">Backend package structure</title>
+    <desc id="diagram-desc">Node.js backend packages and dependencies, based on the actual source folders.</desc>
+    <defs>
+      <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#555" stroke-width="1"/></marker>
+    </defs>
 
-        <rect class="area" x="275" y="38" width="510" height="100" rx="22"/>
-        <text class="label" x="530" y="66" text-anchor="middle">BACKEND STARTUP</text>
-        <rect class="pkg" x="310" y="83" width="180" height="38" rx="8"/>
-        <text class="text" x="400" y="107" text-anchor="middle">server.js</text>
-        <rect class="pkg" x="570" y="83" width="180" height="38" rx="8"/>
-        <text class="text" x="660" y="107" text-anchor="middle">src/app.js</text>
-        <path class="arrow" d="M490 102H565"/>
+    <path class="link" d="M300 86 H355"/>
+    <path class="link" d="M185 61 V40 H787 V67"/>
+    <path class="link" d="M470 123 V160 H190 V201"/>
+    <path class="link" d="M190 258 V323"/>
+    <path class="link" d="M305 225 H355"/>
+    <path class="link" d="M190 396 V473"/>
+    <path class="link" d="M300 360 H355"/>
+    <path class="link" d="M300 377 H326 V510 H355"/>
+    <path class="link" d="M470 423 V473"/>
+    <path class="link" d="M300 510 H610 V100 H669"/>
+    <path class="link" d="M585 377 H625 V100 H669"/>
+    <path class="link" d="M585 225 H640 V112 H669"/>
 
-        <rect class="area" x="50" y="190" width="980" height="255" rx="28"/>
-        <text class="label" x="540" y="220" text-anchor="middle">PRESENTATION · backend/src</text>
+    <g>
+      <path class="package" d="M70 73 H126 V61 H177 V73 H300 V123 H70 Z"/>
+      <text class="title" x="185" y="96" text-anchor="middle">server.js</text>
+      <text class="small" x="185" y="113" text-anchor="middle">backend entry point</text>
+    </g>
+    <g>
+      <path class="package" d="M355 73 H415 V61 H466 V73 H585 V123 H355 Z"/>
+      <text class="title" x="470" y="96" text-anchor="middle">src/app.js</text>
+      <text class="small" x="470" y="113" text-anchor="middle">Express app · global middleware · route mounts</text>
+    </g>
+    <g>
+      <path class="package" d="M675 73 H735 V61 H786 V73 H900 V123 H675 Z"/>
+      <text class="title" x="787" y="96" text-anchor="middle">config/</text>
+      <text class="small" x="787" y="113" text-anchor="middle">sequelize.js · cloudinary.js</text>
+    </g>
 
-        <rect class="pkg" x="90" y="255" width="200" height="145" rx="12"/>
-        <text class="text" x="190" y="283" text-anchor="middle">Routes</text>
-        <text class="small" x="190" y="309" text-anchor="middle">authRoutes.js</text>
-        <text class="small" x="190" y="330" text-anchor="middle">productRoutes.js</text>
-        <text class="small" x="190" y="351" text-anchor="middle">… route modules</text>
+    <g>
+      <path class="package" d="M70 208 H126 V196 H177 V208 H300 V258 H70 Z"/>
+      <text class="title" x="185" y="231" text-anchor="middle">routes/</text>
+      <text class="small" x="185" y="248" text-anchor="middle">auth · products · orders · staff · ...</text>
+    </g>
+    <g>
+      <path class="package" d="M355 208 H415 V196 H466 V208 H585 V258 H355 Z"/>
+      <text class="title" x="470" y="231" text-anchor="middle">middlewares/</text>
+      <text class="small" x="470" y="248" text-anchor="middle">auth · upload · traceId · error handling</text>
+    </g>
 
-        <rect class="pkg" x="350" y="255" width="200" height="145" rx="12"/>
-        <text class="text" x="450" y="283" text-anchor="middle">Middlewares</text>
-        <text class="small" x="450" y="309" text-anchor="middle">Authentication · roles</text>
-        <text class="small" x="450" y="330" text-anchor="middle">Upload · traceId</text>
-        <text class="small" x="450" y="351" text-anchor="middle">Errors · not found</text>
+    <g>
+      <path class="package" d="M70 336 H126 V324 H177 V336 H300 V396 H70 Z"/>
+      <text class="title" x="185" y="360" text-anchor="middle">controllers/</text>
+      <text class="small" x="185" y="379" text-anchor="middle">Request handling · application flows</text>
+    </g>
+    <g>
+      <path class="package" d="M355 336 H415 V324 H466 V336 H585 V423 H355 Z"/>
+      <text class="title" x="470" y="360" text-anchor="middle">services/</text>
+      <text class="small" x="470" y="380" text-anchor="middle">mailService.js</text>
+      <text class="small" x="470" y="398" text-anchor="middle">cloudinaryService.js</text>
+    </g>
 
-        <rect class="pkg" x="610" y="255" width="200" height="145" rx="12"/>
-        <text class="text" x="710" y="283" text-anchor="middle">Controllers</text>
-        <text class="small" x="710" y="309" text-anchor="middle">authController.js</text>
-        <text class="small" x="710" y="330" text-anchor="middle">productController.js</text>
-        <text class="small" x="710" y="351" text-anchor="middle">… controller modules</text>
-
-        <rect class="pkg" x="855" y="255" width="140" height="145" rx="12"/>
-        <text class="text" x="925" y="283" text-anchor="middle">Utils</text>
-        <text class="small" x="925" y="309" text-anchor="middle">Validators</text>
-        <text class="small" x="925" y="330" text-anchor="middle">ApiError</text>
-        <text class="small" x="925" y="351" text-anchor="middle">Response helpers</text>
-
-        <path class="arrow" d="M660 138V170H190V249"/>
-        <path class="arrow" d="M290 327H344"/>
-        <path class="arrow" d="M550 327H604"/>
-        <path class="dashed" d="M450 255V235H925V249"/>
-        <path class="dashed" d="M710 255V237H925V249"/>
-
-        <rect class="area" x="220" y="505" width="370" height="125" rx="24"/>
-        <text class="label" x="405" y="535" text-anchor="middle">DATA ACCESS</text>
-        <rect class="pkg" x="250" y="556" width="175" height="52" rx="9"/>
-        <text class="text" x="337" y="579" text-anchor="middle">Sequelize Models</text>
-        <text class="small" x="337" y="597" text-anchor="middle">models/</text>
-        <rect class="pkg" x="450" y="556" width="115" height="52" rx="9"/>
-        <text class="text" x="507" y="579" text-anchor="middle">Associations</text>
-        <text class="small" x="507" y="597" text-anchor="middle">models/index.js</text>
-        <path class="arrow" d="M710 400V467H337V550"/>
-
-        <rect class="area" x="655" y="505" width="375" height="125" rx="24"/>
-        <text class="label" x="842" y="535" text-anchor="middle">INTEGRATIONS</text>
-        <rect class="pkg" x="685" y="556" width="155" height="52" rx="9"/>
-        <text class="text" x="762" y="579" text-anchor="middle">Services</text>
-        <text class="small" x="762" y="597" text-anchor="middle">Mail · Cloudinary</text>
-        <rect class="pkg" x="860" y="556" width="140" height="52" rx="9"/>
-        <text class="text" x="930" y="579" text-anchor="middle">Config</text>
-        <text class="small" x="930" y="597" text-anchor="middle">Sequelize</text>
-        <path class="arrow" d="M710 400V474H762V550"/>
-
-        <rect class="db" x="265" y="648" width="245" height="34" rx="9"/>
-        <text class="text" x="387" y="670" text-anchor="middle">MySQL · database/init.sql</text>
-        <path class="arrow" d="M337 608V642"/>
-        <path class="arrow" d="M930 608V635H500V642"/>
-
-        <rect class="external" x="700" y="648" width="285" height="34" rx="9"/>
-        <text class="text" x="842" y="670" text-anchor="middle">Gmail SMTP · Cloudinary</text>
-        <path class="dashed" d="M762 608V642"/>
-      </svg>
-    </div>
-  </main>
+    <g>
+      <path class="package" d="M70 485 H126 V473 H177 V485 H300 V545 H70 Z"/>
+      <text class="title" x="185" y="509" text-anchor="middle">models/</text>
+      <text class="small" x="185" y="528" text-anchor="middle">Sequelize models · index.js associations</text>
+    </g>
+    <g>
+      <path class="package" d="M355 485 H415 V473 H466 V485 H585 V545 H355 Z"/>
+      <text class="title" x="470" y="509" text-anchor="middle">utils/</text>
+      <text class="small" x="470" y="528" text-anchor="middle">validators · ApiError · response helpers</text>
+    </g>
+  </svg>
+</main>
 </body>
 </html>

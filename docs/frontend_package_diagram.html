@@ -6,96 +6,106 @@
   <title>Frontend Package Diagram · FS-SIMS</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 34px; background: #fff; color: #252525; font: 14px Arial, sans-serif; }
-    main { max-width: 1200px; margin: auto; }
-    h1 { margin: 0 0 28px; text-align: center; font-size: 22px; }
-    .entry { display: flex; justify-content: center; align-items: center; gap: 18px; }
-    .box { min-width: 150px; padding: 14px 20px; border: 1px solid #e2c45f; background: #fff2c7; text-align: center; font-weight: 700; }
-    .entry .box { min-width: 180px; }
-    .arrow { color: #555; font-size: 24px; text-align: center; }
-    .down { height: 32px; line-height: 32px; }
-    .routers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
-    .router-col { display: flex; flex-direction: column; align-items: center; }
-    .router-col .box { width: 100%; }
-    .views { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start; }
-    .view { border: 1px solid #555; background: white; }
-    .view-title { width: 112px; padding: 8px 14px; border-right: 1px solid #555; border-bottom: 1px solid #555; font-weight: 700; }
-    .view-content { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 12px; min-height: 130px; padding: 18px 14px; }
-    .page { position: relative; min-width: 82px; padding: 11px 10px; border: 1px solid #78ad69; background: #dcebd7; text-align: center; font-size: 12px; font-weight: 700; }
-    .page::before { position: absolute; top: -8px; left: -1px; width: 34px; height: 8px; border: 1px solid #78ad69; border-bottom: 0; background: #dcebd7; content: ""; }
-    .shared { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 32px; }
-    .shared .box { min-height: 76px; display: flex; flex-direction: column; justify-content: center; gap: 7px; }
-    .shared small { font-size: 11px; font-weight: 400; }
-    .backend { width: 260px; margin: 0 auto; border: 1px solid #7c9dcc; background: #dbe8fa; padding: 17px; text-align: center; font-weight: 700; }
-    .backend small { display: block; margin-top: 6px; font-weight: 400; }
-    @media (max-width: 850px) { body { padding: 22px; } .routers, .views { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; } .shared { grid-template-columns: 1fr; gap: 12px; } }
-    @media (max-width: 520px) { body { padding: 16px 10px; } h1 { font-size: 18px; } .routers, .views { grid-template-columns: 1fr; } .entry { flex-direction: column; gap: 4px; } .entry .arrow { transform: rotate(90deg); } }
-    @media print { body { padding: 12px; } }
+    body { margin: 0; padding: 24px; background: #fff; color: #222; font: 14px Arial, sans-serif; }
+    main { max-width: 1180px; margin: 0 auto; }
+    h1 { margin: 0 0 20px; text-align: center; font-size: 21px; }
+    .diagram { display: block; width: 100%; height: auto; }
+    .package { fill: #fff; stroke: #333; stroke-width: 1.2; }
+    .tab { fill: #fff; stroke: #333; stroke-width: 1.2; }
+    .item { fill: #fff; stroke: #555; stroke-width: 1; }
+    .title { font-size: 15px; font-weight: 700; fill: #222; }
+    .label { font-size: 12px; font-weight: 600; fill: #222; }
+    .small { font-size: 10.5px; fill: #333; }
+    .link { fill: none; stroke: #555; stroke-width: 1.2; stroke-dasharray: 2.5 3; marker-end: url(#arrow); }
+    @media (max-width: 700px) { body { padding: 12px 6px; } h1 { font-size: 17px; } }
+    @media print { body { padding: 8px; } }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Frontend Package Diagram · FS-SIMS</h1>
+<main>
+  <h1>Frontend Package Diagram · FS-SIMS</h1>
+  <svg class="diagram" viewBox="0 0 1120 690" role="img" aria-labelledby="diagram-title diagram-desc" xmlns="http://www.w3.org/2000/svg">
+    <title id="diagram-title">Frontend package structure</title>
+    <desc id="diagram-desc">Package diagram of the React and Vite frontend based on the actual frontend source folders.</desc>
+    <defs>
+      <marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#555" stroke-width="1"/></marker>
+    </defs>
 
-    <section class="entry">
-      <div class="box">main.jsx<br><small>ReactDOM · Providers</small></div>
-      <div class="arrow">→</div>
-      <div class="box">App.jsx</div>
-      <div class="arrow">→</div>
-      <div class="box">AppRouter.jsx<br><small>React Router</small></div>
-    </section>
+    <!-- orthogonal package dependencies -->
+    <path class="link" d="M846 94 V134 H580 V171"/>
+    <path class="link" d="M846 94 V148 H1003 V180"/>
+    <path class="link" d="M365 260 H396"/>
+    <path class="link" d="M578 132 V171"/>
+    <path class="link" d="M580 352 V390 H565 V425"/>
+    <path class="link" d="M733 273 H800 V231 H847"/>
+    <path class="link" d="M733 320 H785 V485 H847"/>
+    <path class="link" d="M565 527 V567 H450 V590"/>
+    <path class="link" d="M565 527 V567 H719 V590"/>
+    <path class="link" d="M847 263 H820 V405 H663 V460"/>
+    <path class="link" d="M1060 263 H1085 V568 H813 V620"/>
 
-    <div class="arrow down">↓</div>
+    <!-- components package -->
+    <g>
+      <path class="package" d="M38 192 H100 V180 H150 V192 H365 V382 H38 Z"/>
+      <text class="title" x="201" y="215" text-anchor="middle">components</text>
+      <rect class="item" x="61" y="236" width="132" height="43" rx="1"/><text class="label" x="127" y="262" text-anchor="middle">auth</text>
+      <rect class="item" x="207" y="236" width="132" height="43" rx="1"/><text class="label" x="273" y="262" text-anchor="middle">layouts</text>
+      <rect class="item" x="61" y="300" width="132" height="43" rx="1"/><text class="label" x="127" y="326" text-anchor="middle">common</text>
+      <text class="small" x="61" y="365">ProtectedRoute · layouts · shared UI</text>
+    </g>
 
-    <section class="routers">
-      <div class="router-col"><div class="box">PublicRouter</div><div class="arrow down">↓</div></div>
-      <div class="router-col"><div class="box">OwnerRouter</div><div class="arrow down">↓</div></div>
-      <div class="router-col"><div class="box">SaleRouter</div><div class="arrow down">↓</div></div>
-      <div class="router-col"><div class="box">StaffLeaderRouter</div><div class="arrow down">↓</div></div>
-    </section>
+    <!-- hooks package -->
+    <g>
+      <path class="package" d="M510 108 H565 V96 H616 V108 H646 V145 H510 Z"/>
+      <text class="title" x="578" y="132" text-anchor="middle">hooks</text>
+      <text class="small" x="578" y="160" text-anchor="middle">hooks/index.js</text>
+    </g>
 
-    <section class="views">
-      <article class="view">
-        <div class="view-title">View</div>
-        <div class="view-content">
-          <div class="page">Home</div><div class="page">Products</div><div class="page">Product Detail</div>
-          <div class="page">Login</div><div class="page">Register</div><div class="page">Profile</div>
-          <div class="page">Cart</div><div class="page">Customer Orders</div>
-        </div>
-      </article>
-      <article class="view">
-        <div class="view-title">View</div>
-        <div class="view-content">
-          <div class="page">Staff Accounts</div><div class="page">Suppliers</div><div class="page">Products</div>
-          <div class="page">Materials</div><div class="page">Purchase Receipts</div><div class="page">Material Exports</div>
-          <div class="page">Production Orders</div><div class="page">Orders</div><div class="page">Financial Reports</div>
-        </div>
-      </article>
-      <article class="view">
-        <div class="view-title">View</div>
-        <div class="view-content">
-          <div class="page">Create Order</div><div class="page">Create Request</div><div class="page">Orders</div>
-          <div class="page">Contracts</div><div class="page">Requests</div><div class="page">Customers</div>
-        </div>
-      </article>
-      <article class="view">
-        <div class="view-title">View</div>
-        <div class="view-content">
-          <div class="page">Leader Orders</div>
-        </div>
-      </article>
-    </section>
+    <!-- app package -->
+    <g>
+      <path class="package" d="M780 58 H832 V46 H884 V58 H1060 V130 H780 Z"/>
+      <text class="title" x="920" y="86" text-anchor="middle">app</text>
+      <text class="small" x="920" y="108" text-anchor="middle">main.jsx · App.jsx · apps/AppRouter.jsx</text>
+    </g>
 
-    <div class="arrow down">↓</div>
+    <!-- pages package -->
+    <g>
+      <path class="package" d="M396 184 H456 V172 H510 V184 H733 V382 H396 Z"/>
+      <text class="title" x="566" y="207" text-anchor="middle">pages</text>
+      <rect class="item" x="417" y="225" width="142" height="62"/><text class="label" x="488" y="245" text-anchor="middle">public-pages</text><text class="small" x="488" y="265" text-anchor="middle">Home · Product · Cart</text><text class="small" x="488" y="279" text-anchor="middle">Login · Profile · Orders</text>
+      <rect class="item" x="574" y="225" width="138" height="62"/><text class="label" x="643" y="245" text-anchor="middle">owner-pages</text><text class="small" x="643" y="265" text-anchor="middle">Products · Materials</text><text class="small" x="643" y="279" text-anchor="middle">Staff · Reports · Orders</text>
+      <rect class="item" x="417" y="301" width="142" height="62"/><text class="label" x="488" y="321" text-anchor="middle">sale-pages</text><text class="small" x="488" y="341" text-anchor="middle">Requests · Customers</text><text class="small" x="488" y="355" text-anchor="middle">Orders · Contracts</text>
+      <rect class="item" x="574" y="301" width="138" height="62"/><text class="label" x="643" y="321" text-anchor="middle">staff-pages</text><text class="small" x="643" y="341" text-anchor="middle">Staff login · Leader</text><text class="small" x="643" y="355" text-anchor="middle">orders</text>
+      <text class="small" x="566" y="377" text-anchor="middle">error-pages</text>
+    </g>
 
-    <section class="shared">
-      <div class="box">Components & Layouts<small>components/</small></div>
-      <div class="box">Context & Hooks<small>context/ · hooks/ · constants/ · utils/</small></div>
-      <div class="box">Services<small>services/ · Axios API client</small></div>
-    </section>
+    <!-- context package -->
+    <g>
+      <path class="package" d="M847 192 H907 V180 H958 V192 H1060 V279 H847 Z"/>
+      <text class="title" x="954" y="216" text-anchor="middle">context</text>
+      <rect class="item" x="868" y="231" width="80" height="32"/><text class="small" x="908" y="251" text-anchor="middle">AuthContext</text>
+      <rect class="item" x="959" y="231" width="80" height="32"/><text class="small" x="999" y="251" text-anchor="middle">CartContext</text>
+    </g>
 
-    <div class="arrow down">↓</div>
-    <div class="backend">Node.js · Express API<small>REST API · /api/*</small></div>
-  </main>
+    <!-- services package -->
+    <g>
+      <path class="package" d="M467 437 H527 V425 H578 V437 H663 V527 H467 Z"/>
+      <text class="title" x="565" y="461" text-anchor="middle">services</text>
+      <rect class="item" x="488" y="474" width="154" height="36"/><text class="small" x="565" y="490" text-anchor="middle">api.js · authService.js</text><text class="small" x="565" y="503" text-anchor="middle">feature service modules</text>
+    </g>
+
+    <!-- constants and utils packages -->
+    <g>
+      <path class="package" d="M346 602 H405 V590 H456 V602 H542 V660 H346 Z"/>
+      <text class="title" x="444" y="626" text-anchor="middle">constants</text>
+      <text class="small" x="444" y="646" text-anchor="middle">roles · orderStatus</text>
+    </g>
+    <g>
+      <path class="package" d="M616 602 H676 V590 H727 V602 H813 V660 H616 Z"/>
+      <text class="title" x="714" y="626" text-anchor="middle">utils</text>
+      <text class="small" x="714" y="646" text-anchor="middle">formatters · financialExport</text>
+    </g>
+  </svg>
+</main>
 </body>
 </html>
