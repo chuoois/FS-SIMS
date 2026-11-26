@@ -1,8 +1,9 @@
 // =========================================================
 // leaderStaffController.js
 // Bộ điều khiển riêng biệt dành cho vai trò Tổ trưởng xưởng (LEADERSTAFF)
-// Tách độc lập khỏi orderManagementController để tránh xung đột
-// Tuân thủ MVC: Controller chỉ điều phối req/res, gọi qua Model và Validator
+// Tuân thủ MVC & chuẩn format response AGENTS.md / docs/prompts/CONVENTIONS.md:
+// Success: buildSuccessResponse({ status, message, data, meta, req })
+// Error: throw ApiError(status, detail) -> next(err)
 // =========================================================
 
 const {
@@ -14,34 +15,54 @@ const {
 } = require('../models/CustomerOrderModel');
 
 const { toOrderManagementDTO } = require('../utils/orderManagementValidator');
+const { ApiError } = require('../utils/ApiError');
+const { buildSuccessResponse } = require('../utils/successResponse');
+
+function getErrorForNext(error, detail, defaultStatus = 500) {
+  if (error instanceof ApiError) return error;
+
+  const apiError = new ApiError(defaultStatus, detail);
+  apiError.cause = error;
+  return apiError;
+}
+
+function parseOrderIdParam(id) {
+  const orderId = parseInt(id, 10);
+  if (!orderId || Number.isNaN(orderId) || orderId <= 0) {
+    throw new ApiError(400, 'Mã đơn hàng không hợp lệ.');
+  }
+  return orderId;
+}
+
+function getLeaderUserId(req) {
+  return req.user?.user_account_id || req.user?.id || req.user?.sub;
+}
 
 /**
  * 1. GET /api/leader-staff/orders (hoặc /api/order-management/leader/orders)
  * Tổ trưởng xem danh sách các đơn hàng được Owner phân công cho mình
  */
-async function getLeaderOrders(req, res) {
+async function getLeaderOrders(req, res, next) {
   try {
-    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
+    const leaderId = getLeaderUserId(req);
     const { search, status, page = 1, limit = 10 } = req.query;
 
     const result = await getOrdersForLeader(leaderId, { search, status, page, limit });
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Lấy danh sách đơn hàng sản xuất thành công',
-      orders: (result.orders || []).map(toOrderManagementDTO),
-      pagination: {
-        totalItems: result.totalItems,
+      data: (result.orders || []).map(toOrderManagementDTO),
+      meta: {
+        page: result.currentPage,
+        limit: result.itemsPerPage,
+        total: result.totalItems,
         totalPages: result.totalPages,
-        currentPage: result.currentPage,
-        itemsPerPage: result.itemsPerPage,
       },
-    });
+      req,
+    }));
   } catch (error) {
-    console.error('[leaderStaffController.getLeaderOrders]', error);
-    return res.status(500).json({
-      message: 'Lỗi máy chủ khi lấy danh sách đơn của Tổ trưởng',
-      error: error.message,
-    });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy danh sách đơn của Tổ trưởng'));
   }
 }
 
@@ -49,30 +70,23 @@ async function getLeaderOrders(req, res) {
  * 2. GET /api/leader-staff/orders/:id
  * Tổ trưởng xem chi tiết bản vẽ kỹ thuật, thông số (D x R x C cm), chất liệu, màu sắc của đơn
  */
-async function getLeaderOrderDetail(req, res) {
+async function getLeaderOrderDetail(req, res, next) {
   try {
-    const { id } = req.params;
-    const orderId = parseInt(id, 10);
-
-    if (!orderId || isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
-    }
+    const orderId = parseOrderIdParam(req.params.id);
 
     const order = await findOrderById(orderId);
     if (!order) {
-      return res.status(404).json({ message: 'Không tìm thấy đơn hàng.' });
+      throw new ApiError(404, 'Không tìm thấy đơn hàng.');
     }
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Lấy chi tiết đơn hàng sản xuất thành công',
-      order: toOrderManagementDTO(order),
-    });
+      data: toOrderManagementDTO(order),
+      req,
+    }));
   } catch (error) {
-    console.error('[leaderStaffController.getLeaderOrderDetail]', error);
-    return res.status(500).json({
-      message: 'Lỗi máy chủ khi lấy chi tiết đơn hàng',
-      error: error.message,
-    });
+    return next(getErrorForNext(error, 'Lỗi máy chủ khi lấy chi tiết đơn hàng'));
   }
 }
 
@@ -80,27 +94,20 @@ async function getLeaderOrderDetail(req, res) {
  * 3. POST /api/leader-staff/orders/:id/accept
  * Tổ trưởng xác nhận tiếp nhận đơn hàng vào dây chuyền sản xuất của xưởng (chuyển sang IN_PRODUCTION)
  */
-async function leaderAccept(req, res) {
+async function leaderAccept(req, res, next) {
   try {
-    const { id } = req.params;
-    const orderId = parseInt(id, 10);
-    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
-
-    if (!orderId || isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
-    }
+    const orderId = parseOrderIdParam(req.params.id);
+    const leaderId = getLeaderUserId(req);
 
     const order = await leaderAcceptOrder(orderId, leaderId);
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Tiếp nhận đơn hàng vào sản xuất thành công',
-      order: toOrderManagementDTO(order),
-    });
+      data: toOrderManagementDTO(order),
+      req,
+    }));
   } catch (error) {
-    console.error('[leaderStaffController.leaderAccept]', error);
-    return res.status(400).json({
-      message: error.message || 'Lỗi khi tiếp nhận đơn hàng',
-      error: error.message,
-    });
+    return next(getErrorForNext(error, error.message || 'Lỗi khi tiếp nhận đơn hàng', 400));
   }
 }
 
@@ -109,16 +116,11 @@ async function leaderAccept(req, res) {
  * Tổ trưởng cập nhật tiến độ sản xuất: Đánh dấu Hoàn thành / Chưa hoàn thành
  * Body: { isCompleted: boolean, note/progressNote: string }
  */
-async function leaderProgress(req, res) {
+async function leaderProgress(req, res, next) {
   try {
-    const { id } = req.params;
-    const orderId = parseInt(id, 10);
-    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
+    const orderId = parseOrderIdParam(req.params.id);
+    const leaderId = getLeaderUserId(req);
     const { note, isCompleted, progressNote } = req.body;
-
-    if (!orderId || isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
-    }
 
     const finalNote = note || progressNote;
     const finalIsCompleted = isCompleted !== undefined ? Boolean(isCompleted) : undefined;
@@ -128,16 +130,14 @@ async function leaderProgress(req, res) {
       isCompleted: finalIsCompleted,
     });
 
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Cập nhật tiến độ sản xuất thành công',
-      order: toOrderManagementDTO(order),
-    });
+      data: toOrderManagementDTO(order),
+      req,
+    }));
   } catch (error) {
-    console.error('[leaderStaffController.leaderProgress]', error);
-    return res.status(400).json({
-      message: error.message || 'Lỗi khi cập nhật tiến độ',
-      error: error.message,
-    });
+    return next(getErrorForNext(error, error.message || 'Lỗi khi cập nhật tiến độ', 400));
   }
 }
 
@@ -147,28 +147,39 @@ async function leaderProgress(req, res) {
  * Hoặc nhận lại đơn khắc phục và nộp lại nếu Chủ xưởng nghiệm thu chưa đạt
  * Body: { note: string, images: string[] }
  */
-async function leaderSubmit(req, res) {
+async function leaderSubmit(req, res, next) {
   try {
-    const { id } = req.params;
-    const orderId = parseInt(id, 10);
-    const leaderId = req.user?.user_account_id || req.user?.id || req.user?.sub;
+    const orderId = parseOrderIdParam(req.params.id);
+    const leaderId = getLeaderUserId(req);
     const { note, images } = req.body;
 
-    if (!orderId || isNaN(orderId) || orderId <= 0) {
-      return res.status(400).json({ message: 'Mã đơn hàng không hợp lệ.' });
-    }
-
     const order = await leaderSubmitInspection(orderId, leaderId, { note, images });
-    return res.status(200).json({
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
       message: 'Đã gửi yêu cầu nghiệm thu lên Chủ xưởng thành công',
-      order: toOrderManagementDTO(order),
-    });
+      data: toOrderManagementDTO(order),
+      req,
+    }));
   } catch (error) {
-    console.error('[leaderStaffController.leaderSubmit]', error);
-    return res.status(400).json({
-      message: error.message || 'Lỗi khi gửi nghiệm thu',
-      error: error.message,
-    });
+    return next(getErrorForNext(error, error.message || 'Lỗi khi gửi nghiệm thu', 400));
+  }
+}
+
+/**
+ * 7. POST /api/leader-staff/upload-inspection-image
+ * Trả về danh sách URL ảnh nghiệm thu đã tải lên Cloudinary
+ */
+function uploadInspectionImage(req, res, next) {
+  try {
+    const urls = (req.files || []).map((f) => f.path || f.url || f.secure_url).filter(Boolean);
+    return res.status(200).json(buildSuccessResponse({
+      status: 200,
+      message: 'Tải lên hình ảnh nghiệm thu thành công',
+      data: urls,
+      req,
+    }));
+  } catch (error) {
+    return next(getErrorForNext(error, 'Lỗi tải ảnh nghiệm thu'));
   }
 }
 
@@ -178,5 +189,5 @@ module.exports = {
   leaderAccept,
   leaderProgress,
   leaderSubmit,
+  uploadInspectionImage,
 };
-

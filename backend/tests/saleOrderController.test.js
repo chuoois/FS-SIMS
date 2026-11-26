@@ -297,7 +297,7 @@ describe('saleOrderController', () => {
   });
 
   describe('getProductDetail', () => {
-    test('UTCID30 - SALE views counter product details by productId successfully (accounting for hold_quantity)', async () => {
+    test('UTCID01 - SALE views counter product details by productId successfully (accounting for hold_quantity)', async () => {
       // Arrange
       const req = createRequest({ params: { id: '1' } });
       const res = createResponse();

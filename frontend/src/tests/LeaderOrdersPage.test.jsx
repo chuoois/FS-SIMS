@@ -78,33 +78,40 @@ describe('LeaderOrdersPage Component', () => {
     },
   ];
 
-  const mockPagination = {
-    totalItems: 3,
+  const mockMeta = {
+    page: 1,
+    limit: 10,
+    total: 3,
     totalPages: 1,
-    currentPage: 1,
-    itemsPerPage: 10,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     leaderStaffService.getLeaderOrders.mockResolvedValue({
-      orders: mockOrders,
-      pagination: mockPagination,
+      status: 200,
+      message: 'Lấy danh sách đơn hàng sản xuất thành công',
+      data: mockOrders,
+      meta: mockMeta,
     });
     leaderStaffService.getLeaderOrderDetail.mockResolvedValue({
-      order: mockOrders[0],
+      status: 200,
+      message: 'Lấy chi tiết đơn hàng sản xuất thành công',
+      data: mockOrders[0],
     });
     leaderStaffService.leaderAcceptOrder.mockResolvedValue({
+      status: 200,
       message: 'Tiếp nhận đơn hàng vào sản xuất thành công',
-      order: { ...mockOrders[0], status: 'IN_PRODUCTION' },
+      data: { ...mockOrders[0], status: 'IN_PRODUCTION' },
     });
     leaderStaffService.leaderUpdateProgress.mockResolvedValue({
-      message: 'Cập nhật tiến độ thành công',
-      order: { ...mockOrders[1], isProductionCompleted: true },
+      status: 200,
+      message: 'Cập nhật tiến độ sản xuất thành công',
+      data: { ...mockOrders[1], isProductionCompleted: true },
     });
     leaderStaffService.leaderSubmitInspection.mockResolvedValue({
+      status: 200,
       message: 'Đã gửi yêu cầu nghiệm thu lên Chủ xưởng thành công',
-      order: { ...mockOrders[1], status: 'UNDER_INSPECTION' },
+      data: { ...mockOrders[1], status: 'UNDER_INSPECTION' },
     });
   });
 
@@ -160,7 +167,7 @@ describe('LeaderOrdersPage Component', () => {
 
     expect(leaderStaffService.leaderAcceptOrder).toHaveBeenCalledWith(1);
     await waitFor(() => {
-      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/tiếp nhận sản xuất/i));
+      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/tiếp nhận/i));
     });
   });
 

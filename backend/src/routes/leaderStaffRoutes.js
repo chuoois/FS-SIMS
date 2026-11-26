@@ -10,6 +10,7 @@ const {
   leaderAccept,
   leaderProgress,
   leaderSubmit,
+  uploadInspectionImage,
 } = require('../controllers/leaderStaffController');
 
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
@@ -37,18 +38,7 @@ router.post('/orders/:id/progress', leaderProgress);
 router.post('/orders/:id/submit-inspection', leaderSubmit);
 
 // 7. Upload hình ảnh thành phẩm nghiệm thu
-router.post('/upload-inspection-image', upload.array('images', 5), (req, res) => {
-  try {
-    const urls = (req.files || []).map((f) => f.path || f.url || f.secure_url).filter(Boolean);
-    return res.status(200).json({
-      message: 'Tải lên hình ảnh nghiệm thu thành công',
-      urls,
-      images: urls,
-    });
-  } catch (err) {
-    return res.status(500).json({ message: 'Lỗi tải ảnh nghiệm thu', error: err.message });
-  }
-});
+router.post('/upload-inspection-image', upload.array('images', 5), uploadInspectionImage);
 
 module.exports = router;
 
