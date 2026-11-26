@@ -26,6 +26,19 @@ function getErrorForNext(error, detail, defaultStatus = 500) {
   return apiError;
 }
 
+function mapLeaderActionError(error, fallbackDetail) {
+  if (error instanceof ApiError) return error;
+
+  const msg = error?.message || fallbackDetail;
+  if (msg.includes('Không tìm thấy')) {
+    return getErrorForNext(error, msg, 404);
+  }
+  if (msg.includes('không được phân công') || msg.includes('không có quyền')) {
+    return getErrorForNext(error, msg, 403);
+  }
+  return getErrorForNext(error, msg, 400);
+}
+
 function parseOrderIdParam(id) {
   const orderId = parseInt(id, 10);
   if (!orderId || Number.isNaN(orderId) || orderId <= 0) {
@@ -45,9 +58,25 @@ function getLeaderUserId(req) {
 async function getLeaderOrders(req, res, next) {
   try {
     const leaderId = getLeaderUserId(req);
-    const { search, status, page = 1, limit = 10 } = req.query;
+    const {
+      search,
+      search_by,
+      order_code,
+      customer_name,
+      status,
+      page = 1,
+      limit = 10,
+    } = req.query;
 
-    const result = await getOrdersForLeader(leaderId, { search, status, page, limit });
+    const result = await getOrdersForLeader(leaderId, {
+      search,
+      search_by,
+      order_code,
+      customer_name,
+      status,
+      page,
+      limit,
+    });
 
     return res.status(200).json(buildSuccessResponse({
       status: 200,
@@ -107,7 +136,7 @@ async function leaderAccept(req, res, next) {
       req,
     }));
   } catch (error) {
-    return next(getErrorForNext(error, error.message || 'Lỗi khi tiếp nhận đơn hàng', 400));
+    return next(mapLeaderActionError(error, 'Lỗi khi tiếp nhận đơn hàng'));
   }
 }
 
@@ -137,7 +166,7 @@ async function leaderProgress(req, res, next) {
       req,
     }));
   } catch (error) {
-    return next(getErrorForNext(error, error.message || 'Lỗi khi cập nhật tiến độ', 400));
+    return next(mapLeaderActionError(error, 'Lỗi khi cập nhật tiến độ'));
   }
 }
 
@@ -161,7 +190,7 @@ async function leaderSubmit(req, res, next) {
       req,
     }));
   } catch (error) {
-    return next(getErrorForNext(error, error.message || 'Lỗi khi gửi nghiệm thu', 400));
+    return next(mapLeaderActionError(error, 'Lỗi khi gửi nghiệm thu'));
   }
 }
 

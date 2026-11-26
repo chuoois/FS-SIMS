@@ -1060,7 +1060,7 @@ async function completeDelivery(orderId, { updatedBy } = {}) {
 /**
  * Lấy danh sách đơn hàng được phân công cho Leader
  */
-async function getOrdersForLeader(leaderId, { search, status, page = 1, limit = 10 } = {}) {
+async function getOrdersForLeader(leaderId, { search, search_by, order_code, customer_name, status, page = 1, limit = 10 } = {}) {
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
   const offset = (pageNum - 1) * limitNum;
@@ -1094,17 +1094,35 @@ async function getOrdersForLeader(leaderId, { search, status, page = 1, limit = 
   if (status && status !== 'ALL') {
     whereClause.status = status;
   }
-  if (search && search.trim()) {
-    const trimmed = search.trim();
-    whereClause[Op.and] = [
-      {
+
+  const andConditions = [];
+  if (order_code && String(order_code).trim()) {
+    andConditions.push({ order_code: { [Op.like]: `%${String(order_code).trim()}%` } });
+  }
+  if (customer_name && String(customer_name).trim()) {
+    andConditions.push({ contact_name: { [Op.like]: `%${String(customer_name).trim()}%` } });
+  }
+  if (search && String(search).trim()) {
+    const trimmed = String(search).trim();
+    const by = typeof search_by === 'string' ? search_by.trim().toUpperCase() : 'ALL';
+    if (by === 'PHONE') {
+      andConditions.push({ contact_phone: { [Op.like]: `%${trimmed}%` } });
+    } else if (by === 'ORDER_CODE') {
+      andConditions.push({ order_code: { [Op.like]: `%${trimmed}%` } });
+    } else if (by === 'CUSTOMER_NAME') {
+      andConditions.push({ contact_name: { [Op.like]: `%${trimmed}%` } });
+    } else {
+      andConditions.push({
         [Op.or]: [
           { order_code: { [Op.like]: `%${trimmed}%` } },
           { contact_name: { [Op.like]: `%${trimmed}%` } },
           { contact_phone: { [Op.like]: `%${trimmed}%` } },
         ],
-      },
-    ];
+      });
+    }
+  }
+  if (andConditions.length > 0) {
+    whereClause[Op.and] = andConditions;
   }
 
   const { rows, count } = await CustomerOrder.findAndCountAll({
@@ -1159,6 +1177,7 @@ module.exports = {
   VALID_STATUSES,
   NEXT_ORDER_STATUS,
   assignLeaderToCustomerOrder,
+  verifyLeaderOrderPermission,
   leaderAcceptOrder,
   leaderUpdateProgress,
   leaderSubmitInspection,
