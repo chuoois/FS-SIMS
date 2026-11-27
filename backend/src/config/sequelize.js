@@ -1,5 +1,5 @@
-const { Sequelize } = require('sequelize');
-require('dotenv').config();
+const { Sequelize } = require("sequelize");
+require("dotenv").config();
 
 const sequelize = new Sequelize(
   process.env.DB_NAME,
@@ -8,15 +8,20 @@ const sequelize = new Sequelize(
   {
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT) || 3306,
-    dialect: 'mysql',
+    dialect: "mysql",
+    // Matches MySQL SSL mode REQUIRED: encrypt the connection without certificate verification.
+    dialectOptions:
+      process.env.DB_SSL === "true"
+        ? { ssl: { rejectUnauthorized: false } }
+        : {},
     pool: {
       max: 10,
       min: 0,
       acquire: 30000,
       idle: 10000,
     },
-    logging: process.env.NODE_ENV === 'production' ? false : console.log,
-  }
+    logging: process.env.NODE_ENV === "production" ? false : console.log,
+  },
 );
 
 async function testSequelizeConnection(retries = 5, delayMs = 3000) {
@@ -26,7 +31,7 @@ async function testSequelizeConnection(retries = 5, delayMs = 3000) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       await sequelize.authenticate();
-      console.log('✅ Kết nối MySQL thành công');
+      console.log("✅ Kết nối MySQL thành công");
       return true;
     } catch (error) {
       lastError = error;
@@ -36,7 +41,10 @@ async function testSequelizeConnection(retries = 5, delayMs = 3000) {
     }
   }
 
-  console.error(`❌ Kết nối MySQL thất bại sau ${attempts} lần thử:`, lastError.message);
+  console.error(
+    `❌ Kết nối MySQL thất bại sau ${attempts} lần thử:`,
+    lastError.message,
+  );
   return false;
 }
 
