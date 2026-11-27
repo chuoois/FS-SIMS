@@ -12,25 +12,37 @@ import {
   RotateCw,
   Eye,
   X,
-  Phone,
-  Mail,
-  MapPin,
-  Calendar,
-  CheckCircle2,
-  XCircle,
   UserPlus,
   ArrowLeft,
-  User,
   Info,
+  Pencil,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getCustomers, getCustomerById, createSaleCustomer } from '../../services/saleOrderService';
+import {
+  getCustomers,
+  getCustomerById,
+  createSaleCustomer,
+  updateSaleCustomer,
+  deleteSaleCustomer,
+} from '../../services/saleOrderService';
 import { TablePagination } from '../../components/common/TablePagination';
 import { AccountStatusBadge } from '../../components/common/StatusBadge';
 
 // ─── Helpers ──────────────────────────────────────────────
 const formatDate = (d) =>
   d ? new Intl.DateTimeFormat('vi-VN').format(new Date(d)) : '—';
+
+const formatGender = (gender) => {
+  if (gender === 'MALE') return 'Nam';
+  if (gender === 'FEMALE') return 'Nữ';
+  if (gender === 'OTHER') return 'Khác';
+  return '—';
+};
+
+const PHONE_REGEX = /^[0-9+\-\s()]{7,20}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const formatVND = (val) =>
   val != null
@@ -51,7 +63,7 @@ const SEARCH_BY_OPTIONS = [
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
 // ─── Modal Chi tiết Hồ sơ Khách hàng ─────────────────────
-function CustomerDetailModal({ customerId, onClose }) {
+function CustomerDetailModal({ customerId, onClose, onEdit }) {
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('info');
@@ -59,6 +71,7 @@ function CustomerDetailModal({ customerId, onClose }) {
   useEffect(() => {
     if (!customerId) return;
     setLoading(true);
+    setActiveTab('info');
     getCustomerById(customerId)
       .then((res) => {
         // Chuẩn AGENTS.md / CONVENTIONS.md: Dữ liệu trả về nằm trong res.data
@@ -71,8 +84,24 @@ function CustomerDetailModal({ customerId, onClose }) {
       .finally(() => setLoading(false));
   }, [customerId]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Chi tiết hồ sơ khách hàng"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="relative w-full max-w-2xl rounded-xl bg-white shadow-xl border border-stone-200 my-8 overflow-hidden flex flex-col">
         {/* Header Modal */}
         <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 bg-stone-50">
@@ -88,7 +117,7 @@ function CustomerDetailModal({ customerId, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             aria-label="Đóng cửa sổ"
           >
             <X className="h-5 w-5" />
@@ -96,7 +125,7 @@ function CustomerDetailModal({ customerId, onClose }) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-stone-200 px-6 bg-stone-50/50 text-xs">
+        <div className="flex flex-wrap border-b border-stone-200 px-6 bg-stone-50/50 text-xs">
           {[
             { key: 'info', label: 'Thông tin cá nhân' },
             { key: 'requests', label: `Yêu cầu đặt đóng (${customer?.requests?.length ?? 0})` },
@@ -107,7 +136,7 @@ function CustomerDetailModal({ customerId, onClose }) {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`px-3.5 py-2.5 font-medium transition border-b-2 -mb-px ${activeTab === tab.key
+              className={`px-3.5 py-2.5 font-medium transition motion-reduce:transition-none border-b-2 -mb-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900 ${activeTab === tab.key
                   ? 'border-stone-900 text-stone-900 font-semibold'
                   : 'border-transparent text-stone-500 hover:text-stone-800'
                 }`}
@@ -121,7 +150,7 @@ function CustomerDetailModal({ customerId, onClose }) {
         <div className="overflow-y-auto max-h-[60vh] p-6 text-xs text-stone-700 space-y-4">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-stone-500">
-              <RotateCw className="h-6 w-6 animate-spin text-stone-400 mb-2" />
+              <RotateCw className="h-6 w-6 animate-spin motion-reduce:animate-none text-stone-400 mb-2" />
               <span>Đang tải thông tin...</span>
             </div>
           ) : !customer ? (
@@ -141,7 +170,7 @@ function CustomerDetailModal({ customerId, onClose }) {
                   </div>
                   <div className="rounded-lg border border-stone-200 p-3 bg-stone-50/50">
                     <span className="text-[11px] text-stone-500 block">Địa chỉ email:</span>
-                    <span className="text-xs text-stone-800">{customer.email || '—'}</span>
+                    <span className="text-xs text-stone-800 break-all">{customer.email || '—'}</span>
                   </div>
                   <div className="rounded-lg border border-stone-200 p-3 bg-stone-50/50">
                     <span className="text-[11px] text-stone-500 block">Trạng thái tài khoản:</span>
@@ -153,12 +182,21 @@ function CustomerDetailModal({ customerId, onClose }) {
                   </div>
                   <div className="rounded-lg border border-stone-200 p-3 bg-stone-50/50">
                     <span className="text-[11px] text-stone-500 block">Ngày tham gia:</span>
-                    <span className="text-xs text-stone-800">{formatDate(customer.createdate)}</span>
+                    <span className="text-xs font-mono text-stone-800">{formatDate(customer.createdate)}</span>
                   </div>
                   <div className="rounded-lg border border-stone-200 p-3 bg-stone-50/50">
-                    <span className="text-[11px] text-stone-500 block">Giới tính:</span>
-                    <span className="text-xs text-stone-800">{customer.gender || '—'}</span>
+                    <span className="text-[11px] text-stone-500 block">Giới tính / Ngày sinh:</span>
+                    <span className="text-xs text-stone-800">
+                      {formatGender(customer.gender)}
+                      {customer.dob ? ` (${formatDate(customer.dob)})` : ''}
+                    </span>
                   </div>
+                  {customer.note && (
+                    <div className="sm:col-span-2 rounded-lg border border-stone-200 p-3 bg-stone-50/50">
+                      <span className="text-[11px] text-stone-500 block">Ghi chú riêng:</span>
+                      <span className="text-xs text-stone-800">{customer.note}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -211,7 +249,7 @@ function CustomerDetailModal({ customerId, onClose }) {
                   items={customer.orders}
                   emptyText="Khách hàng chưa có đơn hàng nào"
                   renderItem={(o) => (
-                    <div key={o.customer_order_id} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-white">
+                    <div key={o.order_id ?? o.customer_order_id} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-white">
                       <div>
                         <span className="font-mono font-semibold text-stone-900 text-xs">{o.order_code}</span>
                         <p className="text-[11px] text-stone-500 mt-0.5 font-mono">
@@ -230,14 +268,27 @@ function CustomerDetailModal({ customerId, onClose }) {
         </div>
 
         {/* Footer Modal */}
-        <div className="flex items-center justify-end border-t border-stone-200 bg-stone-50 px-6 py-3">
+        <div className="flex items-center justify-end gap-2.5 border-t border-stone-200 bg-stone-50 px-6 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-stone-300 bg-white px-3.5 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-100 transition"
+            className="rounded-lg border border-stone-300 bg-white px-3.5 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-100 transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
           >
             Đóng
           </button>
+          {!loading && customer && onEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onEdit(customer);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-950 transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Chỉnh sửa</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -256,25 +307,60 @@ function HistoryList({ items, emptyText, renderItem }) {
   return <div className="space-y-2">{items.map(renderItem)}</div>;
 }
 
-// ─── Modal Tạo mới Khách hàng ────────────────────────────
-function CreateCustomerModal({ open, onClose, initialName = '', initialPhone = '', onSuccess, returnUrl }) {
+// ─── Modal Tạo mới / Chỉnh sửa Khách hàng ───────────────
+function CustomerFormModal({
+  open,
+  mode = 'create',
+  customer = null,
+  onClose,
+  initialName = '',
+  initialPhone = '',
+  onSuccess,
+  returnUrl,
+}) {
+  const isEdit = mode === 'edit';
   const [fullName, setFullName] = useState(initialName);
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
+  const [gender, setGender] = useState('');
+  const [dob, setDob] = useState('');
+  const [status, setStatus] = useState('ACTIVE');
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (isEdit && customer) {
+      setFullName(customer.full_name || '');
+      setPhoneNumber(customer.phone_number || '');
+      setEmail(customer.email || '');
+      setAddress(customer.address || '');
+      setNote(customer.note || '');
+      setGender(customer.gender || '');
+      setDob(customer.dob ? String(customer.dob).slice(0, 10) : '');
+      setStatus(customer.status || 'ACTIVE');
+    } else {
       setFullName(initialName);
       setPhoneNumber(initialPhone);
       setEmail('');
       setAddress('');
       setNote('');
+      setGender('');
+      setDob('');
+      setStatus('ACTIVE');
     }
-  }, [open, initialName, initialPhone]);
+  }, [open, isEdit, customer, initialName, initialPhone]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !submitting) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, submitting, onClose]);
 
   if (!open) return null;
 
@@ -288,9 +374,37 @@ function CreateCustomerModal({ open, onClose, initialName = '', initialPhone = '
       toast.error('Vui lòng nhập số điện thoại khách hàng');
       return;
     }
+    if (!PHONE_REGEX.test(phoneNumber.trim())) {
+      toast.error('Số điện thoại không hợp lệ (từ 7 đến 20 ký tự số)');
+      return;
+    }
+    if (email.trim() && !EMAIL_REGEX.test(email.trim())) {
+      toast.error('Địa chỉ email không đúng định dạng');
+      return;
+    }
 
     try {
       setSubmitting(true);
+
+      if (isEdit && customer) {
+        const res = await updateSaleCustomer(customer.user_account_id, {
+          fullName: fullName.trim(),
+          phoneNumber: phoneNumber.trim(),
+          email: email.trim() || undefined,
+          address: address.trim(),
+          note: note.trim(),
+          gender: gender || null,
+          dob: dob || null,
+          status,
+        });
+
+        const updatedCustomer = res?.data ?? res?.customer ?? res;
+        toast.success(res?.message || 'Cập nhật thông tin khách hàng thành công');
+        if (onSuccess) onSuccess(updatedCustomer);
+        onClose();
+        return;
+      }
+
       const res = await createSaleCustomer({
         fullName: fullName.trim(),
         phoneNumber: phoneNumber.trim(),
@@ -315,104 +429,177 @@ function CreateCustomerModal({ open, onClose, initialName = '', initialPhone = '
         onClose();
       }
     } catch (err) {
-      console.error('Lỗi khi tạo khách hàng:', err);
-      toast.error(err.response?.data?.detail || err.response?.data?.message || err.message || 'Không thể tạo khách hàng');
+      console.error(isEdit ? 'Lỗi khi cập nhật khách hàng:' : 'Lỗi khi tạo khách hàng:', err);
+      toast.error(
+        err.response?.data?.detail ||
+          err.response?.data?.message ||
+          err.message ||
+          (isEdit ? 'Không thể cập nhật khách hàng' : 'Không thể tạo khách hàng')
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="customer-form-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
+    >
       <div className="relative w-full max-w-md rounded-xl bg-white shadow-xl border border-stone-200 my-8 overflow-hidden">
         <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 bg-stone-50">
           <div>
-            <h3 className="font-bold text-stone-900 text-sm">Thêm mới khách hàng</h3>
-            <p className="text-[11px] text-stone-500">Tạo tài khoản hồ sơ khách hàng vào hệ thống</p>
+            <h3 id="customer-form-modal-title" className="font-bold text-stone-900 text-sm">
+              {isEdit ? 'Chỉnh sửa thông tin khách hàng' : 'Thêm mới khách hàng'}
+            </h3>
+            <p className="text-[11px] text-stone-500">
+              {isEdit
+                ? 'Cập nhật hồ sơ liên hệ và trạng thái tài khoản khách hàng'
+                : 'Tạo tài khoản hồ sơ khách hàng vào hệ thống'}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+            disabled={submitting}
+            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+            aria-label="Đóng cửa sổ"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-3.5 text-xs">
-          {returnUrl && (
+        <form onSubmit={handleSubmit} className="max-h-[78vh] overflow-y-auto p-6 space-y-3.5 text-xs">
+          {!isEdit && returnUrl && (
             <div className="rounded-lg bg-stone-50 border border-stone-200 p-2.5 text-stone-600">
               Sau khi lưu, hệ thống sẽ tự động điền thông tin khách hàng này vào đơn hàng tại quầy.
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">
+            <label htmlFor="customer-fullname" className="block text-xs font-medium text-stone-700 mb-1">
               Họ và tên khách hàng <span className="text-rose-600">*</span>
             </label>
             <input
+              id="customer-fullname"
               type="text"
               required
               placeholder="Nguyễn Văn A"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">
+            <label htmlFor="customer-phone" className="block text-xs font-medium text-stone-700 mb-1">
               Số điện thoại liên hệ <span className="text-rose-600">*</span>
             </label>
             <input
+              id="customer-phone"
               type="tel"
               required
               placeholder="0912345678"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 py-2 px-3 font-mono text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              className="w-full rounded-lg border border-stone-300 py-2 px-3 font-mono text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">
+            <label htmlFor="customer-email" className="block text-xs font-medium text-stone-700 mb-1">
               Địa chỉ Email
             </label>
             <input
+              id="customer-email"
               type="email"
               placeholder="khachhang@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             />
             <p className="mt-1 text-[11px] text-stone-500">
-              Có thể để trống nếu khách chưa có email.
+              {isEdit ? 'Để trống nếu muốn giữ nguyên email hiện tại.' : 'Có thể để trống nếu khách chưa có email.'}
             </p>
           </div>
 
+          {isEdit && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="customer-status" className="block text-xs font-medium text-stone-700 mb-1">
+                  Trạng thái
+                </label>
+                <select
+                  id="customer-status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full rounded-lg border border-stone-300 bg-white py-2 px-2.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+                >
+                  <option value="ACTIVE">Đang hoạt động</option>
+                  <option value="INACTIVE">Ngừng hoạt động</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="customer-gender" className="block text-xs font-medium text-stone-700 mb-1">
+                  Giới tính
+                </label>
+                <select
+                  id="customer-gender"
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  className="w-full rounded-lg border border-stone-300 bg-white py-2 px-2.5 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+                >
+                  <option value="">Chưa cập nhật</option>
+                  <option value="MALE">Nam</option>
+                  <option value="FEMALE">Nữ</option>
+                  <option value="OTHER">Khác</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="customer-dob" className="block text-xs font-medium text-stone-700 mb-1">
+                  Ngày sinh
+                </label>
+                <input
+                  id="customer-dob"
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  className="w-full rounded-lg border border-stone-300 py-2 px-2.5 font-mono text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+                />
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">
+            <label htmlFor="customer-address" className="block text-xs font-medium text-stone-700 mb-1">
               Địa chỉ giao hàng &amp; lắp đặt
             </label>
             <input
+              id="customer-address"
               type="text"
               placeholder="Số nhà, tên đường, phường/xã..."
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">
+            <label htmlFor="customer-note" className="block text-xs font-medium text-stone-700 mb-1">
               Ghi chú riêng
             </label>
             <textarea
+              id="customer-note"
               rows={2}
               placeholder="Sở thích chất liệu gỗ, phong cách nội thất..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full rounded-lg border border-stone-300 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+              className="w-full rounded-lg border border-stone-300 p-2.5 text-xs text-stone-900 placeholder:text-stone-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             />
           </div>
 
@@ -421,19 +608,179 @@ function CreateCustomerModal({ open, onClose, initialName = '', initialPhone = '
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="rounded-lg border border-stone-300 bg-white px-3.5 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 transition"
+              className="rounded-lg border border-stone-300 bg-white px-3.5 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50 transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-amber-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-amber-950 disabled:opacity-50 transition"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-amber-950 disabled:opacity-50 transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             >
-              {submitting ? 'Đang lưu...' : 'Lưu khách hàng'}
+              {submitting && <RotateCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />}
+              <span>{submitting ? 'Đang lưu...' : isEdit ? 'Lưu thay đổi' : 'Lưu khách hàng'}</span>
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal Xác nhận Xóa Khách hàng ──────────────────────
+function DeleteCustomerModal({ open, customer, onClose, onSuccess }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setConflictMessage('');
+      setSubmitting(false);
+    }
+  }, [open, customer]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !submitting) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, submitting, onClose]);
+
+  if (!open || !customer) return null;
+
+  const handleConfirmDelete = async () => {
+    try {
+      setSubmitting(true);
+      const res = await deleteSaleCustomer(customer.user_account_id);
+      toast.success(res?.message || 'Xóa khách hàng thành công');
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (err) {
+      const status = err.response?.status;
+      const msg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Không thể xóa khách hàng';
+      if (status === 409) {
+        setConflictMessage(msg);
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleQuickDeactivate = async () => {
+    try {
+      setSubmitting(true);
+      await updateSaleCustomer(customer.user_account_id, { status: 'INACTIVE' });
+      toast.success('Đã chuyển khách hàng sang ngừng hoạt động');
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || err.response?.data?.message || 'Không thể cập nhật trạng thái khách hàng');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-customer-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
+    >
+      <div className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl border border-stone-200">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+              {conflictMessage ? <AlertTriangle className="h-5 w-5" /> : <Trash2 className="h-5 w-5" />}
+            </div>
+            <div>
+              <h2 id="delete-customer-modal-title" className="text-base font-bold text-stone-900">
+                {conflictMessage ? 'Không thể xóa khách hàng' : 'Xóa vĩnh viễn khách hàng?'}
+              </h2>
+              <p className="text-xs text-stone-500 font-mono">
+                {customer.phone_number || customer.email || `#${customer.user_account_id}`}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+            aria-label="Đóng cửa sổ"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {conflictMessage ? (
+          <div className="mt-4 space-y-3 text-xs">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-rose-800 leading-relaxed">
+              <p className="font-semibold text-rose-900 mb-1">Ràng buộc dữ liệu giao dịch</p>
+              <p>{conflictMessage}</p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+              >
+                Đóng
+              </button>
+              {customer.status !== 'INACTIVE' && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={handleQuickDeactivate}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-950 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+                >
+                  {submitting && <RotateCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />}
+                  <span>Chuyển sang ngừng hoạt động</span>
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 text-xs">
+            <p className="text-stone-600 leading-relaxed">
+              Bạn có chắc chắn muốn xóa khách hàng{' '}
+              <strong>&ldquo;{customer.full_name}&rdquo;</strong>? Hành động này{' '}
+              <strong className="text-rose-700">không thể hoàn tác</strong>.
+            </p>
+            <p className="mt-2.5 rounded-lg border border-stone-200 bg-stone-50 p-3 text-[11px] text-stone-600">
+              Hệ thống chỉ cho phép xóa khi khách hàng chưa phát sinh yêu cầu đặt đóng, hợp đồng hoặc đơn hàng nào.
+            </p>
+
+            <div className="mt-5 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={handleConfirmDelete}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+              >
+                {submitting && <RotateCw className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />}
+                <span>Xác nhận xóa</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -448,6 +795,8 @@ export function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(null);
+  const [deletingCustomer, setDeletingCustomer] = useState(null);
 
   // Bộ lọc & Phân trang
   const [filters, setFilters] = useState({
@@ -802,7 +1151,7 @@ export function CustomersPage() {
                       {formatDate(c.createdate)}
                     </td>
                     <td className="px-3 py-3.5 text-center pr-4 sm:pr-6">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
                         {searchParams.get('returnUrl') && (
                           <button
                             type="button"
@@ -814,7 +1163,7 @@ export function CustomersPage() {
                               if (c.address) params.set('customerAddress', c.address);
                               navigate(`${searchParams.get('returnUrl')}?${params.toString()}`);
                             }}
-                            className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-stone-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                            className="inline-flex items-center gap-1 rounded-lg bg-stone-900 px-2.5 py-1 text-xs font-semibold text-white transition motion-reduce:transition-none hover:bg-stone-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                             title="Chọn khách hàng này cho đơn hàng"
                           >
                             <span>Chọn cho đơn</span>
@@ -823,11 +1172,32 @@ export function CustomersPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedCustomerId(c.user_account_id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 transition hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                          className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 transition motion-reduce:transition-none hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                           title="Xem hồ sơ chi tiết"
+                          aria-label={`Chi tiết khách hàng ${c.full_name}`}
                         >
-                          <Eye className="h-3.5 w-3.5 text-stone-500" />
+                          <Eye className="h-3.5 w-3.5 text-stone-500" aria-hidden="true" />
                           <span>Chi tiết</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingCustomer(c)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 transition motion-reduce:transition-none hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+                          title="Chỉnh sửa thông tin khách hàng"
+                          aria-label={`Sửa khách hàng ${c.full_name}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Sửa</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingCustomer(c)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 transition motion-reduce:transition-none hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+                          title="Xóa khách hàng"
+                          aria-label={`Xóa khách hàng ${c.full_name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Xóa</span>
                         </button>
                       </div>
                     </td>
@@ -862,18 +1232,45 @@ export function CustomersPage() {
         <CustomerDetailModal
           customerId={selectedCustomerId}
           onClose={() => setSelectedCustomerId(null)}
+          onEdit={(customer) => setEditingCustomer(customer)}
         />
       )}
 
       {/* ── MODAL TẠO MỚI KHÁCH HÀNG ─────────────────────────────── */}
-      <CreateCustomerModal
+      <CustomerFormModal
         open={createModalOpen}
+        mode="create"
         onClose={() => setCreateModalOpen(false)}
         initialName={searchParams.get('name') || ''}
         initialPhone={searchParams.get('phone') || ''}
         returnUrl={searchParams.get('returnUrl') || ''}
         onSuccess={() => {
           fetchCustomers(1);
+        }}
+      />
+
+      {/* ── MODAL CHỈNH SỬA KHÁCH HÀNG ───────────────────────────── */}
+      <CustomerFormModal
+        open={Boolean(editingCustomer)}
+        mode="edit"
+        customer={editingCustomer}
+        onClose={() => setEditingCustomer(null)}
+        onSuccess={() => {
+          fetchCustomers(pagination.currentPage);
+        }}
+      />
+
+      {/* ── MODAL XÁC NHẬN XÓA KHÁCH HÀNG ────────────────────────── */}
+      <DeleteCustomerModal
+        open={Boolean(deletingCustomer)}
+        customer={deletingCustomer}
+        onClose={() => setDeletingCustomer(null)}
+        onSuccess={() => {
+          const nextPage =
+            customers.length === 1 && pagination.currentPage > 1
+              ? pagination.currentPage - 1
+              : pagination.currentPage;
+          fetchCustomers(nextPage);
         }}
       />
     </div>

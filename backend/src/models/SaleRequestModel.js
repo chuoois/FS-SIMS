@@ -590,9 +590,10 @@ async function createSalesOrderRequest({
 }
 
 /**
- * Sales cập nhật đơn đặt hàng thiết kế (khi Owner yêu cầu sửa REQUEST_CHANGE hoặc PENDING)
+ * Sales cập nhật đơn đặt hàng thiết kế (chỉ áp dụng cho CUSTOM trước khi Chủ xưởng duyệt/chốt thiết kế: PENDING, DESIGNING, REQUEST_CHANGE)
  */
 async function updateSalesOrderRequest(requestId, {
+  customerAccountId,
   contactName,
   contactPhone,
   contactEmail,
@@ -611,15 +612,31 @@ async function updateSalesOrderRequest(requestId, {
   try {
     const request = await OrderRequest.findByPk(requestId, { transaction, lock: transaction.LOCK.UPDATE });
     if (!request) {
-      throw new Error('Không tìm thấy yêu cầu thiết kế.');
+      const err = new Error('Không tìm thấy yêu cầu thiết kế.');
+      err.statusCode = 404;
+      throw err;
     }
 
-    if (request.status !== 'PENDING' && request.status !== 'REQUEST_CHANGE') {
-      throw new Error(`Không thể chỉnh sửa yêu cầu ở trạng thái "${request.status}". Chỉ cho phép sửa khi Chờ duyệt (PENDING) hoặc Cần chỉnh sửa (REQUEST_CHANGE).`);
+    if (request.order_type !== 'CUSTOM') {
+      const err = new Error('Chỉ cho phép chỉnh sửa yêu cầu đặt đóng theo yêu cầu (CUSTOM).');
+      err.statusCode = 400;
+      throw err;
     }
 
-    // Cập nhật thông tin chính và đổi lại PENDING để Owner duyệt lại
+    const EDITABLE_STATUSES = ['PENDING', 'DESIGNING', 'REQUEST_CHANGE'];
+    if (!EDITABLE_STATUSES.includes(request.status)) {
+      const err = new Error(
+        `Không thể chỉnh sửa yêu cầu ở trạng thái "${request.status}". Chỉ cho phép sửa trước khi Chủ xưởng duyệt hoặc gửi bản vẽ.`
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Giữ trạng thái DESIGNING cho luồng Chủ xưởng duyệt thiết kế (trừ khi đang PENDING từ nguồn ngoài)
+    const nextStatus = request.status === 'PENDING' ? 'PENDING' : 'DESIGNING';
+
     await request.update({
+      customer_account_id: customerAccountId !== undefined ? customerAccountId : request.customer_account_id,
       contact_name: contactName || request.contact_name,
       contact_phone: contactPhone || request.contact_phone,
       contact_email: contactEmail !== undefined ? contactEmail : request.contact_email,
@@ -629,7 +646,7 @@ async function updateSalesOrderRequest(requestId, {
       budget_min: budgetMin !== undefined ? budgetMin : request.budget_min,
       budget_max: budgetMax !== undefined ? budgetMax : request.budget_max,
       expected_date: expectedDate !== undefined ? expectedDate : request.expected_date,
-      status: 'PENDING',
+      status: nextStatus,
       reject_reason: null,
       modifieby: updatedBy || null,
     }, { transaction });
@@ -659,9 +676,12 @@ async function updateSalesOrderRequest(requestId, {
       }
     }
 
-    // Cập nhật images nếu truyền lên
+    // Cập nhật ảnh tham khảo (chỉ thay thế ảnh REFERENCE, bảo toàn ảnh DESIGN nếu có)
     if ((images && Array.isArray(images)) || (items && Array.isArray(items))) {
-      await OrderRequestImage.destroy({ where: { request_id: requestId }, transaction });
+      await OrderRequestImage.destroy({
+        where: { request_id: requestId, image_type: 'REFERENCE' },
+        transaction,
+      });
 
       const allImagesToCreate = [];
 
@@ -677,6 +697,7 @@ async function updateSalesOrderRequest(requestId, {
                   request_id: requestId,
                   request_item_id: targetItemId,
                   image_url: url.trim().length > 255 ? url.trim().substring(0, 255) : url.trim(),
+                  image_type: 'REFERENCE',
                   sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : imgIdx,
                   createby: updatedBy || 'Sales',
                 });
@@ -710,6 +731,7 @@ async function updateSalesOrderRequest(requestId, {
               request_id: requestId,
               request_item_id: targetItemId,
               image_url: cleanUrl,
+              image_type: 'REFERENCE',
               sort_order: (typeof img === 'object' && img.sortOrder !== undefined) ? img.sortOrder : idx,
               createby: updatedBy || 'Sales',
             });

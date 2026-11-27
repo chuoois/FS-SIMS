@@ -16,6 +16,7 @@ jest.mock('../src/models/ContractModel', () => ({
 
 jest.mock('../src/models/SaleRequestModel', () => ({
   convertRequestToContract: jest.fn(),
+  updateSalesOrderRequest: jest.fn(),
 }));
 
 jest.mock('../src/models/OrderRequestModel', () => ({
@@ -33,6 +34,7 @@ const {
 
 const {
   convertRequestToContract: convertRequestToContractModel,
+  updateSalesOrderRequest: updateSalesOrderRequestModel,
 } = require('../src/models/SaleRequestModel');
 
 const { OrderRequest } = require('../src/models/OrderRequestModel');
@@ -43,6 +45,7 @@ const {
   getContracts,
   getContractById,
   convertRequestToContract,
+  updateSalesRequest,
 } = require('../src/controllers/saleContractController');
 
 function createResponse() {
@@ -460,6 +463,94 @@ describe('saleContractController', () => {
         })
       );
       expect(convertRequestToContractModel).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateSalesRequest', () => {
+    test('UTCID1 - SALE updates custom request successfully before owner approval', async () => {
+      const req = createRequest({
+        params: { id: '30' },
+        body: {
+          contactName: 'Nguyễn Văn An',
+          contactPhone: '0912345678',
+          title: 'Tủ áo phòng ngủ (Cập nhật)',
+          expectedDate: getFutureDateString(14),
+          orderType: 'CUSTOM',
+          items: [
+            { itemName: 'Tủ áo 4 cánh', quantity: 1, unitPrice: 12000000 },
+          ],
+        },
+      });
+      const res = createResponse();
+      const mockUpdatedRequest = {
+        request_id: 30,
+        request_code: 'RQ-20261127-0030',
+        order_type: 'CUSTOM',
+        status: 'DESIGNING',
+        contact_name: 'Nguyễn Văn An',
+        contact_phone: '0912345678',
+        title: 'Tủ áo phòng ngủ (Cập nhật)',
+        items: [],
+        images: [],
+      };
+      updateSalesOrderRequestModel.mockResolvedValue(mockUpdatedRequest);
+
+      await updateSalesRequest(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Cập nhật yêu cầu thiết kế thành công',
+          data: expect.objectContaining({ requestId: 30, status: 'DESIGNING' }),
+        })
+      );
+      expect(updateSalesOrderRequestModel).toHaveBeenCalledWith(
+        30,
+        expect.objectContaining({
+          contactName: 'Nguyễn Văn An',
+          updatedBy: 'sales@fssims.local',
+        })
+      );
+    });
+
+    test('UTCID2 - Returns 400 when request ID is invalid', async () => {
+      const req = createRequest({
+        params: { id: 'invalid' },
+        body: { contactName: 'An', contactPhone: '0912345678', items: [{ itemName: 'Bàn', quantity: 1 }] },
+      });
+      const res = createResponse();
+
+      await updateSalesRequest(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Mã yêu cầu không hợp lệ.' })
+      );
+      expect(updateSalesOrderRequestModel).not.toHaveBeenCalled();
+    });
+
+    test('UTCID3 - Returns 409 when request was already approved or designed by owner', async () => {
+      const req = createRequest({
+        params: { id: '30' },
+        body: {
+          contactName: 'Nguyễn Văn An',
+          contactPhone: '0912345678',
+          items: [{ itemName: 'Tủ áo 4 cánh', quantity: 1 }],
+        },
+      });
+      const res = createResponse();
+      const err = new Error('Không thể chỉnh sửa yêu cầu ở trạng thái "DESIGNED".');
+      err.statusCode = 409;
+      updateSalesOrderRequestModel.mockRejectedValue(err);
+
+      await updateSalesRequest(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Không thể chỉnh sửa yêu cầu'),
+        })
+      );
     });
   });
 });

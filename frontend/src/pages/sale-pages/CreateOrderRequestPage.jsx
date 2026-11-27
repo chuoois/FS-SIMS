@@ -5,32 +5,22 @@
 // =========================================================
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FileText,
-  User,
-  Phone,
-  Mail,
-  MapPin,
-  Calendar,
-  Package,
   Plus,
   Trash2,
-  Image as ImageIcon,
-  CheckCircle2,
   RotateCw,
-  Layers,
-  Upload,
   X,
   Send,
   Maximize2,
-  Ruler,
-  DollarSign,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   getProductMetadata,
+  getRequestById,
   createSalesOrderRequest,
+  updateSalesOrderRequest,
   uploadRequestImages,
   createRequestMaterial,
   createRequestColor,
@@ -81,11 +71,20 @@ const createEmptyCustomerInfo = () => ({
   orderType: 'CUSTOM',
 });
 
+const EDITABLE_CUSTOM_STATUSES = ['PENDING', 'DESIGNING', 'REQUEST_CHANGE'];
+
 export const CreateOrderRequestPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('editId');
+  const isEditMode = Boolean(editId);
+
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingRequest, setLoadingRequest] = useState(false);
+  const [editingRequestCode, setEditingRequestCode] = useState('');
   const minExpectedDate = useMemo(() => getMinExpectedDate(10), []);
   const minExpectedDateStr = useMemo(() => formatDateInputStr(minExpectedDate), [minExpectedDate]);
+  const todayStr = useMemo(() => formatDateInputStr(new Date()), []);
 
   // ── 1. Metadata từ API hệ thống (Danh mục, phòng, vật liệu, màu sắc) ──
   const [metadata, setMetadata] = useState({
@@ -152,18 +151,102 @@ export const CreateOrderRequestPage = () => {
     }
   }, []);
 
+  const loadEditingRequest = useCallback(async () => {
+    if (!editId) return;
+    try {
+      setLoadingRequest(true);
+      const res = await getRequestById(editId);
+      const detail = res?.data ?? res?.request ?? null;
+
+      if (!detail) {
+        toast.error('Không tìm thấy yêu cầu cần chỉnh sửa.');
+        navigate('/sale/requests');
+        return;
+      }
+
+      if (detail.orderType !== 'CUSTOM' || !EDITABLE_CUSTOM_STATUSES.includes(detail.status)) {
+        toast.error('Chỉ có thể chỉnh sửa yêu cầu đặt đóng khi Chủ xưởng chưa duyệt.');
+        navigate('/sale/requests');
+        return;
+      }
+
+      setEditingRequestCode(detail.requestCode || '');
+      setCustomerInfo({
+        customerAccountId: detail.customerAccountId || null,
+        title: detail.title || '',
+        contactName: detail.contactName || detail.customerName || '',
+        contactPhone: detail.contactPhone || detail.customerPhone || '',
+        contactEmail: detail.contactEmail || detail.customerEmail || '',
+        deliveryAddress: detail.deliveryAddress || '',
+        expectedDate: detail.expectedDate ? String(detail.expectedDate).slice(0, 10) : '',
+        orderType: detail.orderType || 'CUSTOM',
+      });
+
+      const generalCustomerImgs = (detail.images || []).filter(
+        (img) => img?.imageUrl && !img.isOwnerDesign && img.imageType !== 'OWNER_DESIGN'
+      );
+
+      const mappedItems = (detail.items || []).map((it, idx) => {
+        const itemImgs = (it.images || []).filter(
+          (img) => img?.imageUrl && !img.isOwnerDesign && img.imageType !== 'OWNER_DESIGN'
+        );
+        const effectiveImgs = itemImgs.length > 0 ? itemImgs : (idx === 0 ? generalCustomerImgs : []);
+
+        return {
+          id: it.requestItemId || (Date.now() + idx + Math.random()),
+          requestItemId: it.requestItemId || null,
+          itemName: it.itemName || '',
+          categoryId: it.categoryId ? String(it.categoryId) : '',
+          roomId: it.roomId ? String(it.roomId) : '',
+          materialId: it.materialId ? String(it.materialId) : '',
+          colorId: it.colorId ? String(it.colorId) : '',
+          lengthCm: it.lengthCm ?? '',
+          widthCm: it.widthCm ?? '',
+          heightCm: it.heightCm ?? '',
+          quantity: it.quantity || 1,
+          unitPrice: it.unitPrice ?? '',
+          technicalNotes: it.technicalNotes || it.description || '',
+          images: effectiveImgs.map((img, iIdx) => ({
+            id: img.imageId || img.requestImageId || `${Date.now()}-${idx}-${iIdx}`,
+            imageUrl: img.imageUrl,
+          })),
+          uploading: false,
+        };
+      });
+
+      setItems(mappedItems.length > 0 ? mappedItems : [createEmptyItem()]);
+    } catch (err) {
+      console.error('Lỗi tải chi tiết yêu cầu để chỉnh sửa:', err);
+      toast.error(err.response?.data?.message || 'Không thể tải thông tin yêu cầu để chỉnh sửa.');
+      navigate('/sale/requests');
+    } finally {
+      setLoadingRequest(false);
+    }
+  }, [editId, navigate]);
+
   useEffect(() => {
     fetchMetadata();
   }, [fetchMetadata]);
+
+  useEffect(() => {
+    if (isEditMode) {
+      loadEditingRequest();
+    }
+  }, [isEditMode, loadEditingRequest]);
 
   // ── Làm mới biểu mẫu ──
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
       await fetchMetadata();
-      setCustomerInfo(createEmptyCustomerInfo());
-      setItems([createEmptyItem()]);
-      toast.success('Đã làm mới biểu mẫu.');
+      if (isEditMode) {
+        await loadEditingRequest();
+        toast.success('Đã tải lại dữ liệu yêu cầu.');
+      } else {
+        setCustomerInfo(createEmptyCustomerInfo());
+        setItems([createEmptyItem()]);
+        toast.success('Đã làm mới biểu mẫu.');
+      }
     } finally {
       setRefreshing(false);
     }
@@ -326,7 +409,7 @@ export const CreateOrderRequestPage = () => {
         toast.error('Ngày mong muốn hoàn thiện không thể ở trong quá khứ.');
         return;
       }
-      if (diffDays < 10) {
+      if (!isEditMode && diffDays < 10) {
         toast.error(
           `Ngày mong muốn hoàn thiện phải cách thời điểm tạo đơn ít nhất 10 ngày (sớm nhất từ ngày ${formatDateVN(minExpectedDate)}).`
         );
@@ -401,8 +484,13 @@ export const CreateOrderRequestPage = () => {
         ),
       };
 
-      await createSalesOrderRequest(payload);
-      toast.success('Đã gửi yêu cầu đặt đóng cho Chủ xưởng thẩm định');
+      if (isEditMode) {
+        await updateSalesOrderRequest(editId, payload);
+        toast.success('Cập nhật yêu cầu thiết kế thành công');
+      } else {
+        await createSalesOrderRequest(payload);
+        toast.success('Đã gửi yêu cầu đặt đóng cho Chủ xưởng thẩm định');
+      }
 
       setSummaryModalOpen(false);
       navigate('/sale/requests');
@@ -414,16 +502,34 @@ export const CreateOrderRequestPage = () => {
     }
   };
 
+  if (loadingRequest) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-stone-500">
+        <RotateCw className="h-6 w-6 animate-spin motion-reduce:animate-none text-stone-400 mb-2" />
+        <p className="text-xs">Đang tải thông tin yêu cầu để chỉnh sửa...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12 text-stone-900">
       {/* ── 1. TIÊU ĐỀ TRANG ─────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-5">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
-            Tạo yêu cầu đặt đóng nội thất
-          </h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
+              {isEditMode ? 'Chỉnh sửa yêu cầu đặt đóng nội thất' : 'Tạo yêu cầu đặt đóng nội thất'}
+            </h1>
+            {isEditMode && editingRequestCode && (
+              <span className="rounded bg-amber-50 border border-amber-200 px-2 py-0.5 font-mono text-xs font-bold text-amber-900">
+                #{editingRequestCode}
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-xs text-stone-500 sm:text-sm">
-            Tiếp nhận kích thước đo đạc thực tế, đính kèm ảnh phác thảo và gửi Chủ xưởng duyệt bản vẽ kỹ thuật.
+            {isEditMode
+              ? 'Cập nhật lại thông tin khách hàng, kích thước đo đạc hoặc ảnh mẫu trước khi Chủ xưởng duyệt.'
+              : 'Tiếp nhận kích thước đo đạc thực tế, đính kèm ảnh phác thảo và gửi Chủ xưởng duyệt bản vẽ kỹ thuật.'}
           </p>
         </div>
 
@@ -543,7 +649,7 @@ export const CreateOrderRequestPage = () => {
               </div>
               <input
                 type="date"
-                min={minExpectedDateStr}
+                min={isEditMode ? todayStr : minExpectedDateStr}
                 value={customerInfo.expectedDate}
                 onChange={(e) => setCustomerInfo((p) => ({ ...p, expectedDate: e.target.value }))}
                 className="w-full rounded-lg border border-stone-300 py-2 px-3 text-xs text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
@@ -902,8 +1008,8 @@ export const CreateOrderRequestPage = () => {
               type="submit"
               className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-5 py-2 text-xs font-semibold text-white hover:bg-amber-950 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
             >
-              <Send className="h-4 w-4" />
-              <span>Kiểm tra &amp; Gửi yêu cầu thiết kế</span>
+              <Send className="h-4 w-4" aria-hidden="true" />
+              <span>{isEditMode ? 'Kiểm tra & Cập nhật yêu cầu' : 'Kiểm tra & Gửi yêu cầu thiết kế'}</span>
             </button>
           </div>
         </div>
@@ -1064,13 +1170,13 @@ export const CreateOrderRequestPage = () => {
               >
                 {submitting ? (
                   <>
-                    <RotateCw className="h-4 w-4 animate-spin" />
+                    <RotateCw className="h-4 w-4 animate-spin motion-reduce:animate-none" />
                     <span>Đang gửi...</span>
                   </>
                 ) : (
                   <>
-                    <Send className="h-4 w-4" />
-                    <span>Xác nhận gửi Chủ xưởng</span>
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                    <span>{isEditMode ? 'Xác nhận cập nhật yêu cầu' : 'Xác nhận gửi Chủ xưởng'}</span>
                   </>
                 )}
               </button>

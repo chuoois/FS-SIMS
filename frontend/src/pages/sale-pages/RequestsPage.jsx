@@ -66,6 +66,10 @@ const SEARCH_BY_OPTIONS = [
   { value: 'PHONE', label: 'Số điện thoại' },
 ];
 
+const EDITABLE_CUSTOM_STATUSES = ['PENDING', 'DESIGNING', 'REQUEST_CHANGE'];
+const canEditCustomRequest = (request) =>
+  request?.orderType === 'CUSTOM' && EDITABLE_CUSTOM_STATUSES.includes(request?.status);
+
 // ─── Modal 1: Chi tiết Yêu cầu Đặt đóng ───────────────────
 function RequestDetailModal({ requestId, onClose, onEdit }) {
   const [detail, setDetail] = useState(null);
@@ -429,6 +433,19 @@ function RequestDetailModal({ requestId, onClose, onEdit }) {
           >
             Đóng
           </button>
+          {!loading && canEditCustomRequest(detail) && onEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onEdit(detail.requestId);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+            >
+              <PenTool className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Chỉnh sửa yêu cầu</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1261,16 +1278,30 @@ export function RequestsPage() {
 
                       {/* Thao tác */}
                       <td className="px-3 py-3.5 text-center pr-4 sm:pr-6">
-                        <div className="inline-flex items-center justify-center gap-1.5">
+                        <div className="inline-flex flex-wrap items-center justify-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => setDetailId(r.requestId)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 transition hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-stone-900"
+                            className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-700 transition motion-reduce:transition-none hover:bg-stone-50 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
                             title="Xem chi tiết yêu cầu"
                           >
-                            <Eye className="h-3.5 w-3.5 text-stone-500" />
+                            <Eye className="h-3.5 w-3.5 text-stone-500" aria-hidden="true" />
                             <span>Chi tiết</span>
                           </button>
+
+                          {/* Nút Sửa cho đơn đặt theo yêu cầu trước khi Chủ xưởng duyệt */}
+                          {canEditCustomRequest(r) && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/sale/requests/create?editId=${r.requestId}`)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 transition motion-reduce:transition-none hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-900"
+                              title="Chỉnh sửa yêu cầu đặt đóng"
+                              aria-label={`Sửa yêu cầu ${r.requestCode}`}
+                            >
+                              <PenTool className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span>Sửa</span>
+                            </button>
+                          )}
 
                           {/* Nút Tạo hợp đồng */}
                           {(r.status === 'PENDING' || r.status === 'DESIGNED') && (

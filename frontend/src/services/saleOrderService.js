@@ -181,6 +181,30 @@ export async function createSaleCustomer(payload) {
 export const createCustomer = createSaleCustomer;
 
 /**
+ * 14d. Cập nhật thông tin khách hàng cho Sales
+ * Chuẩn AGENTS.md / CONVENTIONS.md: Trả về { status, message, data: customer }
+ * @param {number|string} customerId
+ * @param {Object} payload - { fullName, phoneNumber, email, address, note, gender, dob, status }
+ * @returns {Promise<{ status: number, message: string, data: Object }>}
+ */
+export async function updateSaleCustomer(customerId, payload) {
+  const response = await api.put(`/sale-orders/customers/${customerId}`, payload);
+  return response.data;
+}
+export const updateCustomer = updateSaleCustomer;
+
+/**
+ * 14e. Xóa khách hàng cho Sales
+ * @param {number|string} customerId
+ * @returns {Promise<{ status: number, message: string, data: null }>}
+ */
+export async function deleteSaleCustomer(customerId) {
+  const response = await api.delete(`/sale-orders/customers/${customerId}`);
+  return response.data;
+}
+export const deleteCustomer = deleteSaleCustomer;
+
+/**
  * 15. Sales tạo đơn yêu cầu thiết kế / may đo riêng biệt (Order Request)
  */
 export async function createSalesOrderRequest(payload) {
