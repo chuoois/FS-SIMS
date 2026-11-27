@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { ChevronDown, ChevronUp, Phone } from 'lucide-react';
-import bannerImg from '../../../public/images/design-banner.png';
+import bannerImg from '../../../public/images/design-banner.jpg';
 
 const PHONE = '0969011078';
 
@@ -17,21 +17,21 @@ const reasons = [
     title: 'Thực tế giống với 3D',
     heading: 'Hình dung rõ trước khi thi công',
     text: 'Bản vẽ 3D được dựng dựa trên số đo thực tế tại nhà bạn. Chúng tôi trao đổi cụ thể về vật liệu và kích thước để thành phẩm sát với bản thiết kế đã duyệt.',
-    image: '/images/reason-3d.png',
+    image: '/images/reason-3d.jpg',
     tone: 'bg-[#232226]',
   },
   {
     title: 'Luôn cá nhân hóa',
     heading: 'Làm theo nhu cầu',
     text: 'Bạn muốn một mẫu thiết kế dành riêng cho căn nhà của mình? Hãy cho Góc Nhà biết nhu cầu, sở thích và ngân sách, chúng tôi sẽ cùng bạn chọn phương án phù hợp với phong cách riêng của bạn.',
-    image: '/images/reason-personalized.png', // Ảnh bảng mẫu vật liệu, màu sắc, bản phác thảo trên bàn
+    image: '/images/reason-personalized.jpg', // Ảnh bảng mẫu vật liệu, màu sắc, bản phác thảo trên bàn
     tone: 'bg-[#323139]',
   },
   {
     title: 'Tư vấn tận tâm',
     heading: 'Làm việc trực tiếp, rõ ràng',
     text: 'Bạn trao đổi trực tiếp với người làm ra sản phẩm và được tư vấn rõ ràng về chi phí, thời gian hoàn thiện. Sau khi bàn giao, Góc Nhà hỗ trợ bảo hành và sửa chữa nếu có vấn đề phát sinh.',
-    image: '/images/reason-consulting.png', // Ảnh thợ/nhà thiết kế trao đổi trực tiếp với khách
+    image: '/images/reason-consulting.jpg', // Ảnh thợ/nhà thiết kế trao đổi trực tiếp với khách
     tone: 'bg-stone-600',
   },
 ];
@@ -48,7 +48,7 @@ const steps = [
 const stepRows = [
   {
     steps: steps.slice(0, 2),
-    image: '/images/step-kitchen.png', // Ảnh bếp nội thất gỗ (tủ bếp, đảo bếp)
+    image: '/images/step-kitchen.jpg', // Ảnh bếp nội thất gỗ (tủ bếp, đảo bếp)
     tone: 'bg-stone-400',
     imageSide: 'right',
     cols: 'md:grid-cols-[24fr_76fr]',
@@ -56,7 +56,7 @@ const stepRows = [
   },
   {
     steps: steps.slice(2, 4),
-    image: '/images/step-living.png', // Ảnh phòng khách liền bếp mở
+    image: '/images/step-living.jpg', // Ảnh phòng khách liền bếp mở
     tone: 'bg-stone-300',
     imageSide: 'left',
     cols: 'md:grid-cols-[76fr_24fr]',
@@ -64,7 +64,7 @@ const stepRows = [
   },
   {
     steps: steps.slice(4, 6),
-    image: '/images/step-bedroom.png', // Ảnh phòng ngủ hoàn thiện (giường, tủ áo gỗ)
+    image: '/images/step-bedroom.jpg', // Ảnh phòng ngủ hoàn thiện (giường, tủ áo gỗ)
     tone: 'bg-stone-500',
     imageSide: 'right',
     cols: 'md:grid-cols-[33fr_67fr]',

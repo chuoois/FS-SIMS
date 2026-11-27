@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Clock, Mail, MapPin, Phone } from 'lucide-react';
-import bannerImg from '../../../public/images/infor-banner.png';
+import bannerImg from '../../../public/images/infor-banner.jpg';
 
 /* ---------- Dữ liệu (thay bằng nội dung thật) ---------- */
 const aboutStats = [
@@ -128,7 +128,7 @@ export const AboutPage = () => (
       <div className={containerCls}>
         <section aria-labelledby="ve-goc-nha" className="grid overflow-hidden bg-stone-100 md:grid-cols-2">
           <Photo
-            src="/images/about-gocnha.png"
+            src="/images/about-gocnha.jpg"
             alt="Không gian Góc Nhà"
             tone="bg-stone-300"
             className="min-h-[280px] w-full md:min-h-[440px]"

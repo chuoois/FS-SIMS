@@ -1,16 +1,48 @@
 import { OwnerLayout } from "../../components/layouts/dashboard-layout/DashboardLayout";
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
-import { ManageStaffAccountsPage } from "../../pages/owner-pages/ManageStaffAccountsPage";
-import { ManageSuppliersPage } from "../../pages/owner-pages/ManageSuppliersPage";
-import { ManageProductsPage } from "../../pages/owner-pages/ManageProductsPage";
-import { ManageMaterialsPage } from "../../pages/owner-pages/ManageMaterialsPage";
-import { ManagePurchaseReceiptsPage } from "../../pages/owner-pages/ManagePurchaseReceiptsPage";
-import { ManageMaterialExportPage } from "../../pages/owner-pages/ManageMaterialExportPage";
-import { ManageProductionOrdersPage } from "../../pages/owner-pages/ManageProductionOrdersPage";
-import { ManageOrdersPage } from "../../pages/owner-pages/ManageOrdersPage";
-import { ManageFinancialReportsPage } from "../../pages/owner-pages/ManageFinancialReportsPage";
-import { ManageCustomerRequestsPage } from "../../pages/owner-pages/ManageCustomerRequestsPage";
+import { lazyNamed } from "../../utils/lazyNamed";
+
+const ManageStaffAccountsPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageStaffAccountsPage"),
+  "ManageStaffAccountsPage"
+);
+const ManageSuppliersPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageSuppliersPage"),
+  "ManageSuppliersPage"
+);
+const ManageProductsPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageProductsPage"),
+  "ManageProductsPage"
+);
+const ManageMaterialsPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageMaterialsPage"),
+  "ManageMaterialsPage"
+);
+const ManagePurchaseReceiptsPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManagePurchaseReceiptsPage"),
+  "ManagePurchaseReceiptsPage"
+);
+const ManageMaterialExportPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageMaterialExportPage"),
+  "ManageMaterialExportPage"
+);
+const ManageProductionOrdersPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageProductionOrdersPage"),
+  "ManageProductionOrdersPage"
+);
+const ManageOrdersPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageOrdersPage"),
+  "ManageOrdersPage"
+);
+const ManageFinancialReportsPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageFinancialReportsPage"),
+  "ManageFinancialReportsPage"
+);
+const ManageCustomerRequestsPage = lazyNamed(
+  () => import("../../pages/owner-pages/ManageCustomerRequestsPage"),
+  "ManageCustomerRequestsPage"
+);
 
 export const OwnerRouter = {
   path: "/owner",

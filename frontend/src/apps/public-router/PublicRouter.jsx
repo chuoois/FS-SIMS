@@ -1,19 +1,37 @@
 import { redirect } from "react-router-dom";
+import { lazyNamed } from "../../utils/lazyNamed";
 import { HomeLayout } from "../../components/layouts/home-layout/HomeLayout";
-import { LoginPage } from "../../pages/public-pages/LoginPage";
-import { RegisterPage } from "../../pages/public-pages/RegisterPage";
-import { ForgotPasswordPage } from "../../pages/public-pages/ForgotpasswordPage";
-import { HomePage } from "../../pages/public-pages/HomePage";
-import { InteriorDesignPage } from "../../pages/public-pages/InteriorDesignPage";
-import { ProductPage } from "../../pages/public-pages/ProductPage";
-import { ProductDetailPage } from "../../pages/public-pages/ProductDetailPage";
-import { AboutPage, ContactPage } from "../../pages/public-pages/InfoPages";
-import { CartPage } from "../../pages/public-pages/Cartpage";
-import { ProfilePage } from "../../pages/public-pages/Profilepage";
-import { CustomerOrdersPage } from "../../pages/public-pages/CustomerOrdersPage";
-import { CustomerOrderDetailPage } from "../../pages/public-pages/CustomerOrderDetailPage";
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
+
+const LoginPage = lazyNamed(() => import("../../pages/public-pages/LoginPage"), "LoginPage");
+const RegisterPage = lazyNamed(() => import("../../pages/public-pages/RegisterPage"), "RegisterPage");
+const ForgotPasswordPage = lazyNamed(
+  () => import("../../pages/public-pages/ForgotpasswordPage"),
+  "ForgotPasswordPage"
+);
+const HomePage = lazyNamed(() => import("../../pages/public-pages/HomePage"), "HomePage");
+const InteriorDesignPage = lazyNamed(
+  () => import("../../pages/public-pages/InteriorDesignPage"),
+  "InteriorDesignPage"
+);
+const ProductPage = lazyNamed(() => import("../../pages/public-pages/ProductPage"), "ProductPage");
+const ProductDetailPage = lazyNamed(
+  () => import("../../pages/public-pages/ProductDetailPage"),
+  "ProductDetailPage"
+);
+const AboutPage = lazyNamed(() => import("../../pages/public-pages/InfoPages"), "AboutPage");
+const ContactPage = lazyNamed(() => import("../../pages/public-pages/InfoPages"), "ContactPage");
+const CartPage = lazyNamed(() => import("../../pages/public-pages/Cartpage"), "CartPage");
+const ProfilePage = lazyNamed(() => import("../../pages/public-pages/Profilepage"), "ProfilePage");
+const CustomerOrdersPage = lazyNamed(
+  () => import("../../pages/public-pages/CustomerOrdersPage"),
+  "CustomerOrdersPage"
+);
+const CustomerOrderDetailPage = lazyNamed(
+  () => import("../../pages/public-pages/CustomerOrderDetailPage"),
+  "CustomerOrderDetailPage"
+);
 
 export const PublicRouter = {
   path: "/",

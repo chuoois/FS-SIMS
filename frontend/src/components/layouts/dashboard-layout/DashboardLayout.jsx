@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { DashboardHeader } from './DashboardHeader';
 import { DashboardSidebar } from './DashboardSidebar';
 import { resolveItems, roles } from './Role';
+import { RouteLoadingFallback } from '../../common/RouteLoadingFallback';
 
 /* Khung chung: Sidebar + Header + <Outlet /> (trang con, index là Tổng quan) */
 const DashboardLayout = ({ role, user: userProp, onLogout: onLogoutProp }) => {
@@ -47,7 +48,9 @@ const DashboardLayout = ({ role, user: userProp, onLogout: onLogoutProp }) => {
           onMenuClick={() => setOpen(true)}
         />
         <main className="w-full flex-1 p-5 lg:p-8">
-          <Outlet />
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

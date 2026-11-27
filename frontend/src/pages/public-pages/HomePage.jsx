@@ -20,7 +20,7 @@ const HERO_SLIDES = [
     accent: 'Sum Vầy',
     text: 'Bàn ghế ăn gỗ nguyên khối bền chắc cùng năm tháng, kết nối những khoảnh khắc yêu thương của gia đình.',
     href: '/products',
-    image: '/assets/slide_ban_an.png',
+    image: '/assets/slide_ban_an.jpg',
   },
   {
     eyebrow: 'NỘI THẤT PHÒNG NGỦ',
@@ -28,7 +28,7 @@ const HERO_SLIDES = [
     accent: 'Bình Yên',
     text: 'Giường ngủ, tủ áo và táp đầu giường từ gỗ cao cấp – kiến tạo không gian thư thái cho giấc ngủ an lành.',
     href: '/products',
-    image: '/assets/slide_phong_ngu.png',
+    image: '/assets/slide_phong_ngu.jpg',
   },
 ];
 
@@ -37,7 +37,7 @@ const STORY = {
   text: 'Góc Nhà chọn từng món đồ nội thất và trang trí từ các nhà thiết kế, xưởng thủ công mà chúng tôi tin tưởng. Khám phá từng bộ sưu tập để tìm món đồ hợp với căn nhà của bạn.',
   cta: 'Khám phá sản phẩm',
   href: '/products',
-  image: '/assets/slide_ban_an.png',
+  image: '/assets/slide_ban_an.jpg',
 };
 
 /* ---------- Tiện ích ---------- */

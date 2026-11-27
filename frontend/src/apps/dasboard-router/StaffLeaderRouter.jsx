@@ -1,7 +1,12 @@
 import { StaffLeaderLayout } from "../../components/layouts/dashboard-layout/DashboardLayout";
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
-import { LeaderOrdersPage } from "../../pages/staff-pages/LeaderOrdersPage";
+import { lazyNamed } from "../../utils/lazyNamed";
+
+const LeaderOrdersPage = lazyNamed(
+  () => import("../../pages/staff-pages/LeaderOrdersPage"),
+  "LeaderOrdersPage"
+);
 
 export const StaffLeaderRouter = {
   path: "/staff-leader",

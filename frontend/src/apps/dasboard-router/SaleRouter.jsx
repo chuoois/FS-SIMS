@@ -1,12 +1,17 @@
 import { SaleLayout } from "../../components/layouts/dashboard-layout/DashboardLayout";
 import { ProtectedRoute } from "../../components/auth/ProtectedRoute";
 import { ROLES } from "../../constants/roles";
-import { CreateOrderPage } from "../../pages/sale-pages/CreateOrderPage";
-import { CreateOrderRequestPage } from "../../pages/sale-pages/CreateOrderRequestPage";
-import { OrdersPage } from "../../pages/sale-pages/OrdersPage";
-import { ContractsPage } from "../../pages/sale-pages/ContractsPage";
-import { RequestsPage } from "../../pages/sale-pages/RequestsPage";
-import { CustomersPage } from "../../pages/sale-pages/CustomersPage";
+import { lazyNamed } from "../../utils/lazyNamed";
+
+const CreateOrderPage = lazyNamed(() => import("../../pages/sale-pages/CreateOrderPage"), "CreateOrderPage");
+const CreateOrderRequestPage = lazyNamed(
+  () => import("../../pages/sale-pages/CreateOrderRequestPage"),
+  "CreateOrderRequestPage"
+);
+const OrdersPage = lazyNamed(() => import("../../pages/sale-pages/OrdersPage"), "OrdersPage");
+const ContractsPage = lazyNamed(() => import("../../pages/sale-pages/ContractsPage"), "ContractsPage");
+const RequestsPage = lazyNamed(() => import("../../pages/sale-pages/RequestsPage"), "RequestsPage");
+const CustomersPage = lazyNamed(() => import("../../pages/sale-pages/CustomersPage"), "CustomersPage");
 
 export const SaleRouter = {
   path: "/sale",
