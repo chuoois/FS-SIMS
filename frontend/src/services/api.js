@@ -19,7 +19,7 @@ const ACCESS_TOKEN_KEY = 'accessToken';
 const TOKEN_REFRESH_BUFFER_MS = 3000;
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'https://fs-sims.onrender.com/api',
   withCredentials: true, // luôn gửi cookie (refresh token httpOnly)
 });
 
@@ -60,7 +60,7 @@ async function refreshAccessTokenSingleFlight() {
 
   refreshPromise = axios
     .post(
-      `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/auth/refresh`,
+      `${import.meta.env.VITE_API_BASE_URL || 'https://fs-sims.onrender.com/api'}/auth/refresh`,
       {},
       { withCredentials: true }
     )
