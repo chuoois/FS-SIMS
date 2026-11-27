@@ -56,6 +56,23 @@ describe('RequestsPage Component', () => {
         },
       ],
     },
+    {
+      requestId: 203,
+      requestCode: 'REQ-20261124-0003',
+      customerName: 'Phạm Minh Khoa',
+      customerPhone: '0911223344',
+      orderType: 'CUSTOM',
+      status: 'DESIGNING',
+      createdAt: '2026-11-24T10:00:00Z',
+      items: [
+        {
+          requestItemId: 3,
+          itemName: 'Tủ quần áo kịch trần',
+          quantity: 1,
+          unitPrice: 14000000,
+        },
+      ],
+    },
   ];
 
   beforeEach(() => {
@@ -152,5 +169,22 @@ describe('RequestsPage Component', () => {
       expect(screen.getByRole('heading', { name: 'Chuyển yêu cầu thành Hợp đồng' })).toBeInTheDocument();
       expect(screen.getByDisplayValue('Đặng Quốc Anh')).toBeInTheDocument();
     });
+  });
+
+  it('shows Sửa button only for CUSTOM requests before owner approval and navigates to edit page', async () => {
+    render(<RequestsPage />);
+    const user = userEvent.setup();
+
+    await waitFor(() => {
+      expect(screen.getByText('REQ-20261124-0003')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: 'Sửa yêu cầu REQ-20261124-0001' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sửa yêu cầu REQ-20261124-0002' })).not.toBeInTheDocument();
+
+    const editBtn = screen.getByRole('button', { name: 'Sửa yêu cầu REQ-20261124-0003' });
+    await user.click(editBtn);
+
+    expect(mockNavigate).toHaveBeenCalledWith('/sale/requests/create?editId=203');
   });
 });

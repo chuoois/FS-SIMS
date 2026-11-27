@@ -636,7 +636,7 @@ async function createSalesRequest(req, res) {
 
 /**
  * PUT /api/sale-orders/requests/:id
- * Sales cập nhật thông tin yêu cầu may đo
+ * Sales cập nhật thông tin yêu cầu may đo (chỉ khi CUSTOM và chưa được Chủ xưởng duyệt)
  */
 async function updateSalesRequest(req, res) {
   try {
@@ -646,13 +646,14 @@ async function updateSalesRequest(req, res) {
       return res.status(400).json({ message: 'Mã yêu cầu không hợp lệ.' });
     }
 
-    const validation = validateCreateSalesRequestInput(req.body);
+    const validation = validateCreateSalesRequestInput(req.body, { isUpdate: true });
     if (!validation.isValid) {
       return res.status(400).json({ message: validation.error });
     }
 
-    const result = await updateSalesOrderRequest(requestId, validation.data, {
-      modifieBy: req.user?.email || 'STAFF',
+    const result = await updateSalesOrderRequest(requestId, {
+      ...validation.data,
+      updatedBy: req.user?.email || 'STAFF',
     });
 
     const requestDTO = toRequestDTO(result);
@@ -666,7 +667,12 @@ async function updateSalesRequest(req, res) {
     return res.status(200).json(responsePayload);
   } catch (error) {
     console.error('[saleContractController.updateSalesRequest]', error);
-    return res.status(500).json({
+    const statusCode = error.statusCode || (
+      error.message?.includes('Không tìm thấy') ? 404 :
+      error.message?.includes('Không thể chỉnh sửa') ? 409 :
+      error.message?.includes('Chỉ cho phép') ? 400 : 500
+    );
+    return res.status(statusCode).json({
       message: error.message || 'Lỗi máy chủ khi cập nhật yêu cầu thiết kế',
       error: error.message,
     });

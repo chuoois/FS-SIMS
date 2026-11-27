@@ -11,6 +11,8 @@ const {
   getSaleCustomers,
   getSaleCustomerById,
   createSaleCustomer,
+  updateSaleCustomer,
+  deleteSaleCustomer,
 } = require('../controllers/saleCustomerController');
 
 const {
@@ -74,6 +76,8 @@ router.post('/colors', createProductColor);
 router.get('/customers', getSaleCustomers);
 router.post('/customers', createSaleCustomer);
 router.get('/customers/:id', getSaleCustomerById);
+router.put('/customers/:id', updateSaleCustomer);
+router.delete('/customers/:id', deleteSaleCustomer);
 
 // ── Luồng Hợp đồng (Contract) ──────────────────────────────
 router.post('/contracts', createOfflineContract);

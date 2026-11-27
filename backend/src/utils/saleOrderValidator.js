@@ -180,7 +180,7 @@ function validateCreateOrderFromContractInput(contractId) {
 /**
  * Validate dữ liệu đầu vào khi Sales tạo đơn đặt hàng may đo/thiết kế (Order Request)
  */
-function validateCreateSalesRequestInput(data = {}) {
+function validateCreateSalesRequestInput(data = {}, { isUpdate = false } = {}) {
   const {
     customerAccountId,
     contactName,
@@ -223,7 +223,7 @@ function validateCreateSalesRequestInput(data = {}) {
     }
   }
 
-  // Ngày hẹn giao / mong muốn hoàn thiện (nếu nhập thì phải không ở quá khứ và cách ít nhất 10 ngày)
+  // Ngày hẹn giao / mong muốn hoàn thiện (nếu nhập thì không ở quá khứ; khi tạo mới phải cách ít nhất 10 ngày)
   if (expectedDate && String(expectedDate).trim()) {
     const expDateObj = new Date(String(expectedDate).trim());
     if (isNaN(expDateObj.getTime())) {
@@ -236,7 +236,7 @@ function validateCreateSalesRequestInput(data = {}) {
     if (diffDays < 0) {
       return { isValid: false, error: 'Ngày hẹn giao hàng không thể ở trong quá khứ.' };
     }
-    if (diffDays < 10) {
+    if (!isUpdate && diffDays < 10) {
       return { isValid: false, error: 'Ngày hẹn giao hàng phải cách thời điểm tạo yêu cầu ít nhất 10 ngày.' };
     }
   }

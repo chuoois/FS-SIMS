@@ -21,6 +21,16 @@ function getCustomerOrderModel() {
 }
 
 /**
+ * Helper lấy role_id của CUSTOMER
+ */
+async function getCustomerRoleId() {
+  const customerRole = typeof findUserRoleByCode === 'function'
+    ? await findUserRoleByCode('CUSTOMER')
+    : (UserRole && typeof UserRole.findOne === 'function' ? await UserRole.findOne({ where: { role_code: 'CUSTOMER' }, raw: true }) : null);
+  return customerRole ? customerRole.role_id : null;
+}
+
+/**
  * Lấy danh sách khách hàng có phân trang, tìm kiếm và lọc
  * @param {object} options
  * @param {number} options.page
@@ -42,14 +52,12 @@ async function getCustomersWithPagination({
   const offset = (pageNum - 1) * limitNum;
 
   // Lấy role_id của CUSTOMER
-  const customerRole = typeof findUserRoleByCode === 'function'
-    ? await findUserRoleByCode('CUSTOMER')
-    : (UserRole && typeof UserRole.findOne === 'function' ? await UserRole.findOne({ where: { role_code: 'CUSTOMER' }, raw: true }) : null);
-  if (!customerRole) {
+  const customerRoleId = await getCustomerRoleId();
+  if (!customerRoleId) {
     return { customers: [], totalItems: 0, totalPages: 0, currentPage: pageNum, itemsPerPage: limitNum };
   }
 
-  const where = { role_id: customerRole.role_id };
+  const where = { role_id: customerRoleId };
 
   // Filter theo status
   if (status && status !== 'ALL') {
@@ -87,6 +95,7 @@ async function getCustomersWithPagination({
       'address',
       'gender',
       'dob',
+      'note',
       'createdate',
     ],
     order: [['createdate', 'DESC']],
@@ -100,47 +109,7 @@ async function getCustomersWithPagination({
 
   // Lấy stats (số yêu cầu, hợp đồng, đơn hàng) cho từng khách
   const customerIds = rows.map((r) => r.user_account_id);
-  let statsMap = {};
-
-  if (customerIds.length > 0) {
-    // Đếm order_request
-    const requestCounts = await sequelize.query(
-      `SELECT customer_account_id, COUNT(*) AS cnt
-       FROM order_request
-       WHERE customer_account_id IN (:ids)
-       GROUP BY customer_account_id`,
-      { replacements: { ids: customerIds }, type: sequelize.QueryTypes.SELECT }
-    );
-    // Đếm contract
-    const contractCounts = await sequelize.query(
-      `SELECT customer_account_id, COUNT(*) AS cnt
-       FROM contract
-       WHERE customer_account_id IN (:ids)
-       GROUP BY customer_account_id`,
-      { replacements: { ids: customerIds }, type: sequelize.QueryTypes.SELECT }
-    );
-    // Đếm customer_order
-    const orderCounts = await sequelize.query(
-      `SELECT customer_account_id, COUNT(*) AS cnt
-       FROM customer_order
-       WHERE customer_account_id IN (:ids)
-       GROUP BY customer_account_id`,
-      { replacements: { ids: customerIds }, type: sequelize.QueryTypes.SELECT }
-    );
-
-    customerIds.forEach((id) => {
-      statsMap[id] = { totalRequests: 0, totalContracts: 0, totalOrders: 0 };
-    });
-    requestCounts.forEach((r) => {
-      if (statsMap[r.customer_account_id]) statsMap[r.customer_account_id].totalRequests = Number(r.cnt);
-    });
-    contractCounts.forEach((r) => {
-      if (statsMap[r.customer_account_id]) statsMap[r.customer_account_id].totalContracts = Number(r.cnt);
-    });
-    orderCounts.forEach((r) => {
-      if (statsMap[r.customer_account_id]) statsMap[r.customer_account_id].totalOrders = Number(r.cnt);
-    });
-  }
+  const statsMap = await getCustomerRelationStatsMap(customerIds);
 
   const customers = rows.map((r) => ({
     ...r,
@@ -151,17 +120,66 @@ async function getCustomersWithPagination({
 }
 
 /**
+ * Helper đếm số lượng yêu cầu, hợp đồng, đơn hàng theo danh sách ID khách hàng
+ */
+async function getCustomerRelationStatsMap(customerIds = []) {
+  const statsMap = {};
+  if (!Array.isArray(customerIds) || customerIds.length === 0) return statsMap;
+
+  customerIds.forEach((id) => {
+    statsMap[id] = { totalRequests: 0, totalContracts: 0, totalOrders: 0 };
+  });
+
+  const [requestCounts, contractCounts, orderCounts] = await Promise.all([
+    sequelize.query(
+      `SELECT customer_account_id, COUNT(*) AS cnt
+       FROM order_request
+       WHERE customer_account_id IN (:ids)
+       GROUP BY customer_account_id`,
+      { replacements: { ids: customerIds }, type: sequelize.QueryTypes.SELECT }
+    ),
+    sequelize.query(
+      `SELECT customer_account_id, COUNT(*) AS cnt
+       FROM contract
+       WHERE customer_account_id IN (:ids)
+       GROUP BY customer_account_id`,
+      { replacements: { ids: customerIds }, type: sequelize.QueryTypes.SELECT }
+    ),
+    sequelize.query(
+      `SELECT customer_account_id, COUNT(*) AS cnt
+       FROM customer_order
+       WHERE customer_account_id IN (:ids)
+       GROUP BY customer_account_id`,
+      { replacements: { ids: customerIds }, type: sequelize.QueryTypes.SELECT }
+    ),
+  ]);
+
+  (requestCounts || []).forEach((r) => {
+    if (statsMap[r.customer_account_id]) statsMap[r.customer_account_id].totalRequests = Number(r.cnt);
+  });
+  (contractCounts || []).forEach((r) => {
+    if (statsMap[r.customer_account_id]) statsMap[r.customer_account_id].totalContracts = Number(r.cnt);
+  });
+  (orderCounts || []).forEach((r) => {
+    if (statsMap[r.customer_account_id]) statsMap[r.customer_account_id].totalOrders = Number(r.cnt);
+  });
+
+  return statsMap;
+}
+
+/**
  * Lấy chi tiết 1 khách hàng kèm lịch sử yêu cầu, hợp đồng, đơn hàng
  * @param {number|string} customerId
  * @returns {object|null}
  */
 async function findCustomerById(customerId) {
   const accountId = parseInt(customerId, 10) || customerId;
+  const customerRoleId = await getCustomerRoleId();
+  const where = { user_account_id: accountId };
+  if (customerRoleId) where.role_id = customerRoleId;
 
   const account = await UserAccount.findOne({
-    where: {
-      user_account_id: accountId,
-    },
+    where,
     attributes: { exclude: ['password_hash'] },
     raw: true,
   });
@@ -224,10 +242,7 @@ async function findCustomerById(customerId) {
  */
 async function createCustomerBySales({ fullName, phoneNumber, email, address, note, createBy }) {
   const bcrypt = require('bcryptjs');
-  const customerRole = typeof findUserRoleByCode === 'function'
-    ? await findUserRoleByCode('CUSTOMER')
-    : (UserRole && typeof UserRole.findOne === 'function' ? await UserRole.findOne({ where: { role_code: 'CUSTOMER' }, raw: true }) : null);
-  const roleId = customerRole ? customerRole.role_id : 4;
+  const roleId = (await getCustomerRoleId()) || 4;
 
   const cleanFullName = (fullName || '').trim();
   const cleanPhone = (phoneNumber || '').trim();
@@ -270,5 +285,114 @@ async function createCustomerBySales({ fullName, phoneNumber, email, address, no
   };
 }
 
-module.exports = { getCustomersWithPagination, findCustomerById, createCustomerBySales };
+/**
+ * Cập nhật thông tin khách hàng bởi Nhân viên kinh doanh (Sale)
+ * Chỉ cập nhật tài khoản thuộc role CUSTOMER
+ */
+async function updateCustomerBySales(
+  customerId,
+  { fullName, phoneNumber, email, address, note, gender, dob, status, modifieBy } = {}
+) {
+  const accountId = parseInt(customerId, 10) || customerId;
+  const roleId = (await getCustomerRoleId()) || 4;
+
+  const existing = await UserAccount.findOne({
+    where: { user_account_id: accountId, role_id: roleId },
+    attributes: { exclude: ['password_hash'] },
+    raw: true,
+  });
+
+  if (!existing) return null;
+
+  const updateFields = {
+    modifieby: modifieBy || 'SALES',
+    modifiedate: new Date(),
+  };
+
+  if (fullName !== undefined) updateFields.full_name = fullName.trim();
+  if (phoneNumber !== undefined) updateFields.phone_number = phoneNumber ? phoneNumber.trim() : null;
+
+  if (email !== undefined && email !== null && String(email).trim() !== '') {
+    const cleanEmail = String(email).trim().toLowerCase();
+    if (cleanEmail !== (existing.email || '').toLowerCase()) {
+      const duplicateEmail = await UserAccount.findOne({
+        where: {
+          email: cleanEmail,
+          user_account_id: { [Op.ne]: accountId },
+        },
+        raw: true,
+      });
+      if (duplicateEmail) {
+        throw new Error(`Email "${cleanEmail}" đã được sử dụng bởi một tài khoản khác.`);
+      }
+    }
+    updateFields.email = cleanEmail;
+  }
+
+  if (address !== undefined) updateFields.address = address ? address.trim() : null;
+  if (note !== undefined) updateFields.note = note ? note.trim() : null;
+  if (gender !== undefined) updateFields.gender = gender || null;
+  if (dob !== undefined) updateFields.dob = dob || null;
+  if (status !== undefined) updateFields.status = String(status).trim().toUpperCase();
+
+  await UserAccount.update(updateFields, {
+    where: { user_account_id: accountId, role_id: roleId },
+  });
+
+  const updated = await UserAccount.findOne({
+    where: { user_account_id: accountId, role_id: roleId },
+    attributes: { exclude: ['password_hash'] },
+    raw: true,
+  });
+
+  return updated || { ...existing, ...updateFields };
+}
+
+/**
+ * Xóa khách hàng bởi Nhân viên kinh doanh (Sale)
+ * Chỉ xóa khi khách hàng chưa phát sinh yêu cầu, hợp đồng hoặc đơn hàng nào
+ */
+async function deleteCustomerBySales(customerId) {
+  const accountId = parseInt(customerId, 10) || customerId;
+  const roleId = (await getCustomerRoleId()) || 4;
+
+  const existing = await UserAccount.findOne({
+    where: { user_account_id: accountId, role_id: roleId },
+    attributes: { exclude: ['password_hash'] },
+    raw: true,
+  });
+
+  if (!existing) {
+    return { deleted: false, reason: 'NOT_FOUND' };
+  }
+
+  const statsMap = await getCustomerRelationStatsMap([accountId]);
+  const counts = statsMap[accountId] || { totalRequests: 0, totalContracts: 0, totalOrders: 0 };
+
+  if (counts.totalRequests > 0 || counts.totalContracts > 0 || counts.totalOrders > 0) {
+    return {
+      deleted: false,
+      reason: 'HAS_RELATIONS',
+      customer: existing,
+      counts,
+    };
+  }
+
+  const affected = await UserAccount.destroy({
+    where: { user_account_id: accountId, role_id: roleId },
+  });
+
+  return {
+    deleted: affected > 0,
+    reason: affected > 0 ? null : 'NOT_FOUND',
+  };
+}
+
+module.exports = {
+  getCustomersWithPagination,
+  findCustomerById,
+  createCustomerBySales,
+  updateCustomerBySales,
+  deleteCustomerBySales,
+};
 
